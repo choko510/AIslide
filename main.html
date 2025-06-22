@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Slide Maker</title>
+    <style>
+        /* --- 基本スタイル & レイアウト --- */
+        :root {
+            --bg-color: #f0f2f5;
+            --panel-bg: #ffffff;
+            --border-color: #d9d9d9;
+            --primary-color: #1890ff;
+            --text-color: #333;
+            --light-text-color: #888;
+            --shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+            height: 100vh;
+            user-select: none;
+        }
+
+        #app-container {
+            display: flex;
+            height: 100vh;
+            flex-direction: column;
+        }
+
+        #toolbar {
+            display: flex;
+            align-items: center;
+            padding: 8px 16px;
+            background-color: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            z-index: 100;
+        }
+
+        #toolbar button {
+            margin-right: 10px;
+            padding: 5px 12px;
+            border: 1px solid var(--border-color);
+            background-color: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        #toolbar button:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        #toolbar .separator {
+            width: 1px;
+            height: 20px;
+            background-color: var(--border-color);
+            margin: 0 15px;
+        }
+
+        main {
+            display: flex;
+            flex-grow: 1;
+            height: calc(100% - 49px);
+            /* 49pxはツールバーの高さ */
+        }
+
+        #left-pane,
+        #right-pane {
+            background-color: var(--panel-bg);
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+        }
+
+        #left-pane {
+            width: 200px;
+            border-right: 1px solid var(--border-color);
+        }
+
+        #left-pane-header {
+            padding: 10px;
+            border-bottom: 1px solid var(--border-color);
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        #slide-list {
+            list-style: none;
+            padding: 10px;
+            margin: 0;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .slide-thumbnail {
+            cursor: pointer;
+            border: 2px solid transparent;
+            border-radius: 4px;
+            padding: 5px;
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        .slide-thumbnail.active {
+            border-color: var(--primary-color);
+        }
+
+        .slide-thumbnail-wrapper {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background-color: #fff;
+            border: 1px solid var(--border-color);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .slide-thumbnail-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: top left;
+            background-color: white;
+            /* 忘れずに */
+        }
+
+        .thumbnail-index {
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            background: var(--light-text-color);
+            color: white;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 20px;
+            font-size: 12px;
+            z-index: 1;
+        }
+
+        .slide-thumbnail.active .thumbnail-index {
+            background: var(--primary-color);
+        }
+
+        #main-pane {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow: auto;
+        }
+
+        #slide-wrapper {
+            width: 90%;
+            max-width: 1280px;
+            aspect-ratio: 16 / 9;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+            background-color: white;
+        }
+
+        #slide-canvas {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .slide-element {
+            position: absolute;
+            cursor: move;
+            min-width: 20px;
+            min-height: 20px;
+        }
+
+        .slide-element.text {
+            padding: 5px;
+            line-height: 1.2;
+            word-wrap: break-word;
+        }
+
+        .slide-element img {
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            /* 画像自体がドラッグイベントを奪わないように */
+        }
+
+        /* 編集可能でないときはキャレットを非表示に */
+        .slide-element[contenteditable="false"] {
+            caret-color: transparent;
+        }
+
+        /* テキスト編集中は移動カーソルを解除 */
+        .slide-element[contenteditable="true"] {
+            cursor: text;
+        }
+
+        .slide-element:hover {
+            outline: 1px dashed var(--primary-color);
+        }
+
+        .slide-element.selected {
+            outline: 2px solid var(--primary-color);
+            z-index: 9999 !important;
+            /* 選択中の要素を最前面に */
+        }
+
+        /* リサイズハンドル */
+        .resize-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #fff;
+            border: 1px solid var(--primary-color);
+            border-radius: 50%;
+            z-index: 10000;
+        }
+
+        .resize-handle.nw {
+            top: -5px;
+            left: -5px;
+            cursor: nwse-resize;
+        }
+
+        .resize-handle.n {
+            top: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: ns-resize;
+        }
+
+        .resize-handle.ne {
+            top: -5px;
+            right: -5px;
+            cursor: nesw-resize;
+        }
+
+        .resize-handle.w {
+            top: 50%;
+            left: -5px;
+            transform: translateY(-50%);
+            cursor: ew-resize;
+        }
+
+        .resize-handle.e {
+            top: 50%;
+            right: -5px;
+            transform: translateY(-50%);
+            cursor: ew-resize;
+        }
+
+        .resize-handle.sw {
+            bottom: -5px;
+            left: -5px;
+            cursor: nesw-resize;
+        }
+
+        .resize-handle.s {
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            cursor: ns-resize;
+        }
+
+        .resize-handle.se {
+            bottom: -5px;
+            right: -5px;
+            cursor: nwse-resize;
+        }
+
+
+        #right-pane {
+            width: 280px;
+            border-left: 1px solid var(--border-color);
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        #inspector h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+
+        .inspector-group {
+            margin-bottom: 15px;
+        }
+
+        .inspector-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+            color: var(--light-text-color);
+        }
+
+        .inspector-group input[type="text"],
+        .inspector-group input[type="number"],
+        .inspector-group input[type="color"] {
+            width: 100%;
+            padding: 4px;
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+        }
+
+        .pos-size-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        #no-selection-message {
+            color: var(--light-text-color);
+            text-align: center;
+            margin-top: 50px;
+        }
+
+        /* --- プレゼンテーションモード --- */
+        body.presentation-mode {
+            background-color: #000;
+        }
+
+        .presentation-mode #app-container {
+            display: none;
+        }
+
+        #presentation-view {
+            display: none;
+            /* 通常は非表示 */
+            width: 100vw;
+            height: 100vh;
+            background-color: #000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .presentation-mode #presentation-view {
+            display: flex;
+        }
+
+        #presentation-slide-container {
+            position: relative;
+            background-color: white;
+            overflow: hidden;
+            /* JSでサイズを計算 */
+        }
+    </style>
+    <style>
+    /* --- レスポンシブ強化 --- */
+    @media (max-width: 900px) {
+        #left-pane, #right-pane {
+            width: 120px;
+            min-width: 80px;
+        }
+        #main-pane {
+            padding: 5px;
+        }
+        #slide-wrapper {
+            width: 100%;
+            max-width: 100vw;
+        }
+    }
+    @media (max-width: 600px) {
+        #app-container {
+            flex-direction: column;
+        }
+        main {
+            flex-direction: column;
+            height: auto;
+        }
+        #left-pane, #right-pane {
+            width: 100vw;
+            min-width: 0;
+            max-width: 100vw;
+            border: none;
+            box-shadow: none;
+            flex-direction: row;
+            overflow-x: auto;
+            padding: 0;
+        }
+        #left-pane-header {
+            padding: 5px;
+        }
+        #slide-list {
+            display: flex;
+            flex-direction: row;
+            overflow-x: auto;
+            padding: 5px;
+        }
+        .slide-thumbnail {
+            min-width: 80px;
+            margin-right: 8px;
+            margin-bottom: 0;
+        }
+        #main-pane {
+            padding: 2px;
+        }
+        #slide-wrapper {
+            width: 100vw;
+            max-width: 100vw;
+            aspect-ratio: 16 / 9;
+        }
+        #right-pane {
+            padding: 5px;
+        }
+        #toolbar {
+            flex-wrap: wrap;
+            padding: 4px 2px;
+        }
+        #toolbar button {
+            margin: 2px 4px 2px 0;
+            padding: 4px 8px;
+            font-size: 13px;
+        }
+        .separator {
+            margin: 0 6px;
+        }
+    }
+        /* サムネドラッグ中の見た目 */
+        .slide-thumbnail.dragging {
+            opacity: 0.5;
+        }
+        .slide-thumbnail.drag-over {
+            border: 2px dashed var(--primary-color);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="app-container">
+        <div id="toolbar">
+            <button id="add-slide-btn">＋ スライド追加</button>
+            <button id="delete-slide-btn">ー スライド削除</button>
+            <div class="separator"></div>
+            <button id="add-text-btn">テキスト追加</button>
+            <button id="add-image-btn">画像追加</button>
+            <div class="separator"></div>
+            <button id="save-btn">保存</button>
+            <button id="present-btn">プレゼンテーション開始</button>
+            <button id="export-btn">エクスポート</button>
+            <div id="export-menu" style="display:none;position:absolute;z-index:10000;background:#fff;border:1px solid #ccc;box-shadow:0 2px 8px rgba(0,0,0,0.15);min-width:160px;"></div>
+        </div>
+
+        <main>
+            <div id="left-pane">
+                <div id="left-pane-header">
+                    <h4>スライド一覧</h4>
+                </div>
+                <ul id="slide-list"></ul>
+            </div>
+
+            <div id="main-pane">
+                <div id="slide-wrapper">
+                    <div id="slide-canvas"></div>
+                </div>
+            </div>
+
+            <div id="right-pane">
+                <div id="inspector"></div>
+                <div id="no-selection-message">
+                    <p>要素を選択して編集します</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="presentation-view">
+        <div id="presentation-slide-container"></div>
+    </div>
+
+
+    <!-- html2canvas & jsPDF CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        const App = {
+            state: {
+                presentation: null,
+                activeSlideId: null,
+                selectedElementId: null,
+                isEditingText: false,
+                undoStack: [],
+                redoStack: [],
+                interaction: {
+                    isDragging: false,
+                    isResizing: false,
+                    handle: null,
+                    startX: 0,
+                    startY: 0,
+                    elementStartX: 0,
+                    elementStartY: 0,
+                    elementStartW: 0,
+                    elementStartH: 0,
+                },
+                slideCanvasRect: null,
+            },
+            elements: {},
+
+            init() {
+                this.cacheElements();
+                this.bindEvents();
+                this.loadState();
+                this.render();
+            },
+
+            cacheElements() {
+                this.elements = {
+                    appContainer: document.getElementById('app-container'),
+                    addSlideBtn: document.getElementById('add-slide-btn'),
+                    deleteSlideBtn: document.getElementById('delete-slide-btn'),
+                    addTextBtn: document.getElementById('add-text-btn'),
+                    addImageBtn: document.getElementById('add-image-btn'),
+                    saveBtn: document.getElementById('save-btn'),
+                    presentBtn: document.getElementById('present-btn'),
+                    slideList: document.getElementById('slide-list'),
+                    slideCanvas: document.getElementById('slide-canvas'),
+                    inspector: document.getElementById('inspector'),
+                    noSelectionMessage: document.getElementById('no-selection-message'),
+                    presentationView: document.getElementById('presentation-view'),
+                    presentationSlideContainer: document.getElementById('presentation-slide-container'),
+                };
+            },
+
+            loadState() {
+                const savedData = localStorage.getItem('webSlideMakerData');
+                if (savedData) {
+                    this.state.presentation = JSON.parse(savedData);
+                    this.state.activeSlideId = this.state.presentation.slides[0]?.id || null;
+                } else {
+                    this.createNewPresentation();
+                }
+                this.state.selectedElementId = null;
+            },
+
+            saveState() {
+                // Undo履歴にpush
+                if (!this._skipHistory) {
+                    this.state.undoStack.push(JSON.stringify(this.state.presentation));
+                    // 履歴が多すぎる場合は古いものを削除
+                    if (this.state.undoStack.length > 100) this.state.undoStack.shift();
+                    this.state.redoStack = [];
+                }
+                localStorage.setItem('webSlideMakerData', JSON.stringify(this.state.presentation));
+                this.elements.saveBtn.textContent = '保存済み';
+                setTimeout(() => { this.elements.saveBtn.textContent = '保存'; }, 1500);
+            },
+
+            createNewPresentation() {
+                const firstSlideId = this.generateId('slide');
+                this.state.presentation = {
+                    settings: { width: 1280, height: 720 },
+                    slides: [{
+                        id: firstSlideId,
+                        elements: []
+                    }]
+                };
+                this.state.activeSlideId = firstSlideId;
+            },
+
+            render() {
+                if (!this.state.presentation) return;
+                this.state.slideCanvasRect = this.elements.slideCanvas.getBoundingClientRect();
+                this.renderThumbnails();
+                this.renderSlideCanvas();
+                this.renderInspector();
+            },
+
+            renderThumbnails() {
+                const { slides, settings } = this.state.presentation;
+                this.elements.slideList.innerHTML = '';
+                slides.forEach((slide, index) => {
+                    const li = document.createElement('li');
+                    li.className = `slide-thumbnail ${slide.id === this.state.activeSlideId ? 'active' : ''}`;
+                    li.dataset.id = slide.id;
+
+                    // --- ドラッグ＆ドロップ用属性とイベント ---
+                    li.draggable = true;
+                    li.addEventListener('dragstart', (e) => {
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', slide.id);
+                        li.classList.add('dragging');
+                    });
+                    li.addEventListener('dragend', () => {
+                        li.classList.remove('dragging');
+                    });
+                    li.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        li.classList.add('drag-over');
+                    });
+                    li.addEventListener('dragleave', () => {
+                        li.classList.remove('drag-over');
+                    });
+                    li.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        li.classList.remove('drag-over');
+                        const fromId = e.dataTransfer.getData('text/plain');
+                        const toId = slide.id;
+                        if (fromId && fromId !== toId) {
+                            App.moveSlide(fromId, toId);
+                        }
+                    });
+
+                    // --- 右クリックメニュー追加 ---
+                    li.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        App.showSlideContextMenu(e, slide.id);
+                    });
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'slide-thumbnail-wrapper';
+
+                    const content = document.createElement('div');
+                    content.className = 'slide-thumbnail-content';
+                    content.style.width = `${settings.width}px`;
+                    content.style.height = `${settings.height}px`;
+
+                    slide.elements.forEach(elData => {
+                        const thumbEl = this.createElementDOM(elData);
+                        content.appendChild(thumbEl);
+                    });
+
+                    const indexSpan = document.createElement('span');
+                    indexSpan.className = 'thumbnail-index';
+                    indexSpan.textContent = index + 1;
+
+                    wrapper.appendChild(content);
+                    li.appendChild(indexSpan);
+                    li.appendChild(wrapper);
+                    this.elements.slideList.appendChild(li);
+
+                    const scale = wrapper.offsetWidth / settings.width;
+                    content.style.transform = `scale(${scale})`;
+                });
+            },
+
+            renderSlideCanvas() {
+                const activeSlide = this.getActiveSlide();
+                this.elements.slideCanvas.innerHTML = '';
+                if (!activeSlide) return;
+
+                activeSlide.elements.forEach(elData => {
+                    const el = this.createElementDOM(elData);
+                    el.dataset.id = elData.id;
+
+                    if (elData.id === this.state.selectedElementId) {
+                        el.classList.add('selected');
+                        this.addResizeHandles(el);
+                    }
+
+                    el.setAttribute('contenteditable', 'false');
+                    if (this.state.isEditingText && elData.id === this.state.selectedElementId) {
+                        el.setAttribute('contenteditable', 'true');
+                    }
+
+                    this.elements.slideCanvas.appendChild(el);
+                });
+            },
+
+            createElementDOM(elData) {
+                const el = document.createElement('div');
+                el.className = `slide-element ${elData.type}`;
+                this.applyStyles(el, elData.style);
+
+                if (elData.type === 'text') {
+                    el.innerText = elData.content;
+                } else if (elData.type === 'image') {
+                    // 画像の再リクエスト抑制：既存img要素を再利用
+                    let img = this._imgCache && this._imgCache[elData.id];
+                    if (!img) {
+                        img = document.createElement('img');
+                        img.src = elData.content;
+                        this._imgCache = this._imgCache || {};
+                        this._imgCache[elData.id] = img;
+                    }
+                    el.appendChild(img);
+                }
+                return el;
+            },
+
+            applyStyles(element, styles) {
+                Object.assign(element.style, {
+                    top: `${styles.top}%`,
+                    left: `${styles.left}%`,
+                    width: `${styles.width}%`,
+                    height: styles.height ? `${styles.height}%` : 'auto',
+                    zIndex: styles.zIndex,
+                    transform: `rotate(${styles.rotation}deg)`,
+                    color: styles.color,
+                    fontSize: styles.fontSize ? `${styles.fontSize}px` : null,
+                    fontFamily: styles.fontFamily ? styles.fontFamily : ''
+                });
+            },
+
+            addResizeHandles(element) {
+                ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se'].forEach(handleType => {
+                    const handle = document.createElement('div');
+                    handle.className = `resize-handle ${handleType}`;
+                    handle.dataset.handle = handleType;
+                    element.appendChild(handle);
+                });
+            },
+
+            renderInspector() {
+                const selectedElement = this.getSelectedElement();
+                if (selectedElement) {
+                    this.elements.inspector.style.display = 'block';
+                    this.elements.noSelectionMessage.style.display = 'none';
+
+                    const s = selectedElement.style;
+                    const inspectorHTML = `
+                    <h3>プロパティ</h3>
+                    <div class="inspector-group">
+                        <label>位置 & サイズ</label>
+                        <div class="pos-size-grid">
+                            <div><label>X: <input type="number" data-prop="left" value="${s.left.toFixed(2)}">%</label></div>
+                            <div><label>Y: <input type="number" data-prop="top" value="${s.top.toFixed(2)}">%</label></div>
+                            <div><label>W: <input type="number" data-prop="width" value="${s.width.toFixed(2)}">%</label></div>
+                            <div><label>H: <input type="number" data-prop="height" value="${(s.height || 0).toFixed(2)}">%</label></div>
+                        </div>
+                    </div>
+                    <div class="inspector-group">
+                        <label>回転</label>
+                        <input type="number" data-prop="rotation" value="${s.rotation}" step="1">
+                    </div>
+                    <div class="inspector-group">
+                        <label>重ね順 (Z-Index)</label>
+                        <input type="number" data-prop="zIndex" value="${s.zIndex}">
+                    </div>
+                    ${selectedElement.type === 'text' ? `
+                    <div class="inspector-group">
+                        <label>フォントサイズ (px)</label>
+                        <input type="number" data-prop="fontSize" value="${s.fontSize}">
+                    </div>
+                    <div class="inspector-group">
+                        <label>フォント</label>
+                        <select data-prop="fontFamily">
+                            <option value="">デフォルト</option>
+                            <option value="serif" ${s.fontFamily === 'serif' ? 'selected' : ''}>Serif</option>
+                            <option value="sans-serif" ${s.fontFamily === 'sans-serif' ? 'selected' : ''}>Sans-serif</option>
+                            <option value="monospace" ${s.fontFamily === 'monospace' ? 'selected' : ''}>Monospace</option>
+                            <option value="游ゴシック体,YuGothic,'Yu Gothic',sans-serif" ${s.fontFamily === "游ゴシック体,YuGothic,'Yu Gothic',sans-serif" ? 'selected' : ''}>游ゴシック</option>
+                            <option value="メイリオ,Meiryo,sans-serif" ${s.fontFamily === "メイリオ,Meiryo,sans-serif" ? 'selected' : ''}>メイリオ</option>
+                            <option value="Arial,Helvetica,sans-serif" ${s.fontFamily === "Arial,Helvetica,sans-serif" ? 'selected' : ''}>Arial</option>
+                            <option value="Times New Roman,Times,serif" ${s.fontFamily === "Times New Roman,Times,serif" ? 'selected' : ''}>Times New Roman</option>
+                        </select>
+                    </div>
+                    <div class="inspector-group">
+                        <label>文字色</label>
+                        <input type="color" data-prop="color" value="${s.color}">
+                    </div>
+                    ` : ''}
+                `;
+                    // 削除ボタン追加
+                    this.elements.inspector.innerHTML = inspectorHTML + `
+                        <div class="inspector-group">
+                            <button id="delete-element-btn" style="color:#fff;background:#e74c3c;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;">要素を削除</button>
+                        </div>
+                    `;
+                    // ボタンイベント
+                    const delBtn = document.getElementById('delete-element-btn');
+                    if (delBtn) {
+                        delBtn.onclick = () => {
+                            if (confirm('この要素を削除しますか？')) this.deleteSelectedElement();
+                        };
+                    }
+                } else {
+                    this.elements.inspector.style.display = 'none';
+                    this.elements.noSelectionMessage.style.display = 'block';
+                }
+            },
+
+            bindEvents() {
+                this.elements.addSlideBtn.addEventListener('click', () => this.addSlide());
+                this.elements.deleteSlideBtn.addEventListener('click', () => this.deleteSlide());
+                this.elements.addTextBtn.addEventListener('click', () => this.addElement('text'));
+                this.elements.addImageBtn.addEventListener('click', () => this.addElement('image'));
+                this.elements.saveBtn.addEventListener('click', () => this.saveState());
+                this.elements.presentBtn.addEventListener('click', () => this.startPresentation());
+                this.elements.exportBtn = document.getElementById('export-btn');
+                this.elements.exportMenu = document.getElementById('export-menu');
+                this.elements.exportBtn.addEventListener('click', (e) => this.showExportMenu(e));
+
+                this.elements.slideList.addEventListener('click', e => this.handleThumbnailClick(e));
+                this.elements.slideCanvas.addEventListener('mousedown', e => this.handleCanvasMouseDown(e));
+                this.elements.slideCanvas.addEventListener('dblclick', e => this.handleCanvasDblClick(e));
+                this.elements.slideCanvas.addEventListener('blur', e => this.handleElementBlur(e), true);
+                this.elements.inspector.addEventListener('input', e => this.handleInspectorInput(e));
+                // 右クリックで要素削除
+                this.elements.slideCanvas.addEventListener('contextmenu', e => {
+                    const element = e.target.closest('.slide-element');
+                    // テキスト編集中は右クリック削除を無効化
+                    if (element && element.dataset.id && !(element.getAttribute('contenteditable') === 'true')) {
+                        e.preventDefault();
+                        this.showElementContextMenu(e, element.dataset.id);
+                    }
+                });
+
+                window.addEventListener('mousemove', e => this.handleMouseMove(e));
+                window.addEventListener('mouseup', e => this.handleMouseUp(e));
+                window.addEventListener('keydown', e => this.handleKeyDown(e));
+                window.addEventListener('resize', () => this.render());
+                document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) this.stopPresentation(); });
+            },
+
+            addSlide() {
+                const newSlideId = this.generateId('slide');
+                const newSlide = { id: newSlideId, elements: [] };
+                const activeIndex = this.state.presentation.slides.findIndex(s => s.id === this.state.activeSlideId);
+                this.state.presentation.slides.splice(activeIndex + 1, 0, newSlide);
+                this.state.activeSlideId = newSlideId;
+                this.setSelectedElement(null);
+                this.render();
+                this.saveState();
+            },
+            deleteSlide() { /* 省略 (変更なし) */ },
+            addElement(type) {
+                const activeSlide = this.getActiveSlide();
+                if (!activeSlide) return;
+
+                const newElement = {
+                    id: this.generateId('el'),
+                    type: type,
+                    style: {
+                        top: 20, left: 20, width: 30, height: null,
+                        zIndex: activeSlide.elements.length + 1,
+                        rotation: 0,
+                    }
+                };
+
+                if (type === 'text') {
+                    newElement.content = '新しいテキスト';
+                    newElement.style.height = null; // auto height
+                    newElement.style.color = '#333333';
+                    newElement.style.fontSize = 24;
+                    newElement.style.fontFamily = '';
+                } else if (type === 'image') {
+                    const url = prompt('画像のURLを入力してください:', 'https://via.placeholder.com/400x300');
+                    if (!url) return;
+                    newElement.content = url;
+                    newElement.style.height = 30;
+                }
+
+                activeSlide.elements.push(newElement);
+                this.setSelectedElement(newElement.id, type === 'text');
+                this.render();
+
+                // --- 修正点 1: 新規テキストを即時編集可能にする ---
+                // テキスト要素を追加した場合、その要素にフォーカスを当ててすぐに編集を開始できるようにします。
+                if (type === 'text') {
+                    const newElDom = this.elements.slideCanvas.querySelector(`[data-id="${newElement.id}"]`);
+                    if (newElDom) {
+                        newElDom.focus();
+                        // ユーザーの利便性のために、テキスト全体を選択状態にします。
+                        document.execCommand('selectAll', false, null);
+                    }
+                }
+                this.saveState();
+            },
+            handleThumbnailClick(e) {
+                const thumbnail = e.target.closest('.slide-thumbnail');
+                if (thumbnail) {
+                    this.state.activeSlideId = thumbnail.dataset.id;
+                    this.setSelectedElement(null);
+                    this.render();
+                }
+            },
+            handleCanvasMouseDown(e) {
+                // ダブルクリック時はmousedownの処理をスキップ
+                if (e.detail === 2) return;
+                this.state.slideCanvasRect = this.elements.slideCanvas.getBoundingClientRect();
+                const target = e.target;
+                const element = e.target.closest('.slide-element');
+
+                if (this.state.isEditingText && element && element.dataset.id === this.state.selectedElementId) {
+                    // テキスト編集中に同じ要素をクリックした場合は何もしない
+                    return;
+                }
+
+                // 編集中のテキスト要素の外側をクリックしたら編集を終了する
+                if (this.state.isEditingText) {
+                    const currentlyEditing = this.elements.slideCanvas.querySelector('[contenteditable="true"]');
+                    if (currentlyEditing) currentlyEditing.blur(); // blurイベントを発火させて保存処理を動かす
+                }
+
+
+                if (target.classList.contains('resize-handle')) {
+                    e.preventDefault();
+                    this.setSelectedElement(element.dataset.id);
+                    this.state.interaction.isResizing = true;
+                    this.state.interaction.handle = target.dataset.handle;
+                    this.startInteraction(e, this.getSelectedElement());
+
+                } else if (element) {
+                    e.preventDefault();
+                    // テキスト要素なら編集モードに
+                    if (element.classList.contains('text')) {
+                        this.setSelectedElement(element.dataset.id);
+                        this.state.interaction.isDragging = true;
+                        this.startInteraction(e, this.getSelectedElement());
+                    } else {
+                        this.setSelectedElement(element.dataset.id);
+                        this.state.interaction.isDragging = true;
+                        this.startInteraction(e, this.getSelectedElement());
+                    }
+                } else {
+                    this.setSelectedElement(null);
+                }
+                this.render();
+            },
+            handleCanvasDblClick(e) {
+                const element = e.target.closest('.slide-element.text');
+                if (element) {
+                    this.setSelectedElement(element.dataset.id, true);
+                    this.render(); // contenteditable=trueを適用するために再描画
+                    // 再描画後に要素を再取得してフォーカスする
+                    const editableElement = this.elements.slideCanvas.querySelector(`[data-id="${element.dataset.id}"]`);
+                    if (editableElement) editableElement.focus();
+                }
+            },
+            handleElementBlur(e) {
+                if (this.state.isEditingText && e.target.classList.contains('slide-element')) {
+                    const elementData = this.getSelectedElement();
+                    if (elementData) {
+                        elementData.content = e.target.innerText;
+                        this.setSelectedElement(this.state.selectedElementId, false);
+                        this.saveState();
+                        this.render(); // blur後も選択状態を維持するために再描画
+                    }
+                }
+            },
+            startInteraction(e, elData) { /* 省略 (変更なし) */ },
+            handleMouseMove(e) { /* 省略 (変更なし) */ },
+            performResize(dx, dy) { /* 省略 (変更なし) */ },
+            handleMouseUp() { /* 省略 (変更なし) */ },
+            handleInspectorInput(e) { /* 省略 (変更なし) */ },
+            handleKeyDown(e) {
+                if (document.body.classList.contains('presentation-mode')) {
+                    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') this.changePresentationSlide(1);
+                    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') this.changePresentationSlide(-1);
+                    else if (e.key === 'Escape') this.stopPresentation();
+                } else {
+                    if (this.state.isEditingText) return; // テキスト編集中はショートカット無効
+                    if (e.key === 'Delete' || e.key === 'Backspace') {
+                        if (this.state.selectedElementId) {
+                            if (confirm('選択中の要素を削除しますか？')) this.deleteSelectedElement();
+                        }
+                    }
+                }
+            },
+            deleteSelectedElement() { /* 省略 (変更なし) */ },
+            startPresentation() { /* 省略 (変更なし) */ },
+            stopPresentation() { /* 省略 (変更なし) */ },
+            renderPresentationSlide() {
+                const slide = this.getActiveSlide();
+                if (!slide) return;
+                const { presentationSlideContainer } = this.elements;
+                const { settings } = this.state.presentation;
+                presentationSlideContainer.innerHTML = '';
+
+                const presW = this.elements.presentationView.clientWidth, presH = this.elements.presentationView.clientHeight;
+                const presRatio = presW / presH, slideRatio = settings.width / settings.height;
+
+                let sW = (presRatio > slideRatio) ? presH * slideRatio : presW;
+                let scale = sW / settings.width;
+                presentationSlideContainer.style.width = `${settings.width}px`;
+                presentationSlideContainer.style.height = `${settings.height}px`;
+
+                // 中央配置をよりシンプルに
+                presentationSlideContainer.style.transform = `translate(-50%, -50%) scale(${scale})`;
+                presentationSlideContainer.style.position = 'absolute';
+                presentationSlideContainer.style.left = '50%';
+                presentationSlideContainer.style.top = '50%';
+                presentationSlideContainer.style.transformOrigin = 'center center';
+
+
+                slide.elements.forEach(elData => {
+                    const el = this.createElementDOM(elData);
+                    presentationSlideContainer.appendChild(el);
+                });
+            },
+            changePresentationSlide(direction) { /* 省略 (変更なし) */ },
+
+            // --- ユーティリティ & 状態セッター ---
+            setSelectedElement(id, isEditing = false) {
+                this.state.selectedElementId = id;
+                this.state.isEditingText = isEditing;
+                if (id === null) {
+                    this.state.isEditingText = false;
+                }
+            },
+            generateId(prefix) { return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`; },
+            getActiveSlide() { return this.state.presentation.slides.find(s => s.id === this.state.activeSlideId); },
+            getSelectedElement() {
+                const activeSlide = this.getActiveSlide();
+                return activeSlide ? activeSlide.elements.find(el => el.id === this.state.selectedElementId) : null;
+            },
+            // --- 変更がなかった関数をここに集約 ---
+            deleteSlide() {
+                if (this.state.presentation.slides.length <= 1) return alert('最後のスライドは削除できません。');
+                if (!confirm('現在のスライドを削除しますか？')) return;
+                const activeIndex = this.state.presentation.slides.findIndex(s => s.id === this.state.activeSlideId);
+                this.state.presentation.slides.splice(activeIndex, 1);
+                this.state.activeSlideId = this.state.presentation.slides[Math.max(0, activeIndex - 1)]?.id;
+                this.setSelectedElement(null);
+                this.render(); this.saveState();
+            },
+            startInteraction(e, elData) {
+                Object.assign(this.state.interaction, {
+                    startX: e.clientX, startY: e.clientY,
+                    elementStartX: elData.style.left, elementStartY: elData.style.top,
+                    elementStartW: elData.style.width, elementStartH: elData.style.height || 0
+                });
+            },
+            handleMouseMove(e) {
+                if (!this.state.interaction.isDragging && !this.state.interaction.isResizing) return;
+                e.preventDefault();
+                const dx = (e.clientX - this.state.interaction.startX) / this.state.slideCanvasRect.width * 100;
+                const dy = (e.clientY - this.state.interaction.startY) / this.state.slideCanvasRect.height * 100;
+                const elStyle = this.getSelectedElement().style;
+                if (this.state.interaction.isDragging) {
+                    elStyle.left = this.state.interaction.elementStartX + dx;
+                    elStyle.top = this.state.interaction.elementStartY + dy;
+                } else if (this.state.interaction.isResizing) this.performResize(dx, dy);
+                this.render();
+            },
+            performResize(dx, dy) {
+                const { handle, elementStartX, elementStartY, elementStartW, elementStartH } = this.state.interaction;
+                const elStyle = this.getSelectedElement().style;
+                if (handle.includes('e')) elStyle.width = Math.max(2, elementStartW + dx);
+                if (handle.includes('w')) { elStyle.width = Math.max(2, elementStartW - dx); elStyle.left = elementStartX + dx; }
+                if (handle.includes('s')) elStyle.height = Math.max(2, elementStartH + dy);
+                if (handle.includes('n')) { elStyle.height = Math.max(2, elementStartH - dy); elStyle.top = elementStartY + dy; }
+            },
+            handleMouseUp() {
+                if (this.state.interaction.isDragging || this.state.interaction.isResizing) this.saveState();
+                this.state.interaction.isDragging = false;
+                this.state.interaction.isResizing = false;
+            },
+            handleInspectorInput(e) {
+                const el = this.getSelectedElement(); if (!el) return;
+                const prop = e.target.dataset.prop;
+                const value = e.target.type === 'color' ? e.target.value : parseFloat(e.target.value);
+                if (prop && el.style[prop] !== undefined) {
+                    el.style[prop] = (prop === 'fontFamily') ? e.target.value : value;
+                }
+                this.render(); this.saveState();
+            },
+            deleteSelectedElement() {
+                const slide = this.getActiveSlide(); if (!slide || !this.state.selectedElementId) return;
+                slide.elements = slide.elements.filter(el => el.id !== this.state.selectedElementId);
+                this.setSelectedElement(null);
+                this.render(); this.saveState();
+            },
+            startPresentation() {
+                document.body.classList.add('presentation-mode');
+                this.renderPresentationSlide(); // 先に描画
+                this.elements.presentationView.requestFullscreen().catch(err => {
+                    console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+                    alert('フルスクリーンモードの開始に失敗しました。');
+                    this.stopPresentation();
+                });
+                window.addEventListener('resize', this.renderPresentationSlide.bind(this)); // プレゼン中のリサイズ対応
+            },
+            stopPresentation() {
+                document.body.classList.remove('presentation-mode');
+                if (document.fullscreenElement) document.exitFullscreen();
+                window.removeEventListener('resize', this.renderPresentationSlide.bind(this));
+            },
+            changePresentationSlide(direction) {
+                const { slides } = this.state.presentation;
+                const currentIndex = slides.findIndex(s => s.id === this.state.activeSlideId);
+                let nextIndex = currentIndex + direction;
+                if (nextIndex >= 0 && nextIndex < slides.length) {
+                    this.state.activeSlideId = slides[nextIndex].id;
+                    this.renderPresentationSlide();
+                }
+            },
+        };
+
+        // --- エクスポートメニュー表示 ---
+        App.showExportMenu = function(e) {
+            const menu = this.elements.exportMenu;
+            menu.innerHTML = `
+                <div style="padding:8px;cursor:pointer;" id="export-png-btn">このスライドをPNG保存</div>
+                <div style="padding:8px;cursor:pointer;" id="export-pdf-btn">このスライドをPDF保存</div>
+            `;
+            menu.style.display = 'block';
+            const rect = this.elements.exportBtn.getBoundingClientRect();
+            menu.style.left = rect.left + 'px';
+            menu.style.top = (rect.bottom + 5) + 'px';
+            document.getElementById('export-png-btn').onclick = () => {
+                this.exportCurrentSlideAsImage();
+                menu.style.display = 'none';
+            };
+            document.getElementById('export-pdf-btn').onclick = () => {
+                this.exportCurrentSlideAsPDF();
+                menu.style.display = 'none';
+            };
+            setTimeout(() => {
+                document.addEventListener('mousedown', function handler(ev) {
+                    if (!menu.contains(ev.target) && ev.target !== App.elements.exportBtn) {
+                        menu.style.display = 'none';
+                        document.removeEventListener('mousedown', handler);
+                    }
+                });
+            }, 10);
+        };
+
+        // --- PNGエクスポート ---
+        App.exportCurrentSlideAsImage = function() {
+            const node = this.elements.slideCanvas;
+            html2canvas(node, { backgroundColor: "#fff" }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'slide.png';
+                link.href = canvas.toDataURL();
+                link.click();
+            });
+        };
+
+        // --- PDFエクスポート ---
+        App.exportCurrentSlideAsPDF = function() {
+            const node = this.elements.slideCanvas;
+            html2canvas(node, { backgroundColor: "#fff" }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new window.jspdf.jsPDF({
+                    orientation: 'landscape',
+                    unit: 'px',
+                    format: [canvas.width, canvas.height]
+                });
+                pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+                pdf.save('slide.pdf');
+            });
+        };
+
+        // --- スライド順入れ替え用メソッド ---
+        App.moveSlide = function(fromId, toId) {
+            const slides = this.state.presentation.slides;
+            const fromIdx = slides.findIndex(s => s.id === fromId);
+            const toIdx = slides.findIndex(s => s.id === toId);
+            if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+            const [moved] = slides.splice(fromIdx, 1);
+            slides.splice(toIdx, 0, moved);
+            this.render();
+            this.saveState();
+        };
+
+        // --- スライド複製処理 ---
+        App.duplicateSlide = function(slideId) {
+            const slides = this.state.presentation.slides;
+            const idx = slides.findIndex(s => s.id === slideId);
+            if (idx === -1) return;
+            // deep copy
+            const newSlide = JSON.parse(JSON.stringify(slides[idx]));
+            newSlide.id = this.generateId('slide');
+            // 各要素のIDも新規発行
+            newSlide.elements = newSlide.elements.map(el => ({ ...el, id: this.generateId('el') }));
+            slides.splice(idx + 1, 0, newSlide);
+            this.state.activeSlideId = newSlide.id;
+            this.setSelectedElement(null);
+            this.render();
+            this.saveState();
+        };
+
+        // --- サムネイル右クリックメニュー表示 ---
+        App.showSlideContextMenu = function(e, slideId) {
+            // 既存メニュー削除
+            const oldMenu = document.getElementById('slide-context-menu');
+            if (oldMenu) oldMenu.remove();
+            // メニュー作成
+            const menu = document.createElement('div');
+            menu.id = 'slide-context-menu';
+            menu.style.position = 'fixed';
+            menu.style.zIndex = 99999;
+            menu.style.left = e.clientX + 'px';
+            menu.style.top = e.clientY + 'px';
+            menu.style.background = '#fff';
+            menu.style.border = '1px solid #ccc';
+            menu.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+            menu.style.padding = '0';
+            menu.style.minWidth = '120px';
+            menu.innerHTML = `
+                <div style="padding:8px;cursor:pointer;" id="slide-duplicate-btn">複製</div>
+                <div style="padding:8px;cursor:pointer;" id="slide-delete-btn">削除</div>
+            `;
+            document.body.appendChild(menu);
+            // イベント
+            document.getElementById('slide-duplicate-btn').onclick = () => {
+                this.duplicateSlide(slideId);
+                menu.remove();
+            };
+            document.getElementById('slide-delete-btn').onclick = () => {
+                this.state.activeSlideId = slideId;
+                this.deleteSlide();
+                menu.remove();
+            };
+            // 外クリックで閉じる
+            setTimeout(() => {
+                document.addEventListener('mousedown', function handler(ev) {
+                    if (!menu.contains(ev.target)) {
+                        menu.remove();
+                        document.removeEventListener('mousedown', handler);
+                    }
+                });
+            }, 10);
+        };
+
+        // --- 要素右クリックメニュー ---
+        App.showElementContextMenu = function(e, elId) {
+            const oldMenu = document.getElementById('element-context-menu');
+            if (oldMenu) oldMenu.remove();
+            const menu = document.createElement('div');
+            menu.id = 'element-context-menu';
+            menu.style.position = 'fixed';
+            menu.style.zIndex = 99999;
+            menu.style.left = e.clientX + 'px';
+            menu.style.top = e.clientY + 'px';
+            menu.style.background = '#fff';
+            menu.style.border = '1px solid #ccc';
+            menu.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+            menu.style.padding = '0';
+            menu.style.minWidth = '120px';
+            menu.innerHTML = `
+                <div style="padding:8px;cursor:pointer;" id="el-copy-btn">コピー</div>
+                <div style="padding:8px;cursor:pointer;" id="el-delete-btn">削除</div>
+            `;
+            document.body.appendChild(menu);
+            document.getElementById('el-copy-btn').onclick = () => {
+                App.copyElement(elId);
+                menu.remove();
+            };
+            document.getElementById('el-delete-btn').onclick = () => {
+                App.state.selectedElementId = elId;
+                App.deleteSelectedElement();
+                menu.remove();
+            };
+            setTimeout(() => {
+                document.addEventListener('mousedown', function handler(ev) {
+                    if (!menu.contains(ev.target)) {
+                        menu.remove();
+                        document.removeEventListener('mousedown', handler);
+                    }
+                });
+            }, 10);
+        };
+        // --- 要素コピー ---
+        App.copyElement = function(elId) {
+            const slide = this.getActiveSlide();
+            if (!slide) return;
+            const idx = slide.elements.findIndex(el => el.id === elId);
+            if (idx === -1) return;
+            const newEl = JSON.parse(JSON.stringify(slide.elements[idx]));
+            newEl.id = this.generateId('el');
+            // 少しずらして貼り付け
+            if (typeof newEl.style.left === 'number') newEl.style.left += 5;
+            if (typeof newEl.style.top === 'number') newEl.style.top += 5;
+            slide.elements.splice(idx + 1, 0, newEl);
+            this.setSelectedElement(newEl.id);
+            this.render();
+            this.saveState();
+        };
+
+        document.addEventListener('DOMContentLoaded', () => App.init());
+    </script>
+</body>
+
+</html>

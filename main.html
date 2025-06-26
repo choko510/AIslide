@@ -2161,13 +2161,11 @@ createElementDOM(elData) {
                 if (type === 'text') setTimeout(() => this.handleCanvasDblClick({ target: this.elements.slideCanvas.querySelector(`[data-id="${newEl.id}"]`) }), 50);
             },
             addChart() {
-                console.log("addChart called. Micromodal:", Micromodal); // Debug
                 // Micromodalでグラフ作成モーダルを表示
                 if (typeof Micromodal !== "undefined") {
                     Micromodal.show('chart-modal');
-                    console.log("Micromodal.show('chart-modal') called."); // Debug
                 } else {
-                    console.error("Micromodal is undefined."); // Debug
+                    console.error("Micromodal is undefined.");
                 }
             },
 

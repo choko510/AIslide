@@ -115,37 +115,109 @@
             background-color: var(--bg-light);
         }
 
-        /* --- メインレイアウト --- */
-        main {
+        /* --- メインレイアウト (New) --- */
+        #app-body { /* Replaces main */
             display: flex;
             flex-grow: 1;
             overflow: hidden;
         }
 
-        /* --- 左ペイン (スライド一覧) --- */
-        #left-pane {
-            width: 220px;
+        /* --- 左サイドバー (New) --- */
+        #left-sidebar {
+            width: 280px; /* Canva-like width */
             background-color: var(--bg-white);
             border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             transition: width 0.2s ease;
-        }
-
-        #left-pane-header {
-            padding: 16px;
-            font-size: 16px;
-            font-weight: 600;
             flex-shrink: 0;
-            border-bottom: 1px solid var(--border-color);
         }
 
-        #slide-list {
-            list-style: none;
-            padding: 16px;
+        #sidebar-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .sidebar-tab-button {
+            flex: 1;
+            padding: 12px 8px; /* Adjusted padding */
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent; /* For active indicator */
+            cursor: pointer;
+            text-align: center;
+            font-size: 13px; /* Slightly smaller font */
+            color: var(--text-secondary);
+            transition: var(--transition);
+        }
+
+        .sidebar-tab-button:hover {
+            background-color: var(--bg-light);
+            color: var(--text-primary);
+        }
+
+        .sidebar-tab-button.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+            font-weight: 600; /* Bolder active tab */
+        }
+
+        #sidebar-content {
             overflow-y: auto;
             flex-grow: 1;
+            padding: 0; /* Remove padding, individual tabs will handle it */
         }
+
+        .sidebar-tab-content {
+            display: none;
+            padding: 16px; /* Padding for content inside tabs */
+        }
+
+        .sidebar-tab-content.active {
+            display: block;
+        }
+
+        /* スライド一覧のスタイル (旧 #left-pane の一部を適用) */
+        #slide-list {
+            list-style: none;
+            padding: 0; /* Adjusted from 16px to 0 as tab content has padding */
+            /* overflow-y: auto; /* sidebar-content handles scrolling */
+            /* flex-grow: 1; */
+        }
+
+        .sidebar-add-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center; /* Center content if text is short */
+            gap: 8px;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-white);
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 13px;
+            color: var(--text-primary);
+            text-align: left;
+        }
+        .sidebar-add-btn:hover {
+            background-color: var(--bg-light);
+            border-color: var(--primary-color-hover);
+        }
+        .sidebar-add-btn i {
+            color: var(--primary-color);
+        }
+
+
+        /* #left-pane-header is now inside a tab, style accordingly */
+        #left-pane-header { /* This ID is still used for the "スライド一覧" title */
+            padding-bottom: 10px;
+            font-size: 16px; /* Keep font size */
+            font-weight: 600; /* Keep font weight */
+            /* border-bottom: 1px solid var(--border-color); Removed, as tabs have border */
+        }
+
 
         .slide-thumbnail {
             cursor: pointer;
@@ -212,8 +284,8 @@
             background: var(--primary-color);
         }
 
-        /* --- 中央ペイン (キャンバス) --- */
-        #main-pane {
+        /* --- 中央キャンバスエリア (New, 旧 #main-pane) --- */
+        #main-canvas-area { /* Replaces #main-pane */
             flex-grow: 1;
             display: flex;
             justify-content: center;
@@ -222,12 +294,14 @@
             overflow: auto;
             min-width: 0;
             min-height: 0;
+            background-color: var(--bg-light); /* Added for contrast if needed */
         }
 
         #slide-wrapper {
             position: relative;
-            width: 100vw;
-            max-width: 90vw;
+            /* width: 100vw; /* This might be too large, let's rely on aspect ratio and max-width */
+            max-width: 90vw; /* Keep this for very wide screens */
+            width: 100%; /* Try to fill the container */
             aspect-ratio: 16 / 9;
             box-shadow: var(--shadow-md);
             background-color: var(--bg-white);
@@ -239,14 +313,14 @@
         }
 
         #slide-canvas {
-            width: 1280px;
-            height: 720px;
-            max-width: 100%;
-            max-height: 100%;
+            width: 1280px; /* Base resolution */
+            height: 720px; /* Base resolution */
+            max-width: 100%; /* Scale down within wrapper */
+            max-height: 100%; /* Scale down within wrapper */
             aspect-ratio: 16 / 9;
             position: relative;
             overflow: hidden;
-            background: transparent;
+            background: transparent; /* Canvas itself is transparent */
         }
 
         /* --- スライド要素 --- */
@@ -383,19 +457,16 @@
             cursor: nwse-resize;
         }
 
-        /* --- 右ペイン (インスペクター) --- */
-        #right-pane {
-            width: 280px;
-            background-color: var(--bg-white);
-            border-left: 1px solid var(--border-color);
-            padding: 16px;
-            overflow-y: auto;
-            transition: width 0.2s ease;
+        /* --- インスペクター (Now inside left-sidebar) --- */
+        /* #right-pane styles are largely deprecated or moved to #left-sidebar */
+
+        #inspector { /* Container for inspector items, now inside a tab */
+          /* padding: 16px; /* This is now handled by .sidebar-tab-content */
         }
 
         #inspector h3 {
             margin-top: 0;
-            margin-bottom: 24px;
+            margin-bottom: 24px; /* Keep spacing for titles within inspector */
             font-size: 16px;
             font-weight: 600;
         }
@@ -442,10 +513,10 @@
             gap: 10px;
         }
 
-        #no-selection-message {
+        #no-selection-message { /* Still relevant, but now inside a tab */
             color: var(--text-secondary);
             text-align: center;
-            margin-top: 50px;
+            margin-top: 50px; /* Or adjust based on tab layout */
             padding: 20px;
         }
 
@@ -532,34 +603,14 @@
             fill: currentColor;
         }
 
-        /* タブのスタイル */
-        .right-pane-tabs {
-            display: flex;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .tab-button {
-            flex: 1;
-            padding: 10px;
-            background: none;
-            border: none;
-            cursor: pointer;
-            text-align: center;
-        }
-
-        .tab-button.active {
-            border-bottom: 2px solid var(--primary-color);
-            font-weight: bold;
-        }
-
-        .tab-content {
-            display: none;
-            padding: 16px;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
+        /* 旧タブのスタイル ( .right-pane-tabs, .tab-button, .tab-content ) は削除または .sidebar-tab-button / .sidebar-tab-content に置き換え */
+        /*
+        .right-pane-tabs { ... }
+        .tab-button { ... }
+        .tab-button.active { ... }
+        .tab-content { ... }
+        .tab-content.active { ... }
+        */
         
         .user-msg {
             color: #007bff;
@@ -608,12 +659,9 @@
 
         /* --- レスポンシブデザイン --- */
         @media (max-width: 1024px) {
-            #left-pane {
-                width: 180px;
-            }
-
-            #right-pane {
-                width: 240px;
+            /* Adjust for new layout if necessary */
+            #left-sidebar {
+                width: 240px; /* Slightly narrower sidebar for smaller screens */
             }
         }
 
@@ -628,67 +676,69 @@
                 min-height: 100vh;
             }
 
-            main {
+            #app-body { /* main was flex-direction: column */
                 flex-direction: column;
                 height: auto;
                 flex-grow: 1;
             }
 
-            #left-pane,
-            #right-pane {
+            #left-sidebar { /* Was #left-pane and #right-pane */
                 width: 100%;
                 border: none;
                 box-shadow: none;
-            }
-
-            #left-pane {
-                order: 2;
+                order: 2; /* Sidebar content (like slides, elements) can come after canvas */
                 border-top: 1px solid var(--border-color);
-                height: 150px;
-                padding: 0;
+                /* height: auto; /* Let content define height */
+                /* padding: 0; /* sidebar-content handles padding */
             }
 
-            #left-pane-header {
-                display: none;
+            #sidebar-tabs {
+                /* Potentially make tabs scrollable horizontally if too many */
+                overflow-x: auto;
+            }
+            .sidebar-tab-button {
+                font-size: 12px; /* Smaller tabs on mobile */
+                padding: 10px 6px;
             }
 
-            #slide-list {
+
+            /* #left-pane-header was display:none, but now it's part of a tab. */
+            /* It should be visible if its tab is active. */
+
+            #slide-list { /* Copied from old #slide-list for mobile */
                 display: flex;
                 flex-direction: row;
                 overflow-x: auto;
-                padding: 12px;
+                padding: 12px; /* Keep padding for horizontal scroll items */
                 align-items: center;
             }
 
-            .slide-thumbnail {
+            .slide-thumbnail { /* Copied from old .slide-thumbnail for mobile */
                 flex-shrink: 0;
                 width: 120px;
                 margin-right: 12px;
                 margin-bottom: 0;
             }
 
-            #main-pane {
+            #main-canvas-area { /* Was #main-pane */
                 padding: 12px;
-                order: 1;
+                order: 1; /* Canvas comes first on mobile */
             }
 
             #slide-wrapper {
-                max-width: 100vw;
-                width: 100vw;
-                aspect-ratio: 16 / 9;
+                max-width: 100vw; /* Full width on mobile */
+                width: 100%; /* Ensure it takes full width */
+                /* aspect-ratio: 16 / 9; /* This should be fine */
             }
             #slide-canvas {
-                width: 1280px;
-                height: 720px;
+                /* width: 1280px; These are base, scaling should handle it */
+                /* height: 720px; */
                 max-width: 100%;
                 max-height: 100%;
-                aspect-ratio: 16 / 9;
+                /* aspect-ratio: 16 / 9; */
             }
 
-            #right-pane {
-                order: 3;
-                border-top: 1px solid var(--border-color);
-            }
+            /* #right-pane specific styles are removed or adapted */
 
             #toolbar {
                 flex-wrap: wrap;
@@ -699,12 +749,47 @@
                 margin-bottom: 4px;
             }
 
-            #toolbar button span {
+            #toolbar button span { /* Hides text on mobile */
                 display: none;
             }
 
             #toolbar .separator {
                 margin: 0 8px;
+            }
+        }
+
+        /* Targeting landscape on smaller devices */
+        @media (max-width: 768px) and (orientation: landscape) {
+            #toolbar {
+                padding: 4px 8px; /* Reduce padding */
+                flex-wrap: nowrap; /* Try to keep toolbar items in one line if possible */
+                overflow-x: auto; /* Allow horizontal scroll if they don't fit */
+            }
+            #toolbar button {
+                padding: 4px 6px; /* Smaller buttons */
+                gap: 4px;
+            }
+            #toolbar button i {
+                font-size: 14px; /* Slightly smaller icons */
+            }
+            #toolbar .separator {
+                margin: 0 4px;
+                height: 20px;
+            }
+
+            #left-sidebar {
+                width: 200px; /* Narrower sidebar in landscape mobile */
+            }
+            .sidebar-tab-button {
+                font-size: 11px; /* Even smaller tab text */
+                padding: 8px 4px;
+            }
+             #slide-list { /* Ensure slide list items are small enough */
+                padding: 8px;
+            }
+            .slide-thumbnail {
+                width: 100px;
+                margin-right: 8px;
             }
         }
     </style>
@@ -718,12 +803,7 @@
             <button id="add-slide-btn" title="スライド追加"><i class="fas fa-plus"></i><span>スライド追加</span></button>
             <button id="delete-slide-btn" title="スライド削除"><i class="fas fa-trash-alt"></i><span>スライド削除</span></button>
             <div class="separator"></div>
-            <button id="add-text-btn" title="テキスト追加"><i class="fas fa-font"></i><span>テキスト</span></button>
-            <button id="add-image-btn" title="画像追加"><i class="fas fa-image"></i><span>画像</span></button>
-            <button id="add-video-btn" title="動画追加"><i class="fas fa-video"></i><span>動画</span></button>
-            <button id="add-table-btn" title="表追加"><i class="fas fa-table"></i><span>表</span></button>
-            <button id="add-chart-btn" title="グラフ追加"><i class="fas fa-chart-bar"></i><span>グラフ</span></button>
-            <div class="separator"></div>
+            <!-- Element add buttons moved to sidebar -->
             <div class="separator"></div>
             <!-- アラインメントボタングループ -->
             <div class="btn-group">
@@ -745,33 +825,59 @@
             </div>
         </div>
 
-        <main>
-            <aside id="left-pane">
-                <div id="left-pane-header"><span>スライド一覧</span></div>
-                <ul id="slide-list"></ul>
+        <div id="app-body" style="display: flex; flex-grow: 1; overflow: hidden;">
+            <aside id="left-sidebar" style="width: 280px; background-color: var(--bg-white); border-right: 1px solid var(--border-color); display: flex; flex-direction: column;">
+                <div id="sidebar-tabs" style="display: flex; border-bottom: 1px solid var(--border-color); flex-shrink: 0;">
+                    <button class="sidebar-tab-button active" data-tab="slides">スライド</button>
+                    <button class="sidebar-tab-button" data-tab="elements">素材</button>
+                    <button class="sidebar-tab-button" data-tab="icons">アイコン</button>
+                    <button class="sidebar-tab-button" data-tab="inspector">設定</button> <!-- 旧インスペクター用 -->
+                    <button class="sidebar-tab-button" data-tab="chat">AI</button> <!-- 旧AIチャット用 -->
+                </div>
+                <div id="sidebar-content" style="overflow-y: auto; flex-grow: 1; padding: 16px;">
+                    <div class="sidebar-tab-content active" data-tab-content="slides">
+                        <div id="left-pane-header" style="padding-bottom:10px; font-weight:600;"><span>スライド一覧</span></div>
+                        <ul id="slide-list"></ul>
+                    </div>
+                    <div class="sidebar-tab-content" data-tab-content="elements">
+                        <div id="element-add-buttons-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <button id="add-text-btn" class="sidebar-add-btn"><i class="fas fa-font fa-fw"></i><span>テキスト</span></button>
+                            <input type="file" id="image-upload-input" accept="image/*" style="display: none;">
+                            <button id="add-image-btn" class="sidebar-add-btn"><i class="fas fa-image fa-fw"></i><span>画像</span></button>
+                            <button id="add-video-btn" class="sidebar-add-btn"><i class="fas fa-video fa-fw"></i><span>動画</span></button>
+                            <button id="add-table-btn" class="sidebar-add-btn"><i class="fas fa-table fa-fw"></i><span>表</span></button>
+                            <button id="add-chart-btn" class="sidebar-add-btn"><i class="fas fa-chart-bar fa-fw"></i><span>グラフ</span></button>
+                        </div>
+                    </div>
+                    <div class="sidebar-tab-content" data-tab-content="icons">
+                        <div id="icon-search-toolbar" style="margin-bottom: 10px;">
+                            <input type="text" id="icon-search-input" placeholder="アイコン検索..." style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: var(--border-radius);">
+                        </div>
+                        <div id="icon-list-container" style="display: flex; flex-wrap: wrap; gap: 10px; max-height: 400px; overflow-y: auto;">
+                            <!-- アイコンはここにJavaScriptで描画されます -->
+                        </div>
+                    </div>
+                    <div class="sidebar-tab-content" data-tab-content="inspector">
+                         <div id="inspector"></div> <!-- 旧インスペクターのコンテナ -->
+                         <div id="no-selection-message" style="display:none;">要素が選択されていません</div>
+                    </div>
+                    <div class="sidebar-tab-content" data-tab-content="chat">
+                        <div id="chat-panel"> <!-- 旧チャットパネルのコンテナ -->
+                            <div id="chat-messages" style="height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px;"></div>
+                            <div style="display: flex;">
+                                <input type="text" id="chat-input" style="flex-grow: 1; padding: 8px;" placeholder="AIに質問...">
+                                <button id="send-chat-btn" style="padding: 8px 15px;">送信</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </aside>
-            <div id="main-pane">
-                <div id="slide-wrapper">
+            <div id="main-canvas-area" style="flex-grow: 1; display: flex; justify-content: center; align-items: center; padding: 24px; overflow: auto; min-width: 0; min-height: 0;">
+                <div id="slide-wrapper"> {/* slide-wrapperのスタイルは既存のmain-pane内のものとほぼ同じはず */}
                     <div id="slide-canvas"></div>
                 </div>
             </div>
-            <aside id="right-pane">
-                <div class="right-pane-tabs">
-                    <button class="tab-button active" data-tab="inspector">インスペクター</button>
-                    <button class="tab-button" data-tab="chat">AI編集</button>
-                </div>
-                <div id="inspector" class="tab-content active"></div>
-                <div id="chat-panel" class="tab-content">
-                    <div id="chat-messages" style="height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px;"></div>
-                    <div style="display: flex;">
-                        <input type="text" id="chat-input" style="flex-grow: 1; padding: 8px;" placeholder="AIに質問...">
-                        <button id="send-chat-btn" style="padding: 8px 15px;">送信</button>
-                    </div>
-                </div>
-                <div id="no-selection-message">
-                </div>
-            </aside>
-        </main>
+        </div>
     </div>
 
     <div id="presentation-view">
@@ -989,15 +1095,54 @@
 
             cacheElements() {
                 this.elements = {
-                    appContainer: document.getElementById('app-container'), addSlideBtn: document.getElementById('add-slide-btn'), deleteSlideBtn: document.getElementById('delete-slide-btn'),
+                    appContainer: document.getElementById('app-container'),
+                    toolbar: document.getElementById('toolbar'), // Added for clarity, though not directly modified here
+                    appBody: document.getElementById('app-body'), // New
+                    leftSidebar: document.getElementById('left-sidebar'), // New
+                    sidebarTabs: document.getElementById('sidebar-tabs'), // New
+                    sidebarContent: document.getElementById('sidebar-content'), // New
+                    mainCanvasArea: document.getElementById('main-canvas-area'), // New
+                    addSlideBtn: document.getElementById('add-slide-btn'), deleteSlideBtn: document.getElementById('delete-slide-btn'),
                     addTextBtn: document.getElementById('add-text-btn'), addImageBtn: document.getElementById('add-image-btn'), addChartBtn: document.getElementById('add-chart-btn'), saveBtn: document.getElementById('save-btn'),
                     presentBtn: document.getElementById('present-btn'), alignLeftBtn: document.getElementById('align-left-btn'), alignCenterHBtn: document.getElementById('align-center-h-btn'),
                     alignRightBtn: document.getElementById('align-right-btn'), alignTopBtn: document.getElementById('align-top-btn'), alignCenterVBtn: document.getElementById('align-center-v-btn'),
                     alignBottomBtn: document.getElementById('align-bottom-btn'), distributeHBtn: document.getElementById('distribute-h-btn'), distributeVBtn: document.getElementById('distribute-v-btn'),
                     exportBtn: document.getElementById('export-btn'), exportMenu: document.getElementById('export-menu'), slideList: document.getElementById('slide-list'),
-                    slideCanvas: document.getElementById('slide-canvas'), inspector: document.getElementById('inspector'), noSelectionMessage: document.getElementById('no-selection-message'),
+                    slideCanvas: document.getElementById('slide-canvas'),
+                    inspector: document.getElementById('inspector'), // Still valid as it's moved
+                    noSelectionMessage: document.getElementById('no-selection-message'), // Still valid
+                    chatPanel: document.getElementById('chat-panel'), // For chat functionality
+                    iconListContainer: document.getElementById('icon-list-container'), // New
+                    iconSearchInput: document.getElementById('icon-search-input'), // New
+                    imageUploadInput: document.getElementById('image-upload-input'), // New for image upload
                     presentationView: document.getElementById('presentation-view'), presentationSlideContainer: document.getElementById('presentation-slide-container'),
                 };
+            },
+
+            // Configuration for things like available icons
+            config: {
+                fontAwesomeIcons: [
+                    // General
+                    { name: 'house', category: 'general', class: 'fas fa-house' }, { name: 'magnifying-glass', category: 'general', class: 'fas fa-magnifying-glass' },
+                    { name: 'user', category: 'general', class: 'fas fa-user' }, { name: 'gear', category: 'general', class: 'fas fa-gear' },
+                    { name: 'star', category: 'general', class: 'fas fa-star' }, { name: 'heart', category: 'general', class: 'fas fa-heart' },
+                    { name: 'envelope', category: 'general', class: 'fas fa-envelope' }, { name: 'flag', category: 'general', class: 'fas fa-flag' },
+                    { name: 'bell', category: 'general', class: 'fas fa-bell' }, { name: 'tag', category: 'general', class: 'fas fa-tag' },
+                    // Arrows
+                    { name: 'arrow-left', category: 'arrows', class: 'fas fa-arrow-left' }, { name: 'arrow-right', category: 'arrows', class: 'fas fa-arrow-right' },
+                    { name: 'arrow-up', category: 'arrows', class: 'fas fa-arrow-up' }, { name: 'arrow-down', category: 'arrows', class: 'fas fa-arrow-down' },
+                    { name: 'arrows-rotate', category: 'arrows', class: 'fas fa-arrows-rotate' },
+                    // Business & Finance
+                    { name: 'briefcase', category: 'business', class: 'fas fa-briefcase' }, { name: 'chart-line', category: 'business', class: 'fas fa-chart-line' },
+                    { name: 'chart-pie', category: 'business', class: 'fas fa-chart-pie' }, { name: 'building', category: 'business', class: 'fas fa-building' },
+                    { name: 'bullhorn', category: 'business', class: 'fas fa-bullhorn' },
+                    // Communication
+                    { name: 'comment', category: 'communication', class: 'fas fa-comment' }, { name: 'comments', category: 'communication', class: 'fas fa-comments' },
+                    { name: 'phone', category: 'communication', class: 'fas fa-phone' }, { name: 'at', category: 'communication', class: 'fas fa-at' },
+                    // Emoji
+                    { name: 'face-smile', category: 'emoji', class: 'fas fa-face-smile' }, { name: 'face-laugh', category: 'emoji', class: 'fas fa-face-laugh' },
+                    { name: 'face-grin-wink', category: 'emoji', class: 'fas fa-face-grin-wink'},
+                ]
             },
 
             loadState() {
@@ -1050,12 +1195,38 @@
                     this.state.slideCanvasRect = this.elements.slideCanvas.getBoundingClientRect();
                     this.renderThumbnails();
                     this.renderSlideCanvas();
-                    // インスペクタータブがアクティブな時だけプロパティUIを描画
-                    if (document.querySelector('.tab-button[data-tab="inspector"]').classList.contains('active')) {
+
+                    // 要素が選択されていれば「設定」タブをアクティブにし、インスペクターを再描画
+                    if (this.state.selectedElementIds.length > 0) {
+                        this.switchToTab('inspector'); // "inspector" は設定タブの data-tab 値
                         this.renderInspector();
+                    } else {
+                        // 要素が選択されていない場合、もし「設定」タブが開いていたらインスペクターをクリア表示
+                        const inspectorTabButton = this.elements.sidebarTabs.querySelector('.sidebar-tab-button[data-tab="inspector"]');
+                        if (inspectorTabButton && inspectorTabButton.classList.contains('active')) {
+                            this.renderInspector(); // renderInspector handles no selection message
+                        }
                     }
                     this.updateToolbarState();
                 });
+            },
+
+            // Helper function to switch sidebar tabs programmatically
+            switchToTab(tabName) {
+                if (!this.elements.sidebarTabs || !this.elements.sidebarContent) return;
+
+                this.elements.sidebarTabs.querySelectorAll('.sidebar-tab-button').forEach(btn => {
+                    if (btn.dataset.tab === tabName) btn.classList.add('active');
+                    else btn.classList.remove('active');
+                });
+                this.elements.sidebarContent.querySelectorAll('.sidebar-tab-content').forEach(content => {
+                    if (content.dataset.tabContent === tabName) content.classList.add('active');
+                    else content.classList.remove('active');
+                });
+                // If switching to inspector, ensure it's rendered
+                if (tabName === 'inspector') {
+                    this.renderInspector();
+                }
             },
 
             updateToolbarState() {
@@ -1192,6 +1363,20 @@ createElementDOM(elData) {
             table.appendChild(tr);
         }
         el.appendChild(table);
+    } else if (elData.type === 'icon') {
+        const iTag = document.createElement('i');
+        iTag.className = elData.content; // e.g., "fas fa-house"
+        // Apply color and fontSize from style. Font size controls icon size.
+        iTag.style.color = elData.style.color || 'inherit';
+        iTag.style.fontSize = elData.style.fontSize ? `${elData.style.fontSize}px` : 'inherit';
+        iTag.style.position = 'absolute'; // Ensure it behaves within the div
+        iTag.style.left = '50%';
+        iTag.style.top = '50%';
+        iTag.style.transform = 'translate(-50%, -50%)'; // Center the icon in its container div
+        iTag.style.width = '100%'; // Make i-tag fill the container for sizing
+        iTag.style.height = '100%';
+        el.style.overflow = 'visible'; // Allow icon to exceed bounds if necessary, or clip if preferred.
+        el.appendChild(iTag);
     }
     return el;
 },
@@ -1308,19 +1493,23 @@ createElementDOM(elData) {
                             </select>
                         </div>
                         ${selectedElement.type === 'text' ? `
-                        <div class="inspector-group"><label>フォントサイズ (px)</label><input type="number" data-prop="fontSize" value="${s.fontSize}"></div>
+                        <div class="inspector-group"><label>フォントサイズ (px)</label><input type="number" data-prop="fontSize" value="${s.fontSize || 24}"></div>
                         <div class="inspector-group">
                             <label>フォント</label>
                             <select data-prop="fontFamily" id="font-family-select">
                                 <option value="sans-serif" ${s.fontFamily === 'sans-serif' ? 'selected' : ''}>モダン (Sans-serif)</option>
                                 <option value="serif" ${s.fontFamily === 'serif' ? 'selected' : ''}>クラシック (Serif)</option>
-                                <option value="游ゴシック体,YuGothic,'Yu Gothic',sans-serif" ${s.fontFamily.includes('YuGothic') ? 'selected' : ''}>游ゴシック</option>
-                                <option value="メイリオ,Meiryo,sans-serif" ${s.fontFamily.includes('Meiryo') ? 'selected' : ''}>メイリオ</option>
+                                <option value="游ゴシック体,YuGothic,'Yu Gothic',sans-serif" ${s.fontFamily && s.fontFamily.includes('YuGothic') ? 'selected' : ''}>游ゴシック</option>
+                                <option value="メイリオ,Meiryo,sans-serif" ${s.fontFamily && s.fontFamily.includes('Meiryo') ? 'selected' : ''}>メイリオ</option>
                             </select>
                             <input type="file" id="font-upload" accept=".ttf,.otf,.woff,.woff2" style="margin-top:8px;">
                             <div id="uploaded-fonts-list" style="margin-top:4px;"></div>
                         </div>
-                        <div class="inspector-group"><label>文字色</label><input type="color" data-prop="color" value="${s.color}"></div>
+                        <div class="inspector-group"><label>文字色</label><input type="color" data-prop="color" value="${s.color || '#212529'}"></div>
+                        ` : ''}
+                        ${selectedElement.type === 'icon' ? `
+                        <div class="inspector-group"><label>アイコンサイズ (px)</label><input type="number" data-prop="fontSize" value="${s.fontSize || 48}"></div>
+                        <div class="inspector-group"><label>アイコン色</label><input type="color" data-prop="color" value="${s.color || '#212529'}"></div>
                         ` : ''}
                         ${videoUI}
                         ${chartUI}
@@ -1386,6 +1575,7 @@ createElementDOM(elData) {
                                 selectedElement.content.rows = newRows;
                                 selectedElement.content.cols = newCols;
                                 selectedElement.content.data = newData;
+                                console.log("Table updated:", JSON.parse(JSON.stringify(selectedElement.content))); // Debug
                                 
                                 this.saveState();
                                 this.render();
@@ -1445,7 +1635,24 @@ createElementDOM(elData) {
                 this.elements.addSlideBtn.addEventListener('click', () => this.addSlide());
                 this.elements.deleteSlideBtn.addEventListener('click', () => this.deleteSlide());
                 this.elements.addTextBtn.addEventListener('click', () => this.addElement('text'));
-                this.elements.addImageBtn.addEventListener('click', () => this.addElement('image'));
+
+                // Image upload button
+                this.elements.addImageBtn.addEventListener('click', () => {
+                    this.elements.imageUploadInput.click(); // Trigger hidden file input
+                });
+                // Handle file selection for image upload
+                this.elements.imageUploadInput.addEventListener('change', (event) => {
+                    const file = event.target.files[0];
+                    if (file && file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            this.addElement('image', e.target.result); // Pass Base64 data URL
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                    event.target.value = null; // Reset file input
+                });
+
                 this.elements.addVideoBtn = document.getElementById('add-video-btn');
                 this.elements.addVideoBtn.addEventListener('click', () => this.addElement('video'));
                 this.elements.addTableBtn = document.getElementById('add-table-btn');
@@ -1455,18 +1662,44 @@ createElementDOM(elData) {
                 this.elements.presentBtn.addEventListener('click', () => this.startPresentation());
                 this.elements.exportBtn.addEventListener('click', (e) => this.showExportMenu(e));
                 
-                // タブ切り替え
-                document.querySelectorAll('.tab-button').forEach(button => {
-                    button.addEventListener('click', function() {
-                        const tabName = this.dataset.tab;
-                        // すべてのタブコンテンツを非表示にし、ボタンのアクティブクラスを削除
-                        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-                        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-                        // クリックされたタブをアクティブに
-                        this.classList.add('active');
-                        document.getElementById(`${tabName === 'chat' ? 'chat-panel' : 'inspector'}`).classList.add('active');
+                // 旧右ペインタブ切り替え (これは新しいサイドバータブに置き換わる)
+                // document.querySelectorAll('.tab-button').forEach(button => { ... });
+
+                // 新しい左サイドバータブ切り替え
+                if (this.elements.sidebarTabs) {
+                    this.elements.sidebarTabs.addEventListener('click', e => {
+                        if (e.target.classList.contains('sidebar-tab-button')) {
+                            const tabName = e.target.dataset.tab;
+                            this.elements.sidebarTabs.querySelectorAll('.sidebar-tab-button').forEach(btn => btn.classList.remove('active'));
+                            e.target.classList.add('active');
+
+                            this.elements.sidebarContent.querySelectorAll('.sidebar-tab-content').forEach(content => {
+                                if (content.dataset.tabContent === tabName) {
+                                    content.classList.add('active');
+                                    if (tabName === 'inspector') this.renderInspector();
+                                    else if (tabName === 'icons') this.renderIconList(); // アイコンタブ選択時にリスト描画
+                                } else {
+                                    content.classList.remove('active');
+                                }
+                            });
+                        }
                     });
-                });
+                }
+
+                if (this.elements.iconSearchInput) {
+                    this.elements.iconSearchInput.addEventListener('input', e => {
+                        this.renderIconList(e.target.value);
+                    });
+                }
+
+                if (this.elements.iconListContainer) {
+                    this.elements.iconListContainer.addEventListener('click', e => {
+                        const iconDiv = e.target.closest('.icon-item');
+                        if (iconDiv && iconDiv.dataset.iconClass) {
+                            this.addIconElement(iconDiv.dataset.iconClass);
+                        }
+                    });
+                }
 
                 // inspector内のselect, input[type="color"]要素のイベント伝播を止める
                 this.elements.inspector.addEventListener('mousedown', e => {
@@ -1552,15 +1785,31 @@ createElementDOM(elData) {
                 this.elements.slideList.addEventListener('click', e => this.handleThumbnailClick(e));
                 // マウス・タッチ両対応
                 const pointerDownHandler = e => {
-                    // セレクトボックス操作時は何もしない
-                    if (e.target.closest('select, option')) return;
+                    // e.target が存在し、かつ select/option 内でなければ処理を続ける
+                    if (!e.target || e.target.closest('select, option')) {
+                        return;
+                    }
+
                     const isTouch = e.type.startsWith('touch');
+                    // touches が存在するか、または touches[0] が存在するかを確認
+                    if (isTouch && (!e.touches || e.touches.length === 0)) {
+                        console.error("pointerDownHandler: touch event with no touches.", e);
+                        return;
+                    }
                     const point = isTouch ? e.touches[0] : e;
-                    const element = point.target ? point.target.closest('.slide-element') : e.target.closest('.slide-element');
+
+                    // point や point.target が存在するかを再度確認
+                    if (!point || !point.target) {
+                        console.error("pointerDownHandler: point or point.target is undefined after touch check.", e, point);
+                        return;
+                    }
+
+                    const element = point.target.closest('.slide-element');
+
                     if (element) {
-                        this.handleCanvasMouseDown(isTouch ? Object.assign({}, e, { clientX: point.clientX, clientY: point.clientY }) : e);
+                        this.handleCanvasMouseDown(e); // 元のイベントオブジェクト e をそのまま渡す
                     } else {
-                        this.handleSelectionBoxStart(isTouch ? Object.assign({}, e, { clientX: point.clientX, clientY: point.clientY }) : e);
+                        this.handleSelectionBoxStart(e); // 元のイベントオブジェクト e をそのまま渡す
                     }
                 };
                 this.elements.slideCanvas.addEventListener('mousedown', pointerDownHandler);
@@ -1610,7 +1859,20 @@ createElementDOM(elData) {
             },
 
             handleCanvasMouseDown(e) {
-                const target = e.target;
+                const isTouch = e.type.startsWith('touch');
+                const point = isTouch ? e.touches[0] : e;
+                let target = point.target;
+
+                // Traverse up to find an Element if the target is not one (e.g., a text node)
+                while (target && target.nodeType !== Node.ELEMENT_NODE) {
+                    target = target.parentNode;
+                }
+
+                if (!target || typeof target.closest !== 'function') {
+                    console.error("handleCanvasMouseDown: target is not an Element or is null.", point.target, e);
+                    return;
+                }
+
                 const element = target.closest('.slide-element');
                 const elementId = element ? element.dataset.id : null;
                 this.state.interaction.isCtrlPressed = e.ctrlKey || e.metaKey;
@@ -1827,20 +2089,37 @@ createElementDOM(elData) {
             handleCanvasDblClick(e) {
                 const element = e.target.closest('.slide-element.text');
                 if (element) {
-                    this.stopTextEditing(true); this.state.selectedElementIds = [element.dataset.id]; this.state.isEditingText = true; this.render();
+                    this.stopTextEditing(true); // Save any previous editing
+                    this.state.selectedElementIds = [element.dataset.id];
+                    this.state.isEditingText = true;
+                    // this.render(); // Avoid re-rendering here, let renderSlideCanvas handle contenteditable
+
+                    // Ensure the element is rendered with contenteditable=true before focusing
+                    this.renderSlideCanvas(); // Render canvas to apply contenteditable
+
                     const editableElement = this.elements.slideCanvas.querySelector(`[data-id="${element.dataset.id}"]`);
-                    if (editableElement) { editableElement.focus(); document.execCommand('selectAll', false, null); }
+                    if (editableElement) {
+                        editableElement.focus();
+                        // Select all text only if it's a genuine double-click, not a programmatic focus
+                        if (e && e.type === 'dblclick') { // Check if it's a user dblclick event
+                           document.execCommand('selectAll', false, null);
+                        }
+                    }
                 }
             },
 
             handleElementBlur(e) {
-                if (this.state.isEditingText && e.target.classList.contains('slide-element')) { this.stopTextEditing(true); this.saveState(); this.render(); }
+                if (this.state.isEditingText && e.target.classList.contains('slide-element')) {
+                    this.stopTextEditing(true);
+                    this.saveState();
+                    this.render();
+                }
             },
 
             addSlide() { const newId = this.generateId('slide'); const newSlide = { id: newId, elements: [] }; const idx = this.state.presentation.slides.findIndex(s => s.id === this.state.activeSlideId); this.state.presentation.slides.splice(idx + 1, 0, newSlide); this.state.activeSlideId = newId; this.state.selectedElementIds = []; this.render(); this.saveState(); },
             deleteSlide() { if (this.state.presentation.slides.length <= 1) return alert('最後のスライドは削除できません。'); if (!confirm('現在のスライドを削除しますか？')) return; const idx = this.state.presentation.slides.findIndex(s => s.id === this.state.activeSlideId); this.state.presentation.slides.splice(idx, 1); this.state.activeSlideId = this.state.presentation.slides[Math.max(0, idx - 1)]?.id; this.state.selectedElementIds = []; this.render(); this.saveState(); },
 
-            addElement(type) {
+            addElement(type, content) { // Added content parameter
                 const slide = this.getActiveSlide();
                 if (!slide) return;
                 const newEl = {
@@ -1849,15 +2128,17 @@ createElementDOM(elData) {
                     style: { top: 20, left: 20, width: 30, height: null, zIndex: slide.elements.length + 1, rotation: 0, animation: '' }
                 };
                 if (type === 'text') {
-                    newEl.content = '新しいテキスト';
+                    newEl.content = content || '新しいテキスト'; // Use provided content or default
                     Object.assign(newEl.style, { color: '#212529', fontSize: 24, fontFamily: 'sans-serif' });
                 } else if (type === 'image') {
-                    const url = prompt('画像のURLを入力してください:', 'https://via.placeholder.com/400x300');
-                    if (!url) return;
-                    newEl.content = url;
-                    newEl.style.height = 30;
+                    if (!content) { // Content is now the dataURL, no prompt needed
+                        console.error('画像データがありません。');
+                        return;
+                    }
+                    newEl.content = content; // content is the Base64 dataURL
+                    newEl.style.height = 30; // Default height, user can resize
                 } else if (type === 'video') {
-                    const url = prompt('動画のURLを入力してください:', 'https://www.w3schools.com/html/mov_bbb.mp4');
+                    const url = content || prompt('動画のURLを入力してください:', 'https://www.w3schools.com/html/mov_bbb.mp4');
                     if (!url) return;
                     newEl.content = { url: url, autoplay: false, loop: false, controls: true };
                     newEl.style.height = 30;
@@ -1880,9 +2161,13 @@ createElementDOM(elData) {
                 if (type === 'text') setTimeout(() => this.handleCanvasDblClick({ target: this.elements.slideCanvas.querySelector(`[data-id="${newEl.id}"]`) }), 50);
             },
             addChart() {
+                console.log("addChart called. Micromodal:", Micromodal); // Debug
                 // Micromodalでグラフ作成モーダルを表示
                 if (typeof Micromodal !== "undefined") {
                     Micromodal.show('chart-modal');
+                    console.log("Micromodal.show('chart-modal') called."); // Debug
+                } else {
+                    console.error("Micromodal is undefined."); // Debug
                 }
             },
 
@@ -2114,6 +2399,66 @@ createElementDOM(elData) {
                 this.render();
                 this.saveState();
             },
+
+            renderIconList(searchTerm = '') {
+                if (!this.elements.iconListContainer) return;
+                this.elements.iconListContainer.innerHTML = '';
+                const lowerSearchTerm = searchTerm.toLowerCase();
+                const filteredIcons = this.config.fontAwesomeIcons.filter(icon => {
+                    return icon.name.toLowerCase().includes(lowerSearchTerm) ||
+                           icon.category.toLowerCase().includes(lowerSearchTerm) ||
+                           icon.class.toLowerCase().includes(lowerSearchTerm);
+                });
+
+                filteredIcons.forEach(icon => {
+                    const iconDiv = document.createElement('div');
+                    iconDiv.className = 'icon-item';
+                    iconDiv.dataset.iconClass = icon.class;
+                    iconDiv.style.padding = '10px';
+                    iconDiv.style.border = '1px solid var(--border-color)';
+                    iconDiv.style.borderRadius = 'var(--border-radius)';
+                    iconDiv.style.cursor = 'pointer';
+                    iconDiv.style.textAlign = 'center';
+                    iconDiv.style.minWidth = '60px'; // Ensure some minimum width
+
+                    const iTag = document.createElement('i');
+                    iTag.className = `${icon.class} fa-2x`; // fa-2x for larger preview
+                    iTag.style.pointerEvents = 'none'; // Make <i> tag non-interactive for click
+                    iconDiv.appendChild(iTag);
+
+                    // Optional: Add icon name below
+                    // const nameSpan = document.createElement('span');
+                    // nameSpan.textContent = icon.name;
+                    // nameSpan.style.display = 'block';
+                    // nameSpan.style.fontSize = '10px';
+                    // iconDiv.appendChild(nameSpan);
+
+                    this.elements.iconListContainer.appendChild(iconDiv);
+                });
+            },
+
+            addIconElement(iconClass) {
+                const slide = this.getActiveSlide();
+                if (!slide) return;
+                const newEl = {
+                    id: this.generateId('el'),
+                    type: 'icon', // New element type for icons
+                    content: iconClass, // Store the Font Awesome class string
+                    style: {
+                        top: 20, left: 20, width: 5, height: 5, // Initial size in percent for consistency, might need adjustment
+                        zIndex: slide.elements.length + 1,
+                        rotation: 0,
+                        color: '#212529', // Default color, can be changed via inspector
+                        fontSize: 48, // Default icon size (rendered via font-size)
+                        animation: ''
+                    }
+                };
+                slide.elements.push(newEl);
+                this.state.selectedElementIds = [newEl.id];
+                this.saveState();
+                this.render();
+            },
+
         // 要素のzIndexを最大に
         bringElementToFront(elId) {
             const slide = this.getActiveSlide();

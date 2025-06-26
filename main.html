@@ -302,28 +302,29 @@
 
         #slide-wrapper {
             position: relative;
-            /* width: 100vw; /* This might be too large, let's rely on aspect ratio and max-width */
-            max-width: 90vw; /* Keep this for very wide screens */
-            width: 100%; /* Try to fill the container */
+            max-width: 90vw;
+            width: 100%;
             aspect-ratio: 16 / 9;
-            box-shadow: var(--shadow-md);
-            background-color: var(--bg-white);
-            border-radius: var(--border-radius);
-            overflow: hidden;
+            background: transparent;
+            border-radius: 0;
+            box-shadow: none;
+            overflow: visible;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
         #slide-canvas {
-            width: 1280px; /* Base resolution */
-            height: 720px; /* Base resolution */
-            max-width: 100%; /* Scale down within wrapper */
-            max-height: 100%; /* Scale down within wrapper */
+            width: 1280px;
+            height: 720px;
+            max-width: 100%;
+            max-height: 100%;
             aspect-ratio: 16 / 9;
             position: relative;
             overflow: hidden;
-            background: transparent; /* Canvas itself is transparent */
+            background: var(--bg-white);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-md);
         }
 
         /* --- スライド要素 --- */
@@ -1219,7 +1220,9 @@
                     startX: 0, startY: 0, initialStates: [],
                 },
                 slideCanvasRect: null,
+                canvasScale: 1.0, // スライド拡大率
             },
+                canvasPan: { x: 0, y: 0, dragging: false, startX: 0, startY: 0, originX: 0, originY: 0 },
             elements: {},
 
             init() {
@@ -1250,6 +1253,7 @@
                 this.bindEvents();
                 this.loadState();
                 this.render();
+                this.initZoomControl();
             },
 
             cacheElements() {
@@ -1621,7 +1625,18 @@
                 const activeSlide = this.getActiveSlide();
                 const canvas = this.elements.slideCanvas;
                 canvas.querySelectorAll('.slide-element, .selection-bounding-box').forEach(el => el.remove());
+                // 拡大率を反映
+                canvas.style.transformOrigin = "center center";
+                canvas.style.transform = `scale(${this.state.canvasScale})`;
                 if (!activeSlide) return;
+
+                // パン（移動）を反映
+                // canvasPanが未定義なら初期化
+                if (!this.state.canvasPan) {
+                    this.state.canvasPan = { x: 0, y: 0, dragging: false, startX: 0, startY: 0, originX: 0, originY: 0 };
+                }
+                const pan = this.state.canvasPan;
+                canvas.style.transform = `scale(${this.state.canvasScale}) translate(${pan.x / this.state.canvasScale}px, ${pan.y / this.state.canvasScale}px)`;
 
                 activeSlide.elements.forEach(elData => {
                     const el = this.createElementDOM(elData);
@@ -2394,6 +2409,158 @@ createElementDOM(elData) {
                 window.addEventListener('keyup', e => this.handleKeyUp(e));
                 window.addEventListener('resize', () => this.render());
                 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) this.stopPresentation(); });
+            },
+
+            // スライド拡大縮小コントロール初期化
+            initZoomControl() {
+                // タッチデバイス向け: 2本指パン・ピンチズーム
+                let lastTouchDist = null;
+                let lastTouchCenter = null;
+                this.elements.slideCanvas.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 2) {
+                        e.preventDefault();
+                        const t1 = e.touches[0], t2 = e.touches[1];
+                        lastTouchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+                        lastTouchCenter = {
+                            x: (t1.clientX + t2.clientX) / 2,
+                            y: (t1.clientY + t2.clientY) / 2
+                        };
+                        if (!this.state.canvasPan) {
+                            this.state.canvasPan = { x: 0, y: 0, dragging: false, startX: 0, startY: 0, originX: 0, originY: 0 };
+                        }
+                        this.state.canvasPan.dragging = true;
+                        this.state.canvasPan.startX = lastTouchCenter.x;
+                        this.state.canvasPan.startY = lastTouchCenter.y;
+                        this.state.canvasPan.originX = this.state.canvasPan.x;
+                        this.state.canvasPan.originY = this.state.canvasPan.y;
+                    }
+                }, { passive: false });
+                this.elements.slideCanvas.addEventListener('touchmove', (e) => {
+                    if (e.touches.length === 2 && this.state.canvasPan && this.state.canvasPan.dragging) {
+                        e.preventDefault();
+                        const t1 = e.touches[0], t2 = e.touches[1];
+                        const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+                        const center = {
+                            x: (t1.clientX + t2.clientX) / 2,
+                            y: (t1.clientY + t2.clientY) / 2
+                        };
+                        // ピンチズーム
+                        if (lastTouchDist) {
+                            let scale = this.state.canvasScale * (dist / lastTouchDist);
+                            scale = Math.max(0.2, Math.min(5, scale));
+                            this.state.canvasScale = scale;
+                            this.updateZoomDisplay();
+                        }
+                        // 2本指パン
+                        if (lastTouchCenter) {
+                            const dx = center.x - this.state.canvasPan.startX;
+                            const dy = center.y - this.state.canvasPan.startY;
+                            this.state.canvasPan.x = this.state.canvasPan.originX + dx;
+                            this.state.canvasPan.y = this.state.canvasPan.originY + dy;
+                        }
+                        lastTouchDist = dist;
+                        lastTouchCenter = center;
+                        this.render();
+                    }
+                }, { passive: false });
+                this.elements.slideCanvas.addEventListener('touchend', (e) => {
+                    if (this.state.canvasPan && this.state.canvasPan.dragging) {
+                        this.state.canvasPan.dragging = false;
+                        lastTouchDist = null;
+                        lastTouchCenter = null;
+                    }
+                });
+                // ミドルクリックパン
+                const canvas = this.elements.slideCanvas;
+                canvas.addEventListener('mousedown', (e) => {
+                    if (e.button === 1) {
+                        e.preventDefault();
+                        if (!this.state.canvasPan) {
+                            this.state.canvasPan = { x: 0, y: 0, dragging: false, startX: 0, startY: 0, originX: 0, originY: 0 };
+                        }
+                        this.state.canvasPan.dragging = true;
+                        this.state.canvasPan.startX = e.clientX;
+                        this.state.canvasPan.startY = e.clientY;
+                        this.state.canvasPan.originX = this.state.canvasPan.x;
+                        this.state.canvasPan.originY = this.state.canvasPan.y;
+                        document.body.style.cursor = 'grab';
+                    }
+                });
+                window.addEventListener('mousemove', (e) => {
+                    if (this.state.canvasPan && this.state.canvasPan.dragging) {
+                        const dx = e.clientX - this.state.canvasPan.startX;
+                        const dy = e.clientY - this.state.canvasPan.startY;
+                        this.state.canvasPan.x = this.state.canvasPan.originX + dx;
+                        this.state.canvasPan.y = this.state.canvasPan.originY + dy;
+                        this.render();
+                    }
+                });
+                window.addEventListener('mouseup', (e) => {
+                    if (this.state.canvasPan && this.state.canvasPan.dragging) {
+                        this.state.canvasPan.dragging = false;
+                        document.body.style.cursor = '';
+                    }
+                });
+                // Ctrl+ホイールで拡大縮小
+                this.elements.slideCanvas.addEventListener('wheel', (e) => {
+                    if (e.ctrlKey) {
+                        e.preventDefault();
+                        let scale = this.state.canvasScale;
+                        if (e.deltaY < 0) scale *= 1.1;
+                        else scale /= 1.1;
+                        scale = Math.max(0.2, Math.min(5, scale));
+                        this.state.canvasScale = scale;
+                        this.render();
+                        this.updateZoomDisplay();
+                    }
+                }, { passive: false });
+                // ズームリセットボタン
+                if (!document.getElementById('zoom-reset-btn')) {
+                    const btn = document.createElement('button');
+                    btn.id = 'zoom-reset-btn';
+                    btn.textContent = 'リセット';
+                    btn.style.position = 'absolute';
+                    btn.style.right = '24px';
+                    btn.style.top = '24px';
+                    btn.style.zIndex = 10001;
+                    btn.style.background = '#fff';
+                    btn.style.border = '1px solid #ccc';
+                    btn.style.borderRadius = '6px';
+                    btn.style.padding = '4px 10px';
+                    btn.style.fontSize = '13px';
+                    btn.style.cursor = 'pointer';
+                    btn.onclick = () => {
+                        this.state.canvasScale = 1.0;
+                        this.render();
+                        this.updateZoomDisplay();
+                        // パンもリセット
+                        this.state.canvasPan.x = 0;
+                        this.state.canvasPan.y = 0;
+                    };
+                    this.elements.mainCanvasArea.appendChild(btn);
+                }
+                // ズーム倍率表示
+                if (!document.getElementById('zoom-display')) {
+                    const disp = document.createElement('div');
+                    disp.id = 'zoom-display';
+                    disp.style.position = 'absolute';
+                    disp.style.right = '24px';
+                    disp.style.top = '60px';
+                    disp.style.zIndex = 10001;
+                    disp.style.background = '#fff';
+                    disp.style.border = '1px solid #ccc';
+                    disp.style.borderRadius = '6px';
+                    disp.style.padding = '2px 10px';
+                    disp.style.fontSize = '13px';
+                    this.elements.mainCanvasArea.appendChild(disp);
+                }
+                this.updateZoomDisplay();
+            },
+            updateZoomDisplay() {
+                const disp = document.getElementById('zoom-display');
+                if (disp) {
+                    disp.textContent = `ズーム: ${(this.state.canvasScale * 100).toFixed(0)}%`;
+                }
             },
 
             handleCanvasMouseDown(e) {

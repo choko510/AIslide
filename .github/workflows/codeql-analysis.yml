@@ -9,30 +9,56 @@ on:
     - cron: '0 0 * * 0'
 
 jobs:
-  analyze:
-    name: Analyze
+  analyze-js:
+    name: Analyze JavaScript/TypeScript
     runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
-
-    strategy:
-      matrix:
-        language: [ 'javascript', 'python' ]
-        # 他の言語を追加する場合はここに追記
-
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'push' || github.event_name == 'pull_request' }}
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Check for JS/TS files
+        id: jsfiles
+        run: |
+          if ls **/*.js **/*.ts 1> /dev/null 2>&1; then
+            echo "found=true" >> $GITHUB_OUTPUT
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Initialize CodeQL
+        if: steps.jsfiles.outputs.found == 'true'
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+      - name: Autobuild
+        if: steps.jsfiles.outputs.found == 'true'
+        uses: github/codeql-action/autobuild@v3
+      - name: Perform CodeQL Analysis
+        if: steps.jsfiles.outputs.found == 'true'
+        uses: github/codeql-action/analyze@v3
 
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
-      with:
-        languages: ${{ matrix.language }}
-
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v3
-
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+  analyze-python:
+    name: Analyze Python
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'push' || github.event_name == 'pull_request' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Check for Python files
+        id: pyfiles
+        run: |
+          if ls **/*.py 1> /dev/null 2>&1; then
+            echo "found=true" >> $GITHUB_OUTPUT
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Initialize CodeQL
+        if: steps.pyfiles.outputs.found == 'true'
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+      - name: Autobuild
+        if: steps.pyfiles.outputs.found == 'true'
+        uses: github/codeql-action/autobuild@v3
+      - name: Perform CodeQL Analysis
+        if: steps.pyfiles.outputs.found == 'true'
+        uses: github/codeql-action/analyze@v3

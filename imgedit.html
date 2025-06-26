@@ -109,11 +109,14 @@
         #image-workspace {
             width: 100%;
             height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
-        #image-workspace img {
+        #image-to-edit {
             max-width: 100%;
-            max-height: 100%;
+            max-height: calc(100vh - 180px);
             object-fit: contain;
         }
 
@@ -228,7 +231,7 @@
             gap: 8px;
         }
 
-        .button-group button:hover {
+        .button-group button:hover:not(:disabled) {
             background-color: #f1f3f5;
             border-color: #adb5bd;
         }
@@ -442,21 +445,36 @@
                     <div class="control-group">
                         <h2>フィルター</h2>
                         <div class="slider-group"><label for="brightness">明るさ</label><input type="range" id="brightness"
-                                min="0" max="200" value="100" class="filter-slider"><output>100%</output></div>
+                                min="0" max="200" value="100" class="filter-slider" data-unit="%"><output>100%</output>
+                        </div>
                         <div class="slider-group"><label for="contrast">コントラスト</label><input type="range" id="contrast"
-                                min="0" max="200" value="100" class="filter-slider"><output>100%</output></div>
+                                min="0" max="200" value="100" class="filter-slider" data-unit="%"><output>100%</output>
+                        </div>
                         <div class="slider-group"><label for="saturate">彩度</label><input type="range" id="saturate"
-                                min="0" max="200" value="100" class="filter-slider"><output>100%</output></div>
+                                min="0" max="200" value="100" class="filter-slider" data-unit="%"><output>100%</output>
+                        </div>
                         <div class="slider-group"><label for="grayscale">グレースケール</label><input type="range"
-                                id="grayscale" min="0" max="100" value="0" class="filter-slider"><output>0%</output>
+                                id="grayscale" min="0" max="100" value="0" class="filter-slider"
+                                data-unit="%"><output>0%</output>
                         </div>
                         <div class="slider-group"><label for="sepia">セピア</label><input type="range" id="sepia" min="0"
-                                max="100" value="0" class="filter-slider"><output>0%</output></div>
+                                max="100" value="0" class="filter-slider" data-unit="%"><output>0%</output></div>
+                        <div class="slider-group"><label for="blur">ぼかし</label><input type="range" id="blur" min="0"
+                                max="10" value="0" step="0.1" class="filter-slider" data-unit="px"><output>0px</output>
+                        </div>
+                        <div class="slider-group"><label for="hue-rotate">色相回転</label><input type="range"
+                                id="hue-rotate" min="0" max="360" value="0" class="filter-slider"
+                                data-unit="deg"><output>0deg</output></div>
+                        <div class="slider-group"><label for="invert">階調反転</label><input type="range" id="invert"
+                                min="0" max="100" value="0" class="filter-slider" data-unit="%"><output>0%</output>
+                        </div>
                     </div>
 
-                    <!-- 変形 -->
+                    <!-- トリミングと変形 -->
                     <div class="control-group">
-                        <h2>変形</h2>
+                        <h2>トリミングと変形</h2>
+                        <button id="crop-btn" class="secondary-btn"
+                            style="width: 100%; margin-bottom: 10px;">トリミング</button>
                         <div class="button-group">
                             <button id="rotate-left" title="左に90度回転"><svg xmlns="http://www.w3.org/2000/svg" width="24"
                                     height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -528,10 +546,13 @@
         const editorControls = document.getElementById('editor-controls');
 
         const bgRemoveBtn = document.getElementById('bg-remove-btn');
+        const cropBtn = document.getElementById('crop-btn');
         const rotateLeftBtn = document.getElementById('rotate-left');
         const rotateRightBtn = document.getElementById('rotate-right');
         const flipHBtn = document.getElementById('flip-h');
         const flipVBtn = document.getElementById('flip-v');
+        const transformButtons = [rotateLeftBtn, rotateRightBtn, flipHBtn, flipVBtn];
+
         const resetBtn = document.getElementById('reset-btn');
         const downloadBtn = document.getElementById('download-btn');
 
@@ -575,20 +596,17 @@
         }
 
         function initEditor() {
+            if (cropper) {
+                cropper.destroy();
+                cropper = null;
+            }
             imageToEdit.src = currentImageDataURL;
+            applyFilters(); // Apply filters to the non-cropper image
             dropZoneContainer.classList.add('hidden');
             imageWorkspace.classList.remove('hidden');
             editorControls.classList.remove('hidden');
-
-            if (cropper) cropper.destroy();
-
-            cropper = new Cropper(imageToEdit, {
-                viewMode: 1, dragMode: 'move', aspectRatio: NaN, background: false,
-                autoCropArea: 0.8, responsive: true, restore: false, checkOrientation: false,
-                ready: () => {
-                    resetAll(); // Reset filters and transforms on new image load
-                },
-            });
+            resetAll();
+            updateTransformControls(true); // Disable transform buttons initially
         }
 
         // =================================
@@ -614,7 +632,11 @@
                 });
 
                 currentImageDataURL = URL.createObjectURL(blob);
-                cropper.replace(currentImageDataURL, false); // false to keep crop box
+                if (cropper) {
+                    cropper.replace(currentImageDataURL, false);
+                } else {
+                    imageToEdit.src = currentImageDataURL;
+                }
                 resetFiltersAndTransforms();
 
             } catch (error) {
@@ -627,47 +649,88 @@
         });
 
         // =================================
-        // Filter Controls [MODIFIED]
+        // Filter Controls
         // =================================
         function getFilterString() {
-            const brightness = document.getElementById('brightness').value;
-            const contrast = document.getElementById('contrast').value;
-            const saturate = document.getElementById('saturate').value;
-            const grayscale = document.getElementById('grayscale').value;
-            const sepia = document.getElementById('sepia').value;
-
-            return `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturate}%) grayscale(${grayscale}%) sepia(${sepia}%)`.trim();
+            const filters = [
+                { id: 'brightness', unit: '%', value: document.getElementById('brightness').value },
+                { id: 'contrast', unit: '%', value: document.getElementById('contrast').value },
+                { id: 'saturate', unit: '%', value: document.getElementById('saturate').value },
+                { id: 'grayscale', unit: '%', value: document.getElementById('grayscale').value },
+                { id: 'sepia', unit: '%', value: document.getElementById('sepia').value },
+                { id: 'blur', unit: 'px', value: document.getElementById('blur').value },
+                { id: 'hue-rotate', unit: 'deg', value: document.getElementById('hue-rotate').value },
+                { id: 'invert', unit: '%', value: document.getElementById('invert').value },
+            ];
+            return filters.map(f => `${f.id}(${f.value}${f.unit})`).join(' ').trim();
         }
 
         function applyFilters() {
-            if (!cropper) return;
             const filterString = getFilterString();
-
-            // CORRECTED: Select ALL image elements inside the cropper for preview
-            const imageElements = imageWorkspace.querySelectorAll('.cropper-canvas img, .cropper-view-box img');
-            imageElements.forEach(img => {
-                img.style.filter = filterString;
-            });
+            const target = cropper ? imageWorkspace.querySelector('.cropper-canvas img') : imageToEdit;
+            if (target) {
+                target.style.filter = filterString;
+            }
         }
 
         filterSliders.forEach(slider => {
             slider.addEventListener('input', () => {
-                slider.nextElementSibling.textContent = `${slider.value}%`;
+                const unit = slider.dataset.unit || '%';
+                slider.nextElementSibling.textContent = `${slider.value}${unit}`;
                 applyFilters();
             });
         });
 
         function resetFilters() {
             filterSliders.forEach(slider => {
-                slider.value = slider.id === 'grayscale' || slider.id === 'sepia' ? '0' : '100';
-                slider.nextElementSibling.textContent = `${slider.value}%`;
+                const unit = slider.dataset.unit || '%';
+                if (['brightness', 'contrast', 'saturate'].includes(slider.id)) {
+                    slider.value = '100';
+                } else {
+                    slider.value = '0';
+                }
+                slider.nextElementSibling.textContent = `${slider.value}${unit}`;
             });
             applyFilters();
         }
 
         // =================================
-        // Transform Controls
+        // Crop & Transform Controls
         // =================================
+        cropBtn.addEventListener('click', () => {
+            if (cropper) {
+                stopCropper();
+            } else {
+                startCropper();
+            }
+        });
+
+        function startCropper() {
+            if (cropper) return;
+            cropper = new Cropper(imageToEdit, {
+                viewMode: 1, dragMode: 'move', aspectRatio: NaN, background: false,
+                autoCropArea: 0.8, responsive: true, restore: false, checkOrientation: false,
+                ready: () => {
+                    applyFilters(); // Apply existing filters to cropper image
+                }
+            });
+            cropBtn.textContent = 'トリミング解除';
+            updateTransformControls(false);
+        }
+
+        function stopCropper() {
+            if (!cropper) return;
+            cropper.destroy();
+            cropper = null;
+            imageToEdit.style.filter = getFilterString(); // Re-apply filter to base image
+            cropBtn.textContent = 'トリミング';
+            updateTransformControls(true);
+        }
+
+        function updateTransformControls(disabled) {
+            transformButtons.forEach(btn => btn.disabled = disabled);
+        }
+
         rotateLeftBtn.addEventListener('click', () => cropper && cropper.rotate(-90));
         rotateRightBtn.addEventListener('click', () => cropper && cropper.rotate(90));
         flipHBtn.addEventListener('click', () => cropper && cropper.scaleX(-cropper.getData().scaleX || -1));
@@ -681,53 +744,70 @@
         // Main Actions (Reset, Download)
         // =================================
         resetBtn.addEventListener('click', () => {
-            if (!cropper) return;
-            // Re-initialize the editor with the original uploaded image
+            if (cropper) {
+                stopCropper();
+            }
             currentImageDataURL = originalImageDataURL;
-            cropper.replace(currentImageDataURL, false);
-            resetAll();
+            initEditor();
         });
 
         function resetAll() {
+            resetFilters();
             if (cropper) {
-                resetFilters();
                 resetTransforms();
             }
         }
 
         function resetFiltersAndTransforms() {
+            resetFilters();
             if (cropper) {
-                resetFilters();
                 resetTransforms();
             }
         }
 
         downloadBtn.addEventListener('click', () => {
-            if (!cropper) return;
+            let canvas;
+            if (cropper) {
+                canvas = cropper.getCroppedCanvas({
+                    imageSmoothingEnabled: true,
+                    imageSmoothingQuality: 'high',
+                });
+            } else {
+                canvas = document.createElement('canvas');
+                const img = new Image();
+                img.onload = () => {
+                    canvas.width = img.naturalWidth;
+                    canvas.height = img.naturalHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx.filter = getFilterString();
+                    ctx.drawImage(img, 0, 0);
+                    triggerDownload(canvas);
+                };
+                img.src = currentImageDataURL;
+                return; // Download is triggered in onload
+            }
 
-            const canvas = cropper.getCroppedCanvas({
-                imageSmoothingEnabled: true,
-                imageSmoothingQuality: 'high',
-            });
             if (!canvas) {
                 alert('画像の書き出しに失敗しました。'); return;
             }
 
-            const ctx = canvas.getContext('2d');
-            const filterString = getFilterString();
-
-            // Apply filters to the new canvas before downloading
-            const defaultFilter = "brightness(100%) contrast(100%) saturate(100%) grayscale(0%) sepia(0%)";
-            if (filterString !== defaultFilter) {
-                ctx.filter = filterString;
-                ctx.drawImage(canvas, 0, 0);
+            // Filters are applied differently for cropper vs non-cropper
+            if (cropper) {
+                const ctx = canvas.getContext('2d');
+                const tempCanvas = cropper.getCroppedCanvas();
+                ctx.filter = getFilterString();
+                ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
             }
 
+            triggerDownload(canvas);
+        });
+
+        function triggerDownload(canvas) {
             const link = document.createElement('a');
             link.download = `edited-image_${Date.now()}.png`;
             link.href = canvas.toDataURL('image/png');
             link.click();
-        });
+        }
 
         // =================================
         // UI Helpers
@@ -745,8 +825,17 @@
 
         function setControlsDisabled(disabled) {
             editorControls.querySelectorAll('button, input').forEach(el => {
-                el.disabled = disabled;
+                // Re-enable the crop button even if other controls are disabled
+                if (el.id === 'crop-btn') {
+                    el.disabled = false;
+                } else {
+                    el.disabled = disabled;
+                }
             });
+            // Always manage transform buttons based on cropper state
+            if (!disabled) {
+                updateTransformControls(!cropper);
+            }
         }
     </script>
 

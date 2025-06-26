@@ -1,0 +1,197 @@
+/* モダンなモーダルデザインのためのCSS */
+.modal {
+    font-family: 'Noto Sans Japanese', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+}
+
+.modal__overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+}
+
+.modal__container {
+    background-color: #fff;
+    width: 85%;
+    max-width: 800px;
+    max-height: 90vh;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 20px;
+}
+
+.modal__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #eaeaea;
+    margin-bottom: 15px;
+}
+
+.modal__title {
+    margin: 0;
+    font-weight: 600;
+    font-size: 1.5rem;
+    color: #333;
+}
+
+.modal__close {
+    background: transparent;
+    border: 0;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #666;
+    transition: color 0.2s ease;
+}
+
+.modal__close:hover {
+    color: #333;
+}
+
+.modal__content {
+    margin-bottom: 2rem;
+    color: #333;
+}
+
+.modal__footer {
+    display: flex;
+    justify-content: flex-end;
+    border-top: 1px solid #eaeaea;
+    padding-top: 15px;
+}
+
+.modal__btn {
+    font-size: 1rem;
+    padding: 10px 20px;
+    background-color: #f0f0f0;
+    color: #333;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-left: 10px;
+}
+
+.modal__btn:hover {
+    background-color: #e0e0e0;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.modal__btn-primary {
+    background-color: #4a6cf7;
+    color: #fff;
+}
+
+.modal__btn-primary:hover {
+    background-color: #3a5ce6;
+}
+
+/* アニメーション */
+@keyframes mmfadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes mmfadeOut {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
+@keyframes mmslideIn {
+    from {
+        transform: translateY(10%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}
+
+@keyframes mmslideOut {
+    from {
+        transform: translateY(0);
+    }
+
+    to {
+        transform: translateY(-10%);
+    }
+}
+
+.micromodal-slide {
+    display: none;
+}
+
+.micromodal-slide.is-open {
+    display: block;
+}
+
+.micromodal-slide[aria-hidden="false"] .modal__overlay {
+    animation: mmfadeIn .3s cubic-bezier(0.0, 0.0, 0.2, 1);
+}
+
+.micromodal-slide[aria-hidden="false"] .modal__container {
+    animation: mmslideIn .3s cubic-bezier(0, 0, .2, 1);
+}
+
+.micromodal-slide[aria-hidden="true"] .modal__overlay {
+    animation: mmfadeOut .3s cubic-bezier(0.0, 0.0, 0.2, 1);
+}
+
+.micromodal-slide[aria-hidden="true"] .modal__container {
+    animation: mmslideOut .3s cubic-bezier(0, 0, .2, 1);
+}
+
+.micromodal-slide .modal__container,
+.micromodal-slide .modal__overlay {
+    will-change: transform;
+}
+
+/* スマートフォン対応 */
+@media screen and (max-width: 600px) {
+    .modal__container {
+        width: 100%;
+        height: 93vh;
+        max-height: none;
+        padding: 15px;
+        border-radius: 12px 12px 0px 0px;
+        position: absolute;
+        bottom: 0;
+    }
+
+    .ranking-header {
+        display: block;
+    }
+
+    .score-dashboard {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .score-card__value {
+        font-size: 1.5rem;
+    }
+
+    .tab {
+        padding: 8px 12px;
+        font-size: 0.9rem;
+    }
+}
+

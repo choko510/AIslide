@@ -1,0 +1,788 @@
+/* --- モダンデザイン & 基本スタイル --- */
+:root {
+    --primary-color: #007bff;
+    --primary-color-hover: #0056b3;
+    --bg-light: #f8f9fa;
+    --bg-white: #ffffff;
+    --border-color: #dee2e6;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --danger-color: #dc3545;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --border-radius: 8px;
+    --transition: all 0.2s ease-in-out;
+    --guide-color: #ff4757;
+    /* スマートガイドの色 */
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+    background-color: var(--bg-light);
+    color: var(--text-primary);
+    overflow: hidden;
+    height: 100vh;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+.slide-element.text {
+    font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+}
+
+#app-container {
+    display: flex;
+    height: 100vh;
+    flex-direction: column;
+}
+
+/* --- ツールバー --- */
+#toolbar {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    background-color: var(--bg-white);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    z-index: 100;
+    flex-shrink: 0;
+}
+
+#toolbar button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border: 1px solid transparent;
+    background-color: transparent;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+#toolbar button:hover:not(:disabled) {
+    background-color: var(--bg-light);
+    color: var(--text-primary);
+}
+
+#toolbar button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+#toolbar button svg {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2;
+    fill: none;
+    stroke: currentColor;
+}
+
+#toolbar .separator {
+    width: 1px;
+    height: 24px;
+    background-color: var(--border-color);
+    margin: 0 12px;
+}
+
+#export-menu {
+    border-radius: var(--border-radius);
+    padding: 4px;
+}
+
+#export-menu div {
+    border-radius: 4px;
+}
+
+#export-menu div:hover {
+    background-color: var(--bg-light);
+}
+
+/* --- メインレイアウト (New) --- */
+#app-body { /* Replaces main */
+    display: flex;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+/* --- 左サイドバー (New) --- */
+#left-sidebar {
+    width: 280px; /* Canva-like width */
+    background-color: var(--bg-white);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    transition: width 0.2s ease;
+    flex-shrink: 0;
+}
+
+#sidebar-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.sidebar-tab-button {
+    flex: 1;
+    padding: 12px 8px; /* Adjusted padding */
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent; /* For active indicator */
+    cursor: pointer;
+    text-align: center;
+    font-size: 13px; /* Slightly smaller font */
+    color: var(--text-secondary);
+    transition: var(--transition);
+}
+
+.sidebar-tab-button:hover {
+    background-color: var(--bg-light);
+    color: var(--text-primary);
+}
+
+.sidebar-tab-button.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+    font-weight: 600; /* Bolder active tab */
+}
+
+#sidebar-content {
+    overflow-y: auto;
+    flex-grow: 1;
+    padding: 0; /* Remove padding, individual tabs will handle it */
+}
+
+.sidebar-tab-content {
+    display: none;
+    padding: 16px; /* Padding for content inside tabs */
+}
+
+.sidebar-tab-content.active {
+    display: block;
+}
+
+/* スライド一覧のスタイル (旧 #left-pane の一部を適用) */
+#slide-list {
+    list-style: none;
+    padding: 0; /* Adjusted from 16px to 0 as tab content has padding */
+    /* overflow-y: auto; /* sidebar-content handles scrolling */
+    /* flex-grow: 1; */
+}
+
+.sidebar-add-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center; /* Center content if text is short */
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-white);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 13px;
+    color: var(--text-primary);
+    text-align: left;
+}
+.sidebar-add-btn:hover {
+    background-color: var(--bg-light);
+    border-color: var(--primary-color-hover);
+}
+.sidebar-add-btn i {
+    color: var(--primary-color);
+}
+
+
+/* #left-pane-header is now inside a tab, style accordingly */
+#left-pane-header { /* This ID is still used for the "スライド一覧" title */
+    padding-bottom: 10px;
+    font-size: 16px; /* Keep font size */
+    font-weight: 600; /* Keep font weight */
+    /* border-bottom: 1px solid var(--border-color); Removed, as tabs have border */
+}
+
+
+.slide-thumbnail {
+    cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: var(--border-radius);
+    padding: 4px;
+    margin-right: 12px;
+    margin-bottom: 0;
+    position: relative;
+    transition: var(--transition);
+    flex-shrink: 0;
+    width: 160px;
+}
+
+.slide-thumbnail:hover {
+    background-color: var(--bg-light);
+}
+
+.slide-thumbnail.active {
+    border-color: var(--primary-color);
+    background-color: #e6f2ff;
+}
+
+.slide-thumbnail.dragging {
+    opacity: 0.5;
+}
+
+.slide-thumbnail.drag-over {
+    border-style: dashed;
+}
+
+.slide-thumbnail-wrapper {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background-color: var(--bg-white);
+    border: 1px solid var(--border-color);
+    position: relative;
+    overflow: hidden;
+    border-radius: 4px;
+}
+
+.slide-thumbnail-content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: top left;
+    background-color: white;
+}
+
+.thumbnail-index {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: var(--text-secondary);
+    color: white;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 22px;
+    font-size: 12px;
+    font-weight: 500;
+    z-index: 1;
+}
+
+.slide-thumbnail.active .thumbnail-index {
+    background: var(--primary-color);
+}
+
+/* --- 中央キャンバスエリア (New, 旧 #main-pane) --- */
+#main-canvas-area { /* Replaces #main-pane */
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+    overflow: auto;
+    min-width: 0;
+    min-height: 0;
+    background-color: var(--bg-light); /* Added for contrast if needed */
+}
+
+#slide-wrapper {
+    position: relative;
+    /* width: 100vw; /* This might be too large, let's rely on aspect ratio and max-width */
+    max-width: 90vw; /* Keep this for very wide screens */
+    width: 100%; /* Try to fill the container */
+    aspect-ratio: 16 / 9;
+    box-shadow: var(--shadow-md);
+    background-color: var(--bg-white);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#slide-canvas {
+    width: 1280px; /* Base resolution */
+    height: 720px; /* Base resolution */
+    max-width: 100%; /* Scale down within wrapper */
+    max-height: 100%; /* Scale down within wrapper */
+    aspect-ratio: 16 / 9;
+    position: relative;
+    overflow: hidden;
+    background: transparent; /* Canvas itself is transparent */
+}
+
+/* --- スライド要素 --- */
+.slide-element {
+    position: absolute;
+    cursor: move;
+}
+
+.slide-element.text {
+    padding: 5px;
+    line-height: 1.3;
+    word-wrap: break-word;
+}
+
+.slide-element img {
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.slide-element[contenteditable="false"] {
+    caret-color: transparent;
+}
+
+.slide-element[contenteditable="true"] {
+    cursor: text;
+}
+
+.slide-element.selected {
+    outline: 2px solid var(--primary-color);
+    z-index: 9999 !important;
+}
+
+/* 複数選択時のバウンディングボックス */
+.selection-bounding-box {
+    position: absolute;
+    border: 1px dashed var(--primary-color);
+    pointer-events: none;
+    z-index: 9998;
+}
+/* 範囲選択用ラバーバンド */
+.selection-box {
+    position: absolute;
+    border: 2px solid #3399ff;
+    background: rgba(51,153,255,0.15);
+    pointer-events: none;
+    z-index: 10001;
+    border-radius: 4px;
+}
+
+/* スマートガイドライン */
+.guide-line {
+    position: absolute;
+    background-color: var(--guide-color);
+    z-index: 10000;
+    pointer-events: none;
+}
+
+.guide-line.horizontal {
+    width: 100%;
+    height: 1px;
+    left: 0;
+}
+
+.guide-line.vertical {
+    height: 100%;
+    width: 1px;
+    top: 0;
+}
+
+/* --- リサイズハンドル --- */
+.resize-handle {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: var(--bg-white);
+    border: 2px solid var(--primary-color);
+    border-radius: 2px;
+    z-index: 10000;
+    transform: translate(-50%, -50%);
+}
+
+.resize-handle.nw {
+    top: 0;
+    left: 0;
+    cursor: nwse-resize;
+}
+
+.resize-handle.n {
+    top: 0;
+    left: 50%;
+    cursor: ns-resize;
+}
+
+.resize-handle.ne {
+    top: 0;
+    right: 0;
+    left: auto;
+    cursor: nesw-resize;
+}
+
+.resize-handle.w {
+    top: 50%;
+    left: 0;
+    cursor: ew-resize;
+}
+
+.resize-handle.e {
+    top: 50%;
+    right: 0;
+    left: auto;
+    cursor: ew-resize;
+}
+
+.resize-handle.sw {
+    bottom: 0;
+    top: auto;
+    left: 0;
+    cursor: nesw-resize;
+}
+
+.resize-handle.s {
+    bottom: 0;
+    top: auto;
+    left: 50%;
+    cursor: ns-resize;
+}
+
+.resize-handle.se {
+    bottom: 0;
+    top: auto;
+    right: 0;
+    left: auto;
+    cursor: nwse-resize;
+}
+
+/* --- インスペクター (Now inside left-sidebar) --- */
+/* #right-pane styles are largely deprecated or moved to #left-sidebar */
+
+#inspector { /* Container for inspector items, now inside a tab */
+  /* padding: 16px; /* This is now handled by .sidebar-tab-content */
+}
+
+#inspector h3 {
+    margin-top: 0;
+    margin-bottom: 24px; /* Keep spacing for titles within inspector */
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.inspector-group {
+    margin-bottom: 20px;
+}
+
+.inspector-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.inspector-group input[type="text"],
+.inspector-group input[type="number"],
+.inspector-group input[type="color"],
+.inspector-group select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 14px;
+    transition: var(--transition);
+}
+
+.inspector-group input:focus,
+.inspector-group select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.inspector-group input[type="color"] {
+    padding: 4px;
+    height: 38px;
+}
+
+.pos-size-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+#no-selection-message { /* Still relevant, but now inside a tab */
+    color: var(--text-secondary);
+    text-align: center;
+    margin-top: 50px; /* Or adjust based on tab layout */
+    padding: 20px;
+}
+
+#delete-element-btn {
+    width: 100%;
+    padding: 8px 16px;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    background-color: var(--danger-color);
+    color: white;
+    border: none;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+#delete-element-btn:hover {
+    background-color: #c82333;
+}
+
+/* --- プレゼンテーションモード --- */
+body.presentation-mode {
+    background-color: #000;
+}
+
+.presentation-mode #app-container {
+    display: none;
+}
+
+#presentation-view {
+    display: none;
+    width: 100vw;
+    height: 100vh;
+    background-color: #000;
+    justify-content: center;
+    align-items: center;
+}
+
+.presentation-mode #presentation-view {
+    display: flex;
+}
+
+#presentation-slide-container {
+    position: relative;
+    background-color: white;
+    overflow: hidden;
+}
+
+/* --- コンテキストメニュー --- */
+#slide-context-menu,
+#element-context-menu {
+    border-radius: var(--border-radius);
+    padding: 4px;
+    min-width: 140px !important;
+}
+
+#slide-context-menu div,
+#element-context-menu div {
+    border-radius: 4px;
+}
+
+#slide-context-menu div:hover,
+#element-context-menu div:hover {
+    background-color: var(--bg-light);
+}
+
+/* アラインメントボタングループ */
+.btn-group {
+    display: flex;
+    gap: 4px;
+}
+
+.btn-group button {
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-group button svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    stroke-width: 0.5;
+    fill: currentColor;
+}
+
+/* 旧タブのスタイル ( .right-pane-tabs, .tab-button, .tab-content ) は削除または .sidebar-tab-button / .sidebar-tab-content に置き換え */
+/*
+.right-pane-tabs { ... }
+.tab-button { ... }
+.tab-button.active { ... }
+.tab-content { ... }
+.tab-content.active { ... }
+*/
+
+.user-msg {
+    color: #007bff;
+    margin-bottom: 10px;
+}
+
+.ai-msg {
+    background-color: #f8f9fa;
+    border-left: 3px solid #28a745;
+    padding: 10px;
+    margin-bottom: 15px;
+}
+
+.ai-msg pre {
+    background-color: #e9ecef;
+    padding: 10px;
+    overflow-x: auto;
+    margin: 10px 0;
+}
+
+.execute-btn {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+.success-msg {
+    color: #28a745;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+.error-msg {
+    color: #dc3545;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+.ai-instruction {
+    font-size: 12px;
+    color: #6c757d;
+    margin: 5px 0;
+}
+
+/* --- レスポンシブデザイン --- */
+@media (max-width: 1024px) {
+    /* Adjust for new layout if necessary */
+    #left-sidebar {
+        width: 240px; /* Slightly narrower sidebar for smaller screens */
+    }
+}
+
+@media (max-width: 768px) {
+    body {
+        overflow: auto;
+        height: auto;
+    }
+
+    #app-container {
+        height: auto;
+        min-height: 100vh;
+    }
+
+    #app-body { /* main was flex-direction: column */
+        flex-direction: column;
+        height: auto;
+        flex-grow: 1;
+    }
+
+    #left-sidebar { /* Was #left-pane and #right-pane */
+        width: 100%;
+        border: none;
+        box-shadow: none;
+        order: 2; /* Sidebar content (like slides, elements) can come after canvas */
+        border-top: 1px solid var(--border-color);
+        /* height: auto; /* Let content define height */
+        /* padding: 0; /* sidebar-content handles padding */
+    }
+
+    #sidebar-tabs {
+        /* Potentially make tabs scrollable horizontally if too many */
+        overflow-x: auto;
+    }
+    .sidebar-tab-button {
+        font-size: 12px; /* Smaller tabs on mobile */
+        padding: 10px 6px;
+    }
+
+
+    /* #left-pane-header was display:none, but now it's part of a tab. */
+    /* It should be visible if its tab is active. */
+
+    #slide-list { /* Copied from old #slide-list for mobile */
+        display: flex;
+        flex-direction: row;
+        overflow-x: auto;
+        padding: 12px; /* Keep padding for horizontal scroll items */
+        align-items: center;
+    }
+
+    .slide-thumbnail { /* Copied from old .slide-thumbnail for mobile */
+        flex-shrink: 0;
+        width: 120px;
+        margin-right: 12px;
+        margin-bottom: 0;
+    }
+
+    #main-canvas-area { /* Was #main-pane */
+        padding: 12px;
+        order: 1; /* Canvas comes first on mobile */
+    }
+
+    #slide-wrapper {
+        max-width: 100vw; /* Full width on mobile */
+        width: 100%; /* Ensure it takes full width */
+        /* aspect-ratio: 16 / 9; /* This should be fine */
+    }
+    #slide-canvas {
+        /* width: 1280px; These are base, scaling should handle it */
+        /* height: 720px; */
+        max-width: 100%;
+        max-height: 100%;
+        /* aspect-ratio: 16 / 9; */
+    }
+
+    /* #right-pane specific styles are removed or adapted */
+
+    #toolbar {
+        flex-wrap: wrap;
+        padding: 8px;
+    }
+
+    #toolbar button {
+        margin-bottom: 4px;
+    }
+
+    #toolbar button span { /* Hides text on mobile */
+        display: none;
+    }
+
+    #toolbar .separator {
+        margin: 0 8px;
+    }
+}
+
+/* Targeting landscape on smaller devices */
+@media (max-width: 768px) and (orientation: landscape) {
+    #toolbar {
+        padding: 4px 8px; /* Reduce padding */
+        flex-wrap: nowrap; /* Try to keep toolbar items in one line if possible */
+        overflow-x: auto; /* Allow horizontal scroll if they don't fit */
+    }
+    #toolbar button {
+        padding: 4px 6px; /* Smaller buttons */
+        gap: 4px;
+    }
+    #toolbar button i {
+        font-size: 14px; /* Slightly smaller icons */
+    }
+    #toolbar .separator {
+        margin: 0 4px;
+        height: 20px;
+    }
+
+    #left-sidebar {
+        width: 200px; /* Narrower sidebar in landscape mobile */
+    }
+    .sidebar-tab-button {
+        font-size: 11px; /* Even smaller tab text */
+        padding: 8px 4px;
+    }
+     #slide-list { /* Ensure slide list items are small enough */
+        padding: 8px;
+    }
+    .slide-thumbnail {
+        width: 100px;
+        margin-right: 8px;
+    }
+}

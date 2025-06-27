@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スライド共有アプリ</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>スライド共有アプリ</h1>
+        <nav>
+            <button id="showLoginModal">ログイン</button>
+            <button id="showRegisterModal">新規登録</button>
+            <button id="logoutButton" style="display:none;">ログアウト</button>
+        </nav>
+    </header>
+
+    <main>
+        <h2>マイスライド</h2>
+        <div id="slideList">
+            <!-- スライドはここにJavaScriptで表示されます -->
+            <p>スライドを読み込んでいます...</p>
+        </div>
+
+        <h2>ファイルアップロード</h2>
+        <div>
+            <label for="imageUpload">画像アップロード:</label>
+            <input type="file" id="imageUpload" accept="image/*">
+            <button id="uploadImageButton">アップロード</button>
+        </div>
+        <div>
+            <label for="fontUpload">フォントアップロード:</label>
+            <input type="file" id="fontUpload" accept=".ttf,.otf,.woff,.woff2">
+            <button id="uploadFontButton">アップロード</button>
+        </div>
+        <div>
+            <label for="videoUpload">動画アップロード:</label>
+            <input type="file" id="videoUpload" accept="video/*">
+            <button id="uploadVideoButton">アップロード</button>
+        </div>
+
+        <h2>スライド作成</h2>
+        <div>
+            <textarea id="slideData" placeholder="スライドのコンテンツをここに入力 (例: JSON形式)"></textarea>
+            <button id="createSlideButton">スライド作成</button>
+        </div>
+
+        <h2>AIに質問</h2>
+        <div>
+            <input type.text id="aiPrompt" placeholder="AIへの質問を入力">
+            <button id="askAIButton">質問する</button>
+            <div id="aiResponse"></div>
+        </div>
+
+    </main>
+
+    <!-- 新規登録モーダル -->
+    <div id="registerModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <span class="close-button" data-modal="registerModal">&times;</span>
+            <h2>新規登録</h2>
+            <input type="text" id="registerUsername" placeholder="ユーザー名">
+            <input type="password" id="registerPassword" placeholder="パスワード">
+            <button id="registerButton">登録</button>
+            <p id="registerMessage"></p>
+        </div>
+    </div>
+
+    <!-- ログインモーダル -->
+    <div id="loginModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <span class="close-button" data-modal="loginModal">&times;</span>
+            <h2>ログイン</h2>
+            <input type="text" id="loginUsername" placeholder="ユーザー名">
+            <input type="password" id="loginPassword" placeholder="パスワード">
+            <button id="loginButton">ログイン</button>
+            <p id="loginMessage"></p>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2024 スライド共有アプリ</p>
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

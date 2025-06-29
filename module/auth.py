@@ -8,11 +8,8 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-# Assuming User model and SessionLocal are defined in main.py or a models.py
-# We'll need to adjust imports based on actual project structure if User/db session are elsewhere.
-# For now, let's assume we can import User and get_db from main
-# This might require restructuring main.py later or creating a shared models.py
-from main import User, get_db # Placeholder, might need adjustment
+from module.models import User
+from module.database import get_db
 
 # Configuration
 SECRET_KEY = "YOUR_SECRET_KEY"  # TODO: Change this to a strong, randomly generated key
@@ -50,7 +47,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 async def get_user(db: Session, username: str) -> Optional[User]:
     return db.query(User).filter(User.username == username).first()
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: Annotated[Session, Depends(get_db)]) -> User:
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: Session = Depends(get_db)) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -73,30 +70,16 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: An
 async def _decode_token_and_get_user(token: str, db: Session) -> Optional[User]:
     """
     Decodes the JWT token and retrieves the user from the database.
-    Raises credentials_exception if token is invalid or user not found.
-    This is the core logic used by get_current_user and WebSocket auth.
+    This is a helper for WebSocket auth, not using Depends().
     """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
-            raise credentials_exception
-        token_data = TokenData(username=username)
+            return None
+        return await get_user(db, username=username)
     except JWTError:
-        raise credentials_exception
-
-    user = await get_user(db, username=token_data.username) # get_user is already async
-    if user is None:
-        raise credentials_exception
-    return user
-
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: Annotated[Session, Depends(get_db)]) -> User:
-    return await _decode_token_and_get_user(token, db)
+        return None
 
 
 async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)]) -> User:

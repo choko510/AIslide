@@ -76,7 +76,7 @@ templates = Jinja2Templates(directory="templates")
 # --- Root Endpoint ---
 @app.get("/", response_class=HTMLResponse)
 async def read_index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "slides": []})
+    return templates.TemplateResponse("main.html", {"request": request, "slides": []})
 
 # --- User Account Endpoints ---
 @app.post("/auth/register", response_model=UserResponse)
@@ -158,6 +158,13 @@ async def save_upload_file(upload_file: UploadFile, destination_folder: str, db_
     unique_filename = f"{uuid.uuid4()}{file_extension}"
     file_location = os.path.join(destination_folder, unique_filename)
 
+    # パス検証: 許可ディレクトリ配下のみ
+    uploads_root = os.path.abspath(UPLOAD_DIR)
+    abs_path = os.path.abspath(file_location)
+    if not abs_path.startswith(uploads_root):
+        logger.error(f"Attempted to save file outside uploads dir: {abs_path}")
+        raise HTTPException(status_code=400, detail="Invalid file path.")
+
     db_file_entry.filename = unique_filename
 
     try:
@@ -190,6 +197,11 @@ async def upload_file_unified(
     if file_type not in allowed_file_types:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid file type: {file_type}")
 
+    # file_typeの値を検証
+    allowed_file_types = ["image", "font", "video"]
+    if file_type not in allowed_file_types:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid file type: {file_type}")
+
     destination_subfolder = f"{file_type}s"
     destination_folder = os.path.join(UPLOAD_DIR, destination_subfolder)
     os.makedirs(destination_folder, exist_ok=True)
@@ -207,6 +219,12 @@ async def read_file(file_id: int, *, db: Session = Depends(get_db), current_user
     db_file = db.query(UploadedFile).filter(UploadedFile.id == file_id, UploadedFile.owner_id == current_user.id).first()
     if not db_file:
         raise HTTPException(status_code=404, detail="File not found or not authorized")
+    # パス検証: 許可ディレクトリ配下のみ
+    uploads_root = os.path.abspath(UPLOAD_DIR)
+    abs_path = os.path.abspath(db_file.file_path)
+    if not abs_path.startswith(uploads_root):
+        logger.error(f"Attempted to access file outside uploads dir: {abs_path}")
+        raise HTTPException(status_code=400, detail="Invalid file path.")
     if not os.path.exists(db_file.file_path):
         raise HTTPException(status_code=404, detail="File not found on server")
     return FastAPIFileResponse(path=db_file.file_path, filename=db_file.filename)
@@ -219,6 +237,13 @@ async def delete_file_endpoint(file_id: int, *, db: Session = Depends(get_db), c
 
     deleted_file_response = FileResponse.model_validate(db_file)
     file_path_to_delete = db_file.file_path
+
+    # パス検証: 許可ディレクトリ配下のみ削除
+    uploads_root = os.path.abspath(UPLOAD_DIR)
+    abs_path = os.path.abspath(file_path_to_delete)
+    if not abs_path.startswith(uploads_root):
+        logger.error(f"Attempted to delete file outside uploads dir: {abs_path}")
+        raise HTTPException(status_code=400, detail="Invalid file path.")
 
     try:
         db.delete(db_file)

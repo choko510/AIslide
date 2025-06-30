@@ -4,12 +4,14 @@ import uuid
 import logging
 from datetime import timedelta
 from typing import Annotated, Optional, List
+import asyncio
 
 from fastapi import (
     FastAPI, Depends, HTTPException, status, UploadFile,
-    File, WebSocket, Request
+    File, WebSocket, Request, Form
 )
-from fastapi.responses import FileResponse as FastAPIFileResponse, HTMLResponse
+
+from fastapi.responses import FileResponse as FastAPIFileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.concurrency import run_in_threadpool
 from fastapi.templating import Jinja2Templates
@@ -17,6 +19,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from werkzeug.utils import secure_filename
 import google.generativeai as genai
+from PIL import Image
 
 import module.auth as auth
 from module.database import engine, get_db
@@ -121,15 +124,26 @@ async def get_my_slides(*, db: Session = Depends(get_db), current_user: Annotate
 UPLOAD_DIR = "data/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# File upload settings
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+# File upload settings with type-specific size limits
+MAX_FILE_SIZES = {
+    "image": 15 * 1024 * 1024,  # 15 MB
+    "font": 10 * 1024 * 1024,   # 10 MB
+    "video": 100 * 1024 * 1024  # 100 MB
+}
 ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif"]
 ALLOWED_FONT_TYPES = ["font/ttf", "font/otf", "font/woff", "font/woff2"]
 ALLOWED_VIDEO_TYPES = ["video/mp4", "video/webm", "video/ogg"]
 
 async def save_upload_file(upload_file: UploadFile, destination_folder: str, db_file_entry: UploadedFile, db: Session, file_type: str):
-    if upload_file.size > MAX_FILE_SIZE:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=f"File too large. Max size is {MAX_FILE_SIZE // (1024*1024)}MB.")
+    max_size = MAX_FILE_SIZES.get(file_type)
+    if not max_size:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid file type: {file_type}")
+    
+    if upload_file.size > max_size:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File too large. Max size for {file_type} is {max_size // (1024*1024)}MB."
+        )
 
     content_type = upload_file.content_type
     if file_type == "image" and content_type not in ALLOWED_IMAGE_TYPES:
@@ -254,12 +268,37 @@ else:
     gemini_model = None
 
 @app.post("/ai/ask")
-async def ai_ask(ai_prompt: AIPrompt):
+async def ai_ask(
+    prompt: str = Form(...),
+    image: UploadFile = File(None)
+):
     if not gemini_model:
         raise HTTPException(status_code=503, detail="AI service is not configured.")
     try:
-        response = gemini_model.generate_content(ai_prompt.prompt)
-        return {"response": response.text}
+        import tempfile
+
+        async def gemini_stream():
+            img_obj = None
+            if image is not None:
+                # 一時ファイルに保存
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+                    content = await image.read()
+                    tmp.write(content)
+                    tmp.flush()
+                    img_path = tmp.name
+                img_obj = Image.open(img_path)
+                # Geminiに画像とテキストを渡す
+                for chunk in gemini_model.generate_content_stream([prompt, img_obj]):
+                    if hasattr(chunk, "text") and chunk.text:
+                        yield chunk.text
+                    await asyncio.sleep(0)
+            else:
+                for chunk in gemini_model.generate_content_stream(prompt):
+                    if hasattr(chunk, "text") and chunk.text:
+                        yield chunk.text
+                    await asyncio.sleep(0)
+
+        return StreamingResponse(gemini_stream(), media_type="text/plain")
     except Exception as e:
         logger.error(f"Error calling Gemini API: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error processing AI request.")

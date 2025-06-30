@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+    <title>Web Slide Maker - Modern (Enhanced)</title>
+    <!-- Preconnect for faster font loading -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://site-assets.fontawesome.com">
+    <!-- Preload critical CSS -->
+    <link rel="preload" as="style" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/all.css"
+        onload="this.rel='stylesheet'">
+    <link rel="preload" as="style" href="slide.css" onload="this.rel='stylesheet'">
+    <link rel="preload" as="style" href="imgedit.css" onload="this.rel='stylesheet'">
+    <link rel="preload" as="style"
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap"
+        onload="this.rel='stylesheet'">
+    <!-- Google Fonts for imgedit.html -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+
+<body class=""> <!-- paint-session-active クラスが動的に追加/削除される -->
+    <div id="app-container">
+        <div id="toolbar">
+            <button id="add-slide-btn" title="スライド追加"><i class="fas fa-plus"></i><span>スライド追加</span></button>
+            <button id="delete-slide-btn" title="スライド削除"><i class="fas fa-trash-alt"></i><span>スライド削除</span></button>
+            <div class="separator"></div>
+            <!-- Element add buttons moved to sidebar -->
+            <div class="separator"></div>
+            <!-- アラインメントボタングループ -->
+            <div class="btn-group">
+                <button id="align-left-btn" title="左揃え"><i class="fas fa-align-left"></i></button>
+                <button id="align-center-h-btn" title="水平中央揃え"><i class="fas fa-align-center"></i></button>
+                <button id="align-right-btn" title="右揃え"><i class="fas fa-align-right"></i></button>
+                <button id="align-top-btn" title="上揃え"><i class="fas fa-align-top"></i></button>
+                <button id="align-center-v-btn" title="垂直中央揃え"><i class="fas fa-arrows-alt-v"></i></button>
+                <button id="align-bottom-btn" title="下揃え"><i class="fas fa-align-bottom"></i></button>
+                <button id="distribute-h-btn" title="水平方向へ等間隔に配置"><i class="fas fa-grip-lines"></i></button>
+                <button id="distribute-v-btn" title="垂直方向へ等間隔に配置"><i class="fas fa-grip-lines-vertical"></i></button>
+            </div>
+            <div class="separator"></div>
+            <button id="save-btn" title="保存"><i class="fas fa-save"></i><span>保存</span></button>
+            <button id="present-btn" title="プレゼンテーション開始"><i class="fas fa-play"></i><span>開始</span></button>
+            <button id="export-btn" title="エクスポート"><i class="fas fa-download"></i><span>エクスポート</span></button>
+            <div id="export-menu"
+                style="display:none;position:absolute;z-index:10000;background:#fff;border:1px solid var(--border-color);box-shadow:var(--shadow-md);min-width:160px;">
+            </div>
+        </div>
+
+        <div id="app-body" style="display: flex; flex-direction: column; flex-grow: 1; overflow: hidden;">
+            <div id="center-content" style="display: flex; flex-grow: 1; overflow: hidden !important;">
+                <aside id="left-sidebar" style="position: relative;">
+                    <div id="sidebar-resize-handle"
+                        style="position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: ew-resize; z-index: 10; background: transparent;">
+                    </div>
+                    <div id="sidebar-tabs">
+                        <button class="sidebar-tab-button active" data-tab="elements">
+                            <i class="fas fa-shapes"></i>
+                            <span>素材</span>
+                        </button>
+                        <button class="sidebar-tab-button" data-tab="icons">
+                            <i class="fas fa-icons"></i>
+                            <span>アイコン</span>
+                        </button>
+                        <button class="sidebar-tab-button" data-tab="inspector">
+                            <i class="fas fa-sliders-h"></i>
+                            <span>設定</span>
+                        </button>
+                        <button class="sidebar-tab-button" data-tab="page-settings">
+                            <i class="fas fa-file-code"></i>
+                            <span>ページCSS</span>
+                        </button>
+                        <button class="sidebar-tab-button" data-tab="settings">
+                            <i class="fas fa-cog"></i>
+                            <span>設定</span>
+                        </button>
+                        <button class="sidebar-tab-button" data-tab="chat">
+                            <i class="fas fa-robot"></i>
+                            <span>AI</span>
+                        </button>
+                    </div>
+                    <div id="sidebar-content">
+                        <div class="sidebar-tab-content active" data-tab-content="elements">
+                            <div id="element-add-buttons-container"
+                                style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                <button id="add-text-btn" class="sidebar-add-btn"><i
+                                        class="fas fa-font fa-fw"></i><span>テキスト</span></button>
+                                <input type="file" id="image-upload-input" accept="image/*" style="display: none;">
+                                <button id="add-image-btn" class="sidebar-add-btn"><i
+                                        class="fas fa-image fa-fw"></i><span>画像</span></button>
+                                <button id="add-image-edit-btn" class="sidebar-add-btn"><i
+                                        class="fas fa-magic"></i><span>画像編集</span></button>
+                                <button id="add-video-btn" class="sidebar-add-btn"><i
+                                        class="fas fa-video fa-fw"></i><span>動画</span></button>
+                                <button id="add-table-btn" class="sidebar-add-btn"><i
+                                        class="fas fa-table fa-fw"></i><span>表</span></button>
+                                <button id="add-chart-btn" class="sidebar-add-btn"><i
+                                        class="fas fa-chart-bar fa-fw"></i><span>グラフ</span></button>
+                                <button id="add-iframe-btn" class="sidebar-add-btn"><i
+                                        class="fas fa-code fa-fw"></i><span>埋め込み</span></button>
+                                <button id="add-qr-btn" class="sidebar-add-btn"><i
+                                        class="fas fa-qrcode fa-fw"></i><span>QRコード</span></button>
+                            </div>
+                        </div>
+                        <div class="sidebar-tab-content" data-tab-content="icons">
+                            <div style="margin-bottom: 10px; display: flex; gap: 8px;">
+                                <button id="fa-toggle-btn" class="sidebar-add-btn active" style="flex-grow: 1;"><i
+                                        class="fa-brands fa-font-awesome"></i><span>Font Awesome</span></button>
+                                <button id="mi-toggle-btn" class="sidebar-add-btn" style="flex-grow: 1;"><i
+                                        class="material-icons">star</i><span>Material Icons</span></button>
+                            </div>
+
+                            <!-- Font Awesome Section -->
+                            <div id="font-awesome-section">
+                                <div id="fa-icon-search-toolbar" style="margin-bottom: 10px;">
+                                    <input type="text" id="fa-icon-search-input" placeholder="Font Awesomeアイコン検索..."
+                                        style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: var(--border-radius);">
+                                </div>
+                                <div style="margin-bottom: 10px;">
+                                    <label
+                                        style="font-size:12px;color:var(--text-secondary);margin-right:6px;">スタイル</label>
+                                    <select id="fa-style-select" style="padding:4px 8px;border-radius:6px;">
+                                        <option value="fas">Solid</option>
+                                        <option value="far">Regular</option>
+                                        <option value="fal">Light</option>
+                                        <option value="fat">Thin</option>
+                                    </select>
+                                </div>
+                                <div id="fa-icon-category-filter"
+                                    style="margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px;">
+                                    <!-- Font Awesome カテゴリーボタンはJSで動的に生成されます -->
+                                </div>
+                                <div id="fa-icon-list-container"
+                                    style="display: flex; flex-wrap: wrap; gap: 10px; max-height: 400px; overflow-y: auto;">
+                                    <!-- Font Awesome アイコンはここにJavaScriptで描画されます -->
+                                </div>
+                            </div>
+
+                            <!-- Material Icons Section -->
+                            <div id="material-icons-section" style="display: none;">
+                                <div id="mi-icon-search-toolbar" style="margin-bottom: 10px;">
+                                    <input type="text" id="mi-icon-search-input" placeholder="Material Icons検索..."
+                                        style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: var(--border-radius);">
+                                </div>
+                                <div style="margin-bottom: 10px;">
+                                    <label
+                                        style="font-size:12px;color:var(--text-secondary);margin-right:6px;">スタイル</label>
+                                    <select id="mi-style-select" style="padding:4px 8px;border-radius:6px;">
+                                        <option value="material-icons">Filled</option>
+                                        <option value="material-icons-outlined">Outlined</option>
+                                        <option value="material-icons-round">Round</option>
+                                        <option value="material-icons-sharp">Sharp</option>
+                                        <option value="material-icons-two-tone">Two Tone</option>
+                                    </select>
+                                </div>
+                                <div id="mi-icon-category-filter"
+                                    style="margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px;">
+                                    <!-- Material Icons カテゴリーボタンはJSで動的に生成されます -->
+                                </div>
+                                <div id="mi-icon-list-container"
+                                    style="display: flex; flex-wrap: wrap; gap: 10px; max-height: 400px; overflow-y: auto;">
+                                    <!-- Material Icons はここにJavaScriptで描画されます -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="sidebar-tab-content" data-tab-content="inspector">
+                            <div id="inspector"></div> <!-- 旧インスペクターのコンテナ -->
+                            <div id="no-selection-message" style="display:none;">要素が選択されていません</div>
+                        </div>
+                        <div class="sidebar-tab-content" data-tab-content="page-settings">
+                            <h3>ページ全体のカスタムCSS</h3>
+                            <p style="font-size:12px; color: #6c757d; margin-bottom: 8px;">ここに記述したCSSは、すべてのスライドに適用されます。
+                            </p>
+                            <div id="global-css-input"
+                                style="height: 300px; border: 1px solid var(--border-color); border-radius: var(--border-radius);">
+                            </div>
+                            <button id="save-global-css-btn" class="sidebar-add-btn"
+                                style="width:100%; margin-top: 10px; justify-content: center;">ページCSSを適用</button>
+                        </div>
+                        <div class="sidebar-tab-content" data-tab-content="settings">
+                            <div id="settings-panel">
+                                <div class="settings-group">
+                                    <h3>外観設定</h3>
+                                    <div class="settings-item">
+                                        <label>
+                                            ダークモード
+                                            <div class="settings-description">画面を暗いテーマに切り替えます</div>
+                                        </label>
+                                        <div class="settings-control">
+                                            <label class="theme-toggle">
+                                                <input type="checkbox" id="theme-toggle">
+                                                <span class="theme-slider"></span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="settings-item">
+                                        <label>
+                                            フォントサイズ
+                                            <div class="settings-description">UIのフォントサイズを調整します</div>
+                                        </label>
+                                        <div class="settings-control">
+                                            <select id="font-size-setting"
+                                                style="padding: 4px 8px; border-radius: 4px;">
+                                                <option value="small">小</option>
+                                                <option value="normal" selected>標準</option>
+                                                <option value="large">大</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="settings-group">
+                                    <h3>エディター設定</h3>
+                                    <div class="settings-item">
+                                        <label>
+                                            自動保存
+                                            <div class="settings-description">変更を自動的に保存します</div>
+                                        </label>
+                                        <div class="settings-control">
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" id="auto-save-toggle" checked>
+                                                <span class="slider"></span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="settings-item">
+                                        <label>
+                                            スナップ機能
+                                            <div class="settings-description">要素の配置時にガイドラインにスナップします</div>
+                                        </label>
+                                        <div class="settings-control">
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" id="snap-toggle" checked>
+                                                <span class="slider"></span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="settings-item">
+                                        <label>
+                                            グリッド表示
+                                            <div class="settings-description">スライドキャンバスにグリッドを表示します</div>
+                                        </label>
+                                        <div class="settings-control">
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" id="grid-toggle">
+                                                <span class="slider"></span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="settings-group">
+                                    <h3>データ管理</h3>
+                                    <div class="settings-item">
+                                        <label>
+                                            データのエクスポート
+                                            <div class="settings-description">プレゼンテーションデータをJSONファイルとして保存</div>
+                                        </label>
+                                        <div class="settings-control">
+                                            <button id="export-data-btn" class="sidebar-add-btn"
+                                                style="padding: 6px 12px; font-size: 12px;">
+                                                <i class="fas fa-download"></i> エクスポート
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="settings-item">
+                                        <label>
+                                            データのインポート
+                                            <div class="settings-description">JSONファイルからプレゼンテーションデータを読み込み</div>
+                                        </label>
+                                        <div class="settings-control">
+                                            <input type="file" id="import-data-input" accept=".json"
+                                                style="display: none;">
+                                            <button id="import-data-btn" class="sidebar-add-btn"
+                                                style="padding: 6px 12px; font-size: 12px;">
+                                                <i class="fas fa-upload"></i> インポート
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="settings-item">
+                                        <label>
+                                            データの削除
+                                            <div class="settings-description">すべてのプレゼンテーションデータを削除</div>
+                                        </label>
+                                        <div class="settings-control">
+                                            <button id="clear-data-btn" class="sidebar-add-btn"
+                                                style="padding: 6px 12px; font-size: 12px; background-color: var(--danger-color); border-color: var(--danger-color);">
+                                                <i class="fas fa-trash"></i> 全削除
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="sidebar-tab-content" data-tab-content="chat">
+                            <div id="chat-panel">
+                                <div id="ai-controls"
+                                    style="margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px;">
+                                    <div style="display: flex; gap: 8px;">
+                                        <button id="restore-checkpoint-btn" class="sidebar-add-btn"
+                                            title="AIによる直前の変更を取り消します" style="flex-grow: 1; justify-content: center;"
+                                            disabled><i class="fas fa-undo"></i> AIの変更を戻す</button>
+                                    </div>
+                                    <label
+                                        style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; border: 1px solid var(--border-color); border-radius: var(--border-radius); cursor: pointer;">
+                                        <i class="fas fa-magic-wand-sparkles"></i>
+                                        <span>自律モード</span>
+                                        <div class="toggle-switch">
+                                            <input type="checkbox" id="autonomous-mode-toggle">
+                                            <span class="slider"></span>
+                                        </div>
+                                    </label>
+                                </div>
+                                <div id="chat-messages"
+                                    style="height: 250px; overflow-y: auto; border: 1px solid var(--border-color); padding: 10px; margin-bottom: 10px; border-radius: var(--border-radius);">
+                                </div>
+                                <div id="chat-input-container" style="display: flex;">
+                                    <input type="text" id="chat-input"
+                                        style="flex-grow: 1; padding: 8px; border: 1px solid var(--border-color); border-radius: var(--border-radius) 0 0 var(--border-radius);"
+                                        placeholder="AIにスライドの変更を指示...">
+                                    <button id="send-chat-btn"
+                                        style="padding: 8px 15px; border-radius: 0 var(--border-radius) var(--border-radius) 0; border: 1px solid var(--border-color); border-left: none; background: var(--primary-color); color: white; cursor: pointer;">送信</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+                <div id="main-canvas-area"
+                    style="flex-grow: 1; display: flex; justify-content: center; align-items: center; padding: 24px; overflow: hidden; min-width: 0; min-height: 0;">
+                    <div id="slide-wrapper"> <!-- slide-wrapperのスタイルは既存のmain-pane内のものとほぼ同じはず -->
+                        <div id="slide-canvas"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="bottom-pane"
+                style="flex-shrink: 0; height: 140px; background-color: var(--bg-white); border-top: 1px solid var(--border-color); padding: 8px; overflow: hidden; display: flex; align-items: center;">
+                <div id="slide-list-container">
+                    <ul id="slide-list"
+                        style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: row; align-items: center; width: 100%; height: 100%;">
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="presentation-view">
+        <div id="presentation-slide-container"></div>
+    </div>
+
+    <!-- グラフ作成用モーダル -->
+    <div class="modal micromodal-slide" id="chart-modal" aria-hidden="true">
+        <div class="modal__overlay" tabindex="-1" data-micromodal-close>
+            <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="chart-modal-title"
+                style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+                <button class="modal__close" aria-label="Close modal" data-micromodal-close
+                    style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; color: #6c757d; cursor: pointer; z-index: 1001;">&times;</button>
+                <main class="modal__content" id="chart-modal-content" style="padding: 24px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;">
+                        <!-- 左側：設定パネル -->
+                        <div style="background: #f8f9fa; border-radius: 12px; padding: 20px;">
+                            <form id="chart-create-form">
+                                <!-- グラフ種類選択 -->
+                                <div style="margin-bottom: 20px;">
+                                    <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #495057;">グラフの種類</h3>
+                                    <div
+                                        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 8px;">
+                                        <button type="button" class="chart-type-btn" data-type="bar"
+                                            style="display: flex; flex-direction: column; align-items: center; padding: 12px 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                                            <i class="fas fa-chart-bar"
+                                                style="font-size: 20px; margin-bottom: 4px; color: #6c757d;"></i>
+                                            <span style="font-size: 11px; color: #6c757d;">棒グラフ</span>
+                                        </button>
+                                        <button type="button" class="chart-type-btn" data-type="line"
+                                            style="display: flex; flex-direction: column; align-items: center; padding: 12px 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                                            <i class="fas fa-chart-line"
+                                                style="font-size: 20px; margin-bottom: 4px; color: #6c757d;"></i>
+                                            <span style="font-size: 11px; color: #6c757d;">折れ線</span>
+                                        </button>
+                                        <button type="button" class="chart-type-btn" data-type="pie"
+                                            style="display: flex; flex-direction: column; align-items: center; padding: 12px 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                                            <i class="fas fa-chart-pie"
+                                                style="font-size: 20px; margin-bottom: 4px; color: #6c757d;"></i>
+                                            <span style="font-size: 11px; color: #6c757d;">円グラフ</span>
+                                        </button>
+                                        <button type="button" class="chart-type-btn" data-type="doughnut"
+                                            style="display: flex; flex-direction: column; align-items: center; padding: 12px 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                                            <i class="fas fa-dot-circle"
+                                                style="font-size: 20px; margin-bottom: 4px; color: #6c757d;"></i>
+                                            <span style="font-size: 11px; color: #6c757d;">ドーナツ</span>
+                                        </button>
+                                        <button type="button" class="chart-type-btn" data-type="radar"
+                                            style="display: flex; flex-direction: column; align-items: center; padding: 12px 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
+                                            <i class="fas fa-project-diagram"
+                                                style="font-size: 20px; margin-bottom: 4px; color: #6c757d;"></i>
+                                            <span style="font-size: 11px; color: #6c757d;">レーダー</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- データ入力 -->
+                                <div style="margin-bottom: 20px;">
+                                    <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #495057;">データ</h3>
+                                    <div style="display: grid; gap: 12px;">
+                                        <div>
+                                            <label
+                                                style="display: block; margin-bottom: 4px; font-size: 13px; color: #6c757d; font-weight: 500;">タイトル</label>
+                                            <input type="text" id="chart-title" placeholder="グラフタイトル"
+                                                style="width: 100%; padding: 10px 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px;">
+                                        </div>
+                                        <div>
+                                            <label
+                                                style="display: block; margin-bottom: 4px; font-size: 13px; color: #6c757d; font-weight: 500;">データセット名</label>
+                                            <input type="text" id="chart-dataset-label" value="Dataset" required
+                                                style="width: 100%; padding: 10px 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px;">
+                                        </div>
+                                        <div>
+                                            <label
+                                                style="display: block; margin-bottom: 4px; font-size: 13px; color: #6c757d; font-weight: 500;">ラベル（カンマ区切り）</label>
+                                            <input type="text" id="chart-labels" value="A,B,C" required
+                                                style="width: 100%; padding: 10px 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px;">
+                                        </div>
+                                        <div>
+                                            <label
+                                                style="display: block; margin-bottom: 4px; font-size: 13px; color: #6c757d; font-weight: 500;">値（カンマ区切り）</label>
+                                            <input type="text" id="chart-data" value="10,20,30" required
+                                                style="width: 100%; padding: 10px 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px;">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- スタイル設定 -->
+                                <div style="margin-bottom: 20px;">
+                                    <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #495057;">スタイル</h3>
+                                    <div style="display: grid; gap: 16px;">
+                                        <div>
+                                            <label
+                                                style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">カラーパレット</label>
+                                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                                <button type="button" class="color-palette-btn"
+                                                    data-colors="#007bff,#28a745,#dc3545,#ffc107,#6f42c1"
+                                                    style="width: 40px; height: 40px; border: 2px solid #dee2e6; border-radius: 8px; cursor: pointer; background: linear-gradient(45deg, #007bff 0%, #007bff 20%, #28a745 20%, #28a745 40%, #dc3545 40%, #dc3545 60%, #ffc107 60%, #ffc107 80%, #6f42c1 80%);"></button>
+                                                <button type="button" class="color-palette-btn"
+                                                    data-colors="#e74c3c,#f39c12,#f1c40f,#2ecc71,#3498db"
+                                                    style="width: 40px; height: 40px; border: 2px solid #dee2e6; border-radius: 8px; cursor: pointer; background: linear-gradient(45deg, #e74c3c 0%, #e74c3c 20%, #f39c12 20%, #f39c12 40%, #f1c40f 40%, #f1c40f 60%, #2ecc71 60%, #2ecc71 80%, #3498db 80%);"></button>
+                                                <button type="button" class="color-palette-btn"
+                                                    data-colors="#8e44ad,#9b59b6,#e67e22,#d35400,#c0392b"
+                                                    style="width: 40px; height: 40px; border: 2px solid #dee2e6; border-radius: 8px; cursor: pointer; background: linear-gradient(45deg, #8e44ad 0%, #8e44ad 20%, #9b59b6 20%, #9b59b6 40%, #e67e22 40%, #e67e22 60%, #d35400 60%, #d35400 80%, #c0392b 80%);"></button>
+                                            </div>
+                                            <input type="text" id="chart-colors" placeholder="カスタム色（カンマ区切り）"
+                                                style="width: 100%; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 12px; margin-top: 8px;">
+                                        </div>
+
+                                        <div>
+                                            <label
+                                                style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">線の太さ:
+                                                <span id="line-width-value">2</span>px</label>
+                                            <input type="range" id="chart-line-width" min="1" max="10" value="2"
+                                                style="width: 100%; height: 6px; border-radius: 3px; background: #ddd; outline: none;">
+                                        </div>
+
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                            <label
+                                                style="display: flex; align-items: center; font-size: 14px; color: #495057; cursor: pointer;">
+                                                <input type="checkbox" id="chart-show-legend" checked
+                                                    style="margin-right: 8px; transform: scale(1.2);">
+                                                凡例を表示
+                                            </label>
+                                            <label
+                                                style="display: flex; align-items: center; font-size: 14px; color: #495057; cursor: pointer;">
+                                                <input type="checkbox" id="chart-show-grid" checked
+                                                    style="margin-right: 8px; transform: scale(1.2);">
+                                                グリッド線を表示
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button type="submit"
+                                    style="width: 100%; padding: 12px; background: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.2s;">
+                                    <i class="fas fa-plus" style="margin-right: 8px;"></i>グラフを作成
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- 右側：プレビュー -->
+                        <div
+                            style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+                            <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #495057; text-align: center;">プレビュー
+                            </h3>
+                            <div style="position: relative; height: 400px;">
+                                <canvas id="chart-preview" style="width: 100%; height: 100%;"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </div>
+
+    <!-- 画像編集用モーダル -->
+    <div class="modal micromodal-slide" id="imgedit-modal" aria-hidden="true">
+        <div class="modal__overlay" tabindex="-1" data-micromodal-close>
+            <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="imgedit-modal-title"
+                style="max-width: 1400px; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column;">
+                <button class="modal__close" aria-label="Close modal" data-micromodal-close
+                    style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; color: #6c757d; cursor: pointer; z-index: 1001;">&times;</button>
+                <header class="imgedit-header">
+                    <h1>高機能 画像編集アプリ</h1>
+                    <p>背景削除、フィルター、切り抜きなどの編集ができます。</p>
+                </header>
+
+                <main class="imgedit-main-content" style="flex-grow: 1;">
+                    <!-- コントロールパネル -->
+                    <aside class="imgedit-controls-panel">
+                        <div class="imgedit-file-loader">
+                            <label for="imgedit-file-input" class="imgedit-file-label">ファイルを選択</label>
+                            <input type="file" id="imgedit-file-input" accept="image/*">
+                        </div>
+
+                        <div id="imgedit-drop-zone-container">
+                            <div id="imgedit-drop-zone">
+                                <p>画像をここにドラッグ＆ドロップ<br>または上のボタンから選択</p>
+                            </div>
+                        </div>
+
+                        <div id="imgedit-editor-controls" class="hidden">
+                            <!-- 特殊機能 -->
+                            <div class="imgedit-control-group">
+                                <h2>特殊機能</h2>
+                                <button id="imgedit-bg-remove-btn" class="imgedit-special-btn">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                    <span>背景を削除</span>
+                                </button>
+                            </div>
+
+                            <!-- フィルター -->
+                            <div class="imgedit-control-group">
+                                <h2>フィルター</h2>
+                                <div class="imgedit-slider-group"><label for="imgedit-brightness">明るさ</label><input
+                                        type="range" id="imgedit-brightness" min="0" max="200" value="100"
+                                        class="filter-slider" data-unit="%"><output>100%</output>
+                                </div>
+                                <div class="imgedit-slider-group"><label for="imgedit-contrast">コントラスト</label><input
+                                        type="range" id="imgedit-contrast" min="0" max="200" value="100"
+                                        class="filter-slider" data-unit="%"><output>100%</output>
+                                </div>
+                                <div class="imgedit-slider-group"><label for="imgedit-saturate">彩度</label><input
+                                        type="range" id="imgedit-saturate" min="0" max="200" value="100"
+                                        class="filter-slider" data-unit="%"><output>100%</output>
+                                </div>
+                                <div class="imgedit-slider-group"><label for="imgedit-grayscale">グレースケール</label><input
+                                        type="range" id="imgedit-grayscale" min="0" max="100" value="0"
+                                        class="filter-slider" data-unit="%"><output>0%</output></div>
+                                <div class="imgedit-slider-group"><label for="imgedit-sepia">セピア</label><input
+                                        type="range" id="imgedit-sepia" min="0" max="100" value="0"
+                                        class="filter-slider" data-unit="%"><output>0%</output></div>
+                                <div class="imgedit-slider-group"><label for="imgedit-blur">ぼかし</label><input
+                                        type="range" id="imgedit-blur" min="0" max="10" value="0" step="0.1"
+                                        class="filter-slider" data-unit="px"><output>0px</output>
+                                </div>
+                                <div class="imgedit-slider-group"><label for="imgedit-hue-rotate">色相回転</label><input
+                                        type="range" id="imgedit-hue-rotate" min="0" max="360" value="0"
+                                        class="filter-slider" data-unit="deg"><output>0deg</output></div>
+                                <div class="imgedit-slider-group"><label for="imgedit-invert">階調反転</label><input
+                                        type="range" id="imgedit-invert" min="0" max="100" value="0"
+                                        class="filter-slider" data-unit="%"><output>0%</output>
+                                </div>
+                            </div>
+
+                            <!-- トリミングと変形 -->
+                            <div class="imgedit-control-group">
+                                <h2>トリミングと変形</h2>
+                                <button id="imgedit-crop-btn" class="imgedit-secondary-btn"
+                                    style="width: 100%; margin-bottom: 10px;">トリミング</button>
+                                <div class="imgedit-button-group">
+                                    <button id="imgedit-rotate-left" title="左に90度回転">
+                                        <i class="fa-solid fa-rotate-left"></i>
+                                    </button>
+                                    <button id="imgedit-rotate-right" title="右に90度回転">
+                                        <i class="fa-solid fa-rotate-right"></i>
+                                    </button>
+                                    <button id="imgedit-flip-h" title="水平反転">
+                                        <i class="fa-solid fa-arrows-left-right"></i>
+                                    </button>
+                                    <button id="imgedit-flip-v" title="垂直反転">
+                                        <i class="fa-solid fa-arrows-up-down"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- ペイント -->
+                            <div class="imgedit-control-group imgedit-paint-controls">
+                                <h2>描画</h2>
+                                <button id="imgedit-toggle-paint-session" class="imgedit-primary-btn">描画を開始</button>
+
+                                <div id="imgedit-paint-tools-panel" class="hidden">
+                                    <div class="imgedit-paint-tool-selector">
+                                        <button class="imgedit-tool-btn" data-tool="brush" title="ブラシ">
+                                            <i class="fa-solid fa-paintbrush"></i>
+                                            <span>ブラシ</span>
+                                        </button>
+                                        <button class="imgedit-tool-btn" data-tool="eraser" title="消しゴム">
+                                            <i class="fa-solid fa-eraser"></i>
+                                            <span>消しゴム</span>
+                                        </button>
+                                        <button class="imgedit-tool-btn" data-tool="line" title="直線">
+                                            <i class="fa-solid fa-minus"></i>
+                                            <span>直線</span>
+                                        </button>
+                                        <button class="imgedit-tool-btn" data-tool="fill" title="塗りつぶし">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                                stroke-linecap="round" stroke-linejoin="round">
+                                                <path
+                                                    d="M19 11h-1.5a2.5 2.5 0 0 1-2.5-2.5V7a2.5 2.5 0 0 1 2.5-2.5H19c.7 0 1.3.3 1.7.8l2.1 2.1c.3.3.6.8.6 1.3V19a2 2 0 0 1-2 2h-1c-1.3 0-2.5-.6-3.3-1.6L9 14.5V8.5L2.4 3.3c-.6-.4-1.2-.1-1.4.6L.1 7.1c-.2.7.2 1.4.8 1.7L8 12l-1.4 1.4c-.9.9-1.4 2.2-1.4 3.6v.9c0 .9.7 1.6 1.6 1.6H9c.9 0 1.6-.7 1.6-1.6v-.9c0-1.3.5-2.6 1.4-3.6L14 9l2.7 2.7c.4.4.8.6 1.3.6H19a2 2 0 0 0 2-2v-1.5c0-.7-.3-1.3-.8-1.7l-2.1-2.1c-.3-.3-.8-.6-1.3-.6z" />
+                                            </svg>
+                                            <span>塗りつぶし</span>
+                                        </button>
+                                    </div>
+                                    <div id="imgedit-brush-settings">
+                                        <div class="imgedit-slider-group">
+                                            <label for="imgedit-brush-size">サイズ</label>
+                                            <input type="range" id="imgedit-brush-size" min="1" max="100" value="10"
+                                                data-unit="px"><output>10px</output>
+                                        </div>
+                                        <div class="imgedit-slider-group">
+                                            <label for="imgedit-brush-color">色</label>
+                                            <input type="color" id="imgedit-brush-color" value="#FF0000"
+                                                style="width: 100%; height: 30px;">
+                                        </div>
+                                    </div>
+                                    <div id="imgedit-eraser-settings" class="hidden">
+                                        <div class="imgedit-slider-group">
+                                            <label for="imgedit-eraser-size">消しゴムサイズ</label>
+                                            <input type="range" id="imgedit-eraser-size" min="1" max="100" value="20"
+                                                data-unit="px"><output>20px</output>
+                                        </div>
+                                    </div>
+                                    <div class="imgedit-action-group" style="margin-top: 20px;">
+                                        <button id="imgedit-cancel-paint" class="imgedit-danger-btn">キャンセル</button>
+                                        <button id="imgedit-clear-paint" class="imgedit-secondary-btn">全消去</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- アクション -->
+                            <div class="imgedit-control-group imgedit-action-group">
+                                <button id="imgedit-reset-btn" class="imgedit-secondary-btn">リセット</button>
+                                <button id="imgedit-download-btn" class="imgedit-primary-btn">スライドで使用</button>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <!-- 画像表示エリア -->
+                    <div class="imgedit-image-area">
+                        <div id="imgedit-image-workspace" class="hidden">
+                            <img id="imgedit-image-to-edit">
+                            <canvas id="imgedit-paint-canvas" class="hidden"></canvas>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </div>
+
+    <!-- ローディングオーバーレイ -->
+    <div id="imgedit-loading-overlay" class="hidden">
+        <div class="imgedit-loading-spinner"></div>
+        <p id="imgedit-loading-text">処理中...</p>
+        <div class="imgedit-progress-bar-container">
+            <div id="imgedit-progress-bar"></div>
+        </div>
+    </div>
+
+    <script src="ai.js" defer></script>
+    <script src="slide.js" type="module"></script>
+
+    <link href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+    <link rel="stylesheet" href="mainmodal.css">
+    <script src="https://cdn.jsdelivr.net/npm/micromodal@0.6.1/dist/micromodal.min.js" defer></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.6.0/lib/qr-code-styling.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fuse.js/6.6.2/fuse.min.js" defer></script>
+
+    <script type="module" src="https://cdn.jsdelivr.net/npm/lit-html?module"></script>
+
+    <script src="imgedit.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js" defer></script>
+</body>
+
+</html>

@@ -1962,7 +1962,6 @@
                         <label>セル内容</label>
                         <table style="border-collapse:collapse;">${rowsInputs}</table>
                     </div>
-                    <button id="update-table-btn" style="margin-top:10px;width:100%;padding:8px;">表を更新</button>
                 `;
             },
 
@@ -2065,10 +2064,10 @@
                     updateBtn.onclick = () => {
                         const newRows = parseInt(document.getElementById('table-rows').value);
                         const newCols = parseInt(document.getElementById('table-cols').value);
-                        
+
                         const currentData = selectedElement.content.data || [];
                         const newData = [];
-                        
+
                         for (let r = 0; r < newRows; r++) {
                             const row = [];
                             for (let c = 0; c < newCols; c++) {
@@ -2077,15 +2076,53 @@
                             }
                             newData.push(row);
                         }
-                        
+
                         selectedElement.content.rows = newRows;
                         selectedElement.content.cols = newCols;
                         selectedElement.content.data = newData;
-                        
+
                         this.saveState();
                         this.render();
                     };
                 }
+
+                // --- セル編集の即時反映 ---
+                const cellInputs = document.querySelectorAll('input[data-table-row][data-table-col]');
+                cellInputs.forEach(input => {
+                    input.addEventListener('input', (e) => {
+                        const r = parseInt(input.dataset.tableRow);
+                        const c = parseInt(input.dataset.tableCol);
+                        if (!selectedElement.content.data) selectedElement.content.data = [];
+                        if (!selectedElement.content.data[r]) selectedElement.content.data[r] = [];
+                        selectedElement.content.data[r][c] = input.value;
+
+                        // debounceでsaveState/render
+                        if (this._saveTableTimeout) clearTimeout(this._saveTableTimeout);
+                        this._saveTableTimeout = setTimeout(() => {
+                            this.saveState();
+                            this.render();
+                            this._saveTableTimeout = null;
+                        }, 300);
+                    });
+                });
+
+                // --- 行数・列数の即時反映 ---
+                const rowInput = document.getElementById('table-rows');
+                const colInput = document.getElementById('table-cols');
+                const updateRowsCols = () => {
+                    const newRows = parseInt(rowInput.value);
+                    const newCols = parseInt(colInput.value);
+                    selectedElement.content.rows = newRows;
+                    selectedElement.content.cols = newCols;
+                    if (this._saveTableTimeout) clearTimeout(this._saveTableTimeout);
+                    this._saveTableTimeout = setTimeout(() => {
+                        this.saveState();
+                        this.render();
+                        this._saveTableTimeout = null;
+                    }, 300);
+                };
+                if (rowInput) rowInput.addEventListener('input', updateRowsCols);
+                if (colInput) colInput.addEventListener('input', updateRowsCols);
             },
 
             _bindIframeEvents(selectedElement) {
@@ -2568,7 +2605,12 @@
 
             _handleCanvasContextMenu(e) {
                 e.preventDefault();
-                
+                // 右クリック時にドラッグ・リサイズ状態を必ず解除
+                this.batchUpdateState({
+                    'interaction.isDragging': false,
+                    'interaction.isResizing': false,
+                    'interaction.initialStates': []
+                });
                 try {
                     const el = e.target.closest('.slide-element');
                     const isEditingText = el && el.getAttribute('contenteditable') === 'true';
@@ -2748,6 +2790,8 @@
             },
 
             handleCanvasMouseDown(e) {
+                // 右クリックはドラッグ・選択処理を行わない
+                if (!e.type.startsWith('touch') && e.button === 2) return;
                 const isTouch = e.type.startsWith('touch');
                 const point = isTouch ? e.touches[0] : e;
                 let target = point.target;
@@ -4505,6 +4549,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (chartTypeBtns.length > 0 && !document.querySelector('.chart-type-btn.selected')) {
         chartTypeBtns[0].classList.add('selected');
     }
+    // グラフ種類ボタンのクリックイベントを追加
+    chartTypeBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            chartTypeBtns.forEach(b => b.classList.remove('selected'));
+            this.classList.add('selected');
+            updateChartPreview();
+        });
+    });
 
     const chartForm = document.getElementById('chart-create-form');
     if (chartForm) {

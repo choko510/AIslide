@@ -285,6 +285,7 @@ body {
     background-color: var(--bg-light);
     /* Slightly different bg for tabs */
     flex-shrink: 0;
+    z-index: 1000;
 }
 
 .sidebar-tab-button {

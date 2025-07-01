@@ -298,6 +298,21 @@
                             <div id="chat-panel">
                                 <div id="ai-controls"
                                     style="margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px;">
+                                    <div id="ai-mode-selector"
+                                        style="display: flex; justify-content: space-around; background: var(--bg-secondary); padding: 4px; border-radius: var(--border-radius);">
+                                        <button class="ai-mode-btn active" data-mode="design" title="デザインモード">
+                                            <i class="fas fa-palette"></i>
+                                            <span>デザイン</span>
+                                        </button>
+                                        <button class="ai-mode-btn" data-mode="plan" title="計画モード">
+                                            <i class="fas fa-lightbulb"></i>
+                                            <span>計画</span>
+                                        </button>
+                                        <button class="ai-mode-btn" data-mode="ask" title="聞くモード">
+                                            <i class="fas fa-question-circle"></i>
+                                            <span>聞く</span>
+                                        </button>
+                                    </div>
                                     <div style="display: flex; gap: 8px;">
                                         <button id="restore-checkpoint-btn" class="sidebar-add-btn"
                                             title="AIによる直前の変更を取り消します" style="flex-grow: 1; justify-content: center;"
@@ -313,8 +328,16 @@
                                         </div>
                                     </label>
                                 </div>
+                                <!-- 自律モード用UI -->
+                                <div id="autonomous-goal-container"
+                                    style="display:none; flex-direction:column; gap:8px; margin-bottom:10px;">
+                                    <input type="text" id="autonomous-goal-input" placeholder="最終目標を入力..."
+                                        style="padding:8px; border-radius:6px; border:1px solid var(--border-color);">
+                                    <button id="start-autonomous-btn" class="sidebar-add-btn"
+                                        style="align-self:flex-end;">開始</button>
+                                </div>
                                 <div id="chat-messages"
-                                    style="height: 250px; overflow-y: auto; border: 1px solid var(--border-color); padding: 10px; margin-bottom: 10px; border-radius: var(--border-radius);">
+                                    style="height: 60vh; max-height: 700px; overflow-y: auto; border: 1px solid var(--border-color); padding: 10px; margin-bottom: 10px; border-radius: var(--border-radius);">
                                 </div>
                                 <div id="chat-input-container" style="display: flex;">
                                     <input type="text" id="chat-input"
@@ -674,6 +697,15 @@
         </div>
     </div>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // 既存のAppインスタンス生成・AIHandler初期化処理をここに移動
+            if (window.App) {
+                window.appInstance = new App();
+                window.aiHandler = new AIHandler(window.appInstance);
+            }
+        });
+    </script>
     <script src="ai.js" defer></script>
     <script src="slide.js" type="module"></script>
 

@@ -843,14 +843,7 @@
             // =================================================================
             // Legacy Support (backward compatibility)
             // =================================================================
-            
-            static createText(elData) { return this._createText(elData); }
-            static createImage(elData) { return this._createImage(elData); }
-            static createVideo(elData) { return this._createVideo(elData); }
-            static createChart(elData) { return this._createChart(elData); }
-            static createTable(elData) { return this._createTable(elData); }
-            static createIcon(elData) { return this._createIcon(elData); }
-            static createIframe(elData) { return this._createIframe(elData); }
+            // （不要になったため削除）
         }
 
         // =================================================================
@@ -1415,254 +1408,22 @@
             createElementDOM(elData) {
                 const el = document.createElement('div');
                 el.className = `slide-element ${elData.type}`;
-                
-                // StyleManagerを使ってスタイルを適用
                 StyleManager.applyStyles(el, elData.style);
 
-                // ElementFactoryを使ってコンテンツを作成
-                let content = null;
-                switch (elData.type) {
-                    case 'text':
-                        content = ElementFactory.createText(elData);
-                        if (content) el.innerText = content;
-                        break;
-                    case 'image':
-                        content = ElementFactory.createImage(elData);
-                        if (content) el.appendChild(content);
-                        break;
-                    case 'video':
-                        content = ElementFactory.createVideo(elData);
-                        if (content) el.appendChild(content);
-                        break;
-                    case 'chart':
-                        content = ElementFactory.createChart(elData);
-                        if (content) el.appendChild(content);
-                        break;
-                    case 'table':
-                        content = ElementFactory.createTable(elData);
-                        if (content) el.appendChild(content);
-                        break;
-                    case 'icon':
-                        content = ElementFactory.createIcon(elData);
-                        if (content) {
-                            el.style.overflow = 'visible';
-                            el.appendChild(content);
-                        }
-                        break;
-                    case 'iframe':
-                        content = ElementFactory.createIframe(elData);
-                        if (content) {
-                            // DocumentFragmentの場合は子要素を順番に追加
-                            if (content instanceof DocumentFragment) {
-                                el.appendChild(content);
-                            } else {
-                                el.appendChild(content);
-                            }
-                        }
-                        break;
-                    default:
-                        // フォールバック: 従来のメソッドを使用
-                        this._createDOMForElement(el, elData);
+                // ElementFactoryに完全委譲
+                const content = ElementFactory.createElement(elData);
+                if (content) {
+                    if (content instanceof Node) {
+                        el.appendChild(content);
+                    } else if (typeof content === 'string') {
+                        el.innerText = content;
+                    }
                 }
                 return el;
             },
 
             // フォールバック用の統合メソッド
-            _createDOMForElement(el, elData) {
-                switch (elData.type) {
-                    case 'text':
-                        this._createDOMForText(el, elData);
-                        break;
-                    case 'image':
-                        this._createDOMForImage(el, elData);
-                        break;
-                    case 'video':
-                        this._createDOMForVideo(el, elData);
-                        break;
-                    case 'chart':
-                        this._createDOMForChart(el, elData);
-                        break;
-                    case 'table':
-                        this._createDOMForTable(el, elData);
-                        break;
-                    case 'icon':
-                        this._createDOMForIcon(el, elData);
-                        break;
-                    case 'iframe':
-                        this._createDOMForIframe(el, elData);
-                        break;
-                }
-            },
-
-            // 各要素タイプに対応するDOM生成ヘルパーメソッド
-            _createDOMForText(el, elData) {
-                el.innerText = elData.content;
-            },
-
-            _createDOMForImage(el, elData) {
-                let img = el.querySelector('img');
-                if (!img) {
-                    img = document.createElement('img');
-                    el.appendChild(img);
-                }
-                img.src = elData.content;
-
-                // Base64またはBlob URLの場合のみ編集ボタンを追加
-                if (elData.content.startsWith('data:') || elData.content.startsWith('blob:')) {
-                    let editButton = el.querySelector('.image-edit-overlay-btn');
-                    if (!editButton) {
-                        editButton = document.createElement('button');
-                        editButton.className = 'image-edit-overlay-btn'; // CSSでスタイルを適用
-                        editButton.innerHTML = '<i class="fas fa-edit"></i> 編集'; // Font Awesomeアイコン
-                        Object.assign(editButton.style, {
-                            position: 'absolute',
-                            bottom: '5px',
-                            right: '5px',
-                            zIndex: '10',
-                            background: 'rgba(0, 0, 0, 0.7)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '5px',
-                            padding: '5px 10px',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            opacity: '0', // デフォルト非表示
-                            transition: 'opacity 0.3s ease'
-                        });
-                        editButton.querySelector('i').style.pointerEvents = 'none'; // アイコンクリックでイベントが伝播しないように
-                        el.appendChild(editButton);
-                    }
-                    editButton.onclick = (e) => {
-                        e.stopPropagation(); // 要素の選択イベントを阻止
-                        MicroModal.show('imgedit-modal');
-                        // 画像データを画像編集モーダルに渡し、コールバックを設定
-                        App.openImageEditor(elData.content, (editedImageDataURL) => {
-                            // 編集後の画像をスライドの既存要素に適用
-                            const slide = App.getActiveSlide();
-                            if (slide) {
-                                const elementToUpdate = slide.elements.find(el => el.id === elData.id);
-                                if (elementToUpdate) {
-                                    elementToUpdate.content = editedImageDataURL;
-                                    App.saveState();
-                                    App.render();
-                                }
-                            }
-                        });
-                    };
-                } else {
-                    // URLがdata:またはblob:以外の場合、ボタンを削除
-                    const editButton = el.querySelector('.image-edit-overlay-btn');
-                    if (editButton) {
-                        editButton.remove();
-                    }
-                }
-            },
-
-            _createDOMForVideo(el, elData) {
-                let video = el.querySelector('video');
-                if (!video) {
-                    video = document.createElement('video');
-                    video.style.width = '100%';
-                    video.style.height = '100%';
-                    el.appendChild(video);
-                }
-                if (!video.src || video.src !== elData.content.url) {
-                    video.src = elData.content.url || '';
-                }
-                video.autoplay = !!elData.content.autoplay;
-                video.loop = !!elData.content.loop;
-                video.controls = elData.content.controls !== false;
-                video.playsInline = true;
-            },
-
-            _createDOMForChart(el, elData) {
-                const canvasEl = document.createElement('canvas');
-                canvasEl.id = `chart-${elData.id}`;
-                canvasEl.style.width = '100%';
-                canvasEl.style.height = '100%';
-                el.appendChild(canvasEl);
-                setTimeout(() => {
-                    if (canvasEl) {
-                        new Chart(canvasEl.getContext('2d'), elData.content);
-                    }
-                }, 0);
-            },
-
-            _createDOMForTable(el, elData) {
-                const table = document.createElement('table');
-                table.style.width = '100%';
-                table.style.height = '100%';
-                table.style.borderCollapse = 'collapse';
-                for (let r = 0; r < elData.content.rows; r++) {
-                    const tr = document.createElement('tr');
-                    for (let c = 0; c < elData.content.cols; c++) {
-                        const td = document.createElement('td');
-                        td.textContent = elData.content.data?.[r]?.[c] ?? '';
-                        td.style.border = '1px solid #888';
-                        td.style.padding = '4px';
-                        tr.appendChild(td);
-                    }
-                    table.appendChild(tr);
-                }
-                el.appendChild(table);
-            },
-
-            _createDOMForIcon(el, elData) {
-                if (elData.iconType === 'fa') {
-                    const iTag = document.createElement('i');
-                    iTag.className = elData.content;
-                    iTag.style.color = elData.style.color || 'inherit';
-                    iTag.style.fontSize = elData.style.fontSize ? `${elData.style.fontSize}px` : 'inherit';
-                    iTag.style.position = 'absolute';
-                    iTag.style.left = '50%';
-                    iTag.style.top = '50%';
-                    iTag.style.transform = 'translate(-50%, -50%)';
-                    el.style.overflow = 'visible';
-                    el.appendChild(iTag);
-                } else if (elData.iconType === 'mi') {
-                    const spanTag = document.createElement('span');
-                    spanTag.className = elData.content;
-                    spanTag.textContent = elData.miContent;
-                    spanTag.style.color = elData.style.color || 'inherit';
-                    spanTag.style.fontSize = elData.style.fontSize ? `${elData.style.fontSize}px` : 'inherit';
-                    spanTag.style.position = 'absolute';
-                    spanTag.style.left = '50%';
-                    spanTag.style.top = '50%';
-                    spanTag.style.transform = 'translate(-50%, -50%)';
-                    el.style.overflow = 'visible';
-                    el.appendChild(spanTag);
-                }
-            },
-
-            _createDOMForIframe(el, elData) {
-                const iframe = document.createElement('iframe');
-                iframe.src = elData.content.url;
-                iframe.style.width = '100%';
-                iframe.style.height = '100%';
-                iframe.style.border = 'none';
-                iframe.sandbox = elData.content.sandbox || 'allow-scripts allow-same-origin';
-                el.appendChild(iframe);
-
-                const overlay = document.createElement('div');
-                overlay.className = 'iframe-overlay';
-                Object.assign(overlay.style, {
-                    position: 'absolute',
-                    top: 0, left: 0, right: 0, bottom: 0,
-                    zIndex: 10000,
-                    backgroundColor: 'transparent',
-                    cursor: 'move',
-                });
-                overlay.addEventListener('mousedown', (e) => {
-                    App.handleCanvasMouseDown(e);
-                });
-                overlay.addEventListener('touchstart', (e) => {
-                    App.handleCanvasMouseDown(e);
-                }, { passive: false });
-                el.appendChild(overlay);
-            },
+            // （不要になったため削除）
 
             applyStyles(element, styles) {
                 // StyleManagerに委譲

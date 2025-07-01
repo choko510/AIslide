@@ -221,7 +221,10 @@
 
             _createInitialState() {
                 return {
-                    presentation: null,
+                    presentation: {
+                        settings: { width: 1280, height: 720, globalCss: '' },
+                        slides: []
+                    },
                     activeSlideId: null,
                     selectedElementIds: [],
                     isEditingText: false,
@@ -1288,7 +1291,11 @@
                             el.classList.add('animate__animated', elData.style.animation);
                             // アニメーション終了時にクラスを外す
                             el.addEventListener('animationend', function handler() {
-                                el.classList.remove('animate__animated', elData.style.animation);
+                                if (elData.style.animation) {
+                                    el.classList.remove('animate__animated', elData.style.animation);
+                                } else {
+                                    el.classList.remove('animate__animated');
+                                }
                                 el.removeEventListener('animationend', handler);
                             });
                         }
@@ -3441,7 +3448,22 @@
 
             getElementsWithPixelRects(elementsData) { return elementsData.map(elData => { const domEl = this.elements.slideCanvas.querySelector(`[data-id="${elData.id}"]`); return { data: elData, rect: { left: domEl.offsetLeft, top: domEl.offsetTop, width: domEl.offsetWidth, height: domEl.offsetHeight, } }; }); },
             calculatePixelBounds(pixelElements) { const bounds = pixelElements.reduce((acc, el) => ({ minX: Math.min(acc.minX, el.rect.left), minY: Math.min(acc.minY, el.rect.top), maxX: Math.max(acc.maxX, el.rect.left + el.rect.width), maxY: Math.max(acc.maxY, el.rect.top + el.rect.height), }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }); bounds.width = bounds.maxX - bounds.minX; bounds.height = bounds.maxY - bounds.minY; bounds.centerX = bounds.minX + bounds.width / 2; bounds.centerY = bounds.minY + bounds.height / 2; return bounds; },
-            getSelectedElementsBoundingBox(inPercent = false) { const els = this.getSelectedElementsData(); if (els.length === 0) return null; const pixelEls = this.getElementsWithPixelRects(els); const bounds = this.calculatePixelBounds(pixelEls); if (!inPercent) return bounds; const canvasRect = this.state.slideCanvasRect; return { left: bounds.minX / canvasRect.width * 100, top: bounds.minY / canvasRect.height * 100, width: bounds.width / canvasRect.width * 100, height: bounds.height / canvasRect.height * 100 }; },
+            getSelectedElementsBoundingBox(inPercent = false) {
+                const els = this.getSelectedElementsData();
+                if (els.length === 0) return null;
+                const pixelEls = this.getElementsWithPixelRects(els);
+                const bounds = this.calculatePixelBounds(pixelEls);
+                if (!inPercent) return bounds;
+                // 修正: canvasRectの取得方法を修正し、未定義ならnullを返す
+                const canvasRect = (this.getState ? this.getState('canvas.rect') : (this.state.canvas?.rect));
+                if (!canvasRect || !canvasRect.width || !canvasRect.height) return null;
+                return {
+                    left: bounds.minX / canvasRect.width * 100,
+                    top: bounds.minY / canvasRect.height * 100,
+                    width: bounds.width / canvasRect.width * 100,
+                    height: bounds.height / canvasRect.height * 100
+                };
+            },
             handleThumbnailClick(e) { const thumb = e.target.closest('.slide-thumbnail'); if (thumb) { this.state.activeSlideId = thumb.dataset.id; this.state.selectedElementIds = []; this.render(); } },
 handleInspectorInput(e) {
     // Stop the event from bubbling up, just in case.
@@ -3469,6 +3491,17 @@ if (e.target.type === 'checkbox') {
 
     if (el.style.hasOwnProperty(prop)) {
         el.style[prop] = value;
+
+        if (el.type === 'icon' && prop === 'fontSize') {
+            const canvasWidth = this.state.presentation.settings.width || 1280;
+            const canvasHeight = this.state.presentation.settings.height || 720;
+            const newSize = parseFloat(value);
+            if (!isNaN(newSize)) {
+                el.style.width = (newSize / canvasWidth) * 100;
+                el.style.height = (newSize / canvasHeight) * 100;
+            }
+        }
+        
         // アニメーション選択時は見本として再生
         if (prop === 'animation') {
             const domEl = this.elements.slideCanvas.querySelector(`[data-id="${el.id}"]`);
@@ -3824,17 +3857,24 @@ if (e.target.type === 'checkbox') {
                 const slide = this.getActiveSlide();
                 if (!slide) return;
 
+                const fontSize = 48; // Default font size for new icons
+                const canvasWidth = this.state.presentation.settings.width || 1280;
+                const canvasHeight = this.state.presentation.settings.height || 720;
+
                 const newEl = {
                     id: this.generateId('el'),
                     type: 'icon',
                     iconType: iconType, // Store icon type (fa or mi)
                     content: iconClass, // Class string for FA, class name for MI
                     style: {
-                        top: 20, left: 20, width: null, height: null,
+                        top: 20,
+                        left: 20,
+                        width: (fontSize / canvasWidth) * 100,
+                        height: (fontSize / canvasHeight) * 100,
                         zIndex: slide.elements.length + 1,
                         rotation: 0,
                         color: '#212529',
-                        fontSize: 48,
+                        fontSize: fontSize,
                         animation: ''
                     }
                 };
@@ -4566,7 +4606,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const slide = window.App?.getActiveSlide();
             if (!slide) return;
             const newEl = {
-                id: App.generateId('el'), type: 'chart', content: chartInstance.config,
+                id: App.generateId('el'), type: 'chart', content: Utils.deepClone(chartInstance.config),
                 style: { top: 20, left: 20, width: 50, height: 30, zIndex: slide.elements.length + 1, rotation: 0, animation: '' }
             };
             slide.elements.push(newEl);

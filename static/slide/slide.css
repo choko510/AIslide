@@ -69,11 +69,11 @@
     border-radius: 50%;
 }
 
-input:checked + .theme-slider {
+input:checked+.theme-slider {
     background-color: var(--primary-color);
 }
 
-input:checked + .theme-slider:before {
+input:checked+.theme-slider:before {
     transform: translateX(24px);
 }
 
@@ -417,21 +417,25 @@ body {
     transition: background 0.2s, opacity 0.2s;
     box-shadow: none;
 }
+
 .slide-thumbnail.add-slide:hover {
     background: #f0f4fa;
     opacity: 1;
 }
+
 .add-slide-content i {
     font-size: 170px;
     color: #aaa;
     opacity: 1;
     transition: color 0.2s, opacity 0.2s;
-    filter: drop-shadow(0 2px 8px rgba(0,0,0,0.08));
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.08));
 }
+
 .slide-thumbnail.add-slide:hover .add-slide-content i {
     color: #007bff;
     opacity: 1;
 }
+
 .slide-thumbnail:hover {
     background-color: var(--bg-light);
 }
@@ -610,60 +614,53 @@ body {
     border: 2px solid var(--primary-color);
     border-radius: 2px;
     z-index: 10000;
-    transform: translate(-50%, -50%);
 }
 
 .resize-handle.nw {
-    top: 0;
-    left: 0;
+    top: -5px;
+    left: -5px;
     cursor: nwse-resize;
 }
 
 .resize-handle.n {
-    top: 0;
-    left: 50%;
+    top: -5px;
+    left: calc(50% - 5px);
     cursor: ns-resize;
 }
 
 .resize-handle.ne {
-    top: 0;
-    right: 0;
-    left: auto;
+    top: -5px;
+    right: -5px;
     cursor: nesw-resize;
 }
 
 .resize-handle.w {
-    top: 50%;
-    left: 0;
+    top: calc(50% - 5px);
+    left: -5px;
     cursor: ew-resize;
 }
 
 .resize-handle.e {
-    top: 50%;
-    right: 0;
-    left: auto;
+    top: calc(50% - 5px);
+    right: -5px;
     cursor: ew-resize;
 }
 
 .resize-handle.sw {
-    bottom: 0;
-    top: auto;
-    left: 0;
+    bottom: -5px;
+    left: -5px;
     cursor: nesw-resize;
 }
 
 .resize-handle.s {
-    bottom: 0;
-    top: auto;
-    left: 50%;
+    bottom: -5px;
+    left: calc(50% - 5px);
     cursor: ns-resize;
 }
 
 .resize-handle.se {
-    bottom: 0;
-    top: auto;
-    right: 0;
-    left: auto;
+    bottom: -5px;
+    right: -5px;
     cursor: nwse-resize;
 }
 
@@ -820,49 +817,196 @@ body.presentation-mode {
 .tab-content.active { ... }
 */
 
-.user-msg {
-    color: #007bff;
-    margin-bottom: 10px;
+/* --- チャットUIスタイル --- */
+#chat-messages {
+    background-color: var(--bg-light);
+    padding: 10px;
 }
 
-.ai-msg {
-    background-color: #f8f9fa;
-    border-left: 3px solid #28a745;
-    padding: 10px;
-    margin-bottom: 15px;
+.chat-message {
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-white);
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
 }
 
-.ai-msg pre {
-    background-color: #e9ecef;
-    padding: 10px;
+.chat-message::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 4px;
+    height: 100%;
+}
+
+.msg-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.msg-header i {
+    font-size: 14px;
+}
+
+.msg-content {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+.msg-content pre {
+    background-color: var(--bg-light);
+    padding: 12px;
+    border-radius: 6px;
     overflow-x: auto;
     margin: 10px 0;
+    border: 1px solid var(--border-color);
 }
 
+/* ユーザーメッセージ */
+.user-msg::before {
+    background-color: var(--primary-color);
+}
+
+.user-msg .msg-header i {
+    color: var(--primary-color);
+}
+
+/* AIメッセージ */
+.ai-msg::before {
+    background-color: #28a745;
+}
+
+.ai-msg .msg-header i {
+    color: #28a745;
+}
+
+/* システムメッセージ */
+.system-msg::before {
+    background-color: #6c757d;
+}
+
+.system-msg .msg-header i {
+    color: #6c757d;
+}
+
+/* エラーメッセージ */
+.error-msg {
+    background-color: #fff5f5;
+}
+
+.error-msg::before {
+    background-color: var(--danger-color);
+}
+
+.error-msg .msg-header {
+    color: var(--danger-color);
+}
+
+.error-msg .msg-header i {
+    color: var(--danger-color);
+}
+
+.error-msg .msg-content {
+    color: #c53030;
+}
+
+[data-theme="dark"] .error-msg {
+    background-color: rgba(255, 107, 107, 0.1);
+}
+
+[data-theme="dark"] .error-msg .msg-content {
+    color: #ffbaba;
+}
+
+
+/* 実行ボタン */
 .execute-btn {
     background-color: #28a745;
     color: white;
     border: none;
-    padding: 5px 10px;
+    padding: 6px 12px;
+    margin-top: 10px;
+    border-radius: 6px;
     cursor: pointer;
+    transition: var(--transition);
+}
+
+.execute-btn:hover {
+    background-color: #218838;
+}
+
+.execute-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+/* 実行結果 */
+.success-msg,
+.error-msg {
+    padding: 10px;
+    border-radius: 6px;
+    margin-top: 10px;
 }
 
 .success-msg {
-    color: #28a745;
-    font-weight: bold;
-    margin-top: 10px;
+    background-color: #e9f7ef;
+    color: #155724;
+    border: 1px solid #c3e6cb;
 }
 
 .error-msg {
-    color: #dc3545;
-    font-weight: bold;
-    margin-top: 10px;
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
 }
 
-.ai-instruction {
-    font-size: 12px;
-    color: #6c757d;
-    margin: 5px 0;
+[data-theme="dark"] .success-msg {
+    background-color: rgba(40, 167, 69, 0.1);
+    color: #a7d7b4;
+}
+
+[data-theme="dark"] .error-msg {
+    background-color: rgba(220, 53, 69, 0.1);
+    color: #f1b0b7;
+}
+
+
+/* チャット入力エリア */
+#chat-input-container {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+#chat-input {
+    border: none;
+    outline: none;
+    background-color: var(--bg-white);
+    color: var(--text-primary);
+}
+
+#chat-input:focus {
+    box-shadow: none;
+}
+
+#send-chat-btn {
+    background-color: var(--primary-color);
+    border: none;
+    color: white;
+}
+
+#send-chat-btn:hover {
+    background-color: var(--primary-color-hover);
 }
 
 /* --- レスポンシブデザイン --- */
@@ -1091,4 +1235,248 @@ input:checked+.slider:before {
 /* slide-element.imageにホバーしたときにimage-edit-overlay-btnを表示 */
 .slide-element.image:hover .image-edit-overlay-btn {
     opacity: 1 !important;
+}
+
+.chart-type-btn.selected {
+    background: var(--primary-color, #007bff);
+    color: #fff;
+    border-color: var(--primary-color, #007bff);
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.15);
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+/* --- AIモードセレクター --- */
+#ai-mode-selector {
+    display: flex;
+    justify-content: space-around;
+    background: var(--bg-light);
+    padding: 4px;
+    border-radius: var(--border-radius);
+    margin-bottom: 8px;
+}
+
+.ai-mode-btn {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    border: none;
+    background-color: transparent;
+    color: var(--text-secondary);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.ai-mode-btn:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .ai-mode-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.ai-mode-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: 600;
+}
+
+.ai-mode-btn i {
+    font-size: 16px;
+}
+
+/* --- チャットUIスタイル --- */
+#chat-messages {
+    background-color: var(--bg-light);
+    padding: 10px;
+}
+
+.chat-message {
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-white);
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
+}
+
+.chat-message::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 4px;
+    height: 100%;
+}
+
+.msg-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.msg-header i {
+    font-size: 14px;
+}
+
+.msg-content {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+.msg-content pre {
+    background-color: var(--bg-light);
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    border: 1px solid var(--border-color);
+}
+
+/* ユーザーメッセージ */
+.user-msg::before {
+    background-color: var(--primary-color);
+}
+
+.user-msg .msg-header i {
+    color: var(--primary-color);
+}
+
+/* AIメッセージ */
+.ai-msg::before {
+    background-color: #28a745;
+}
+
+.ai-msg .msg-header i {
+    color: #28a745;
+}
+
+/* システムメッセージ */
+.system-msg::before {
+    background-color: #6c757d;
+}
+
+.system-msg .msg-header i {
+    color: #6c757d;
+}
+
+/* エラーメッセージ */
+.error-msg {
+    background-color: #fff5f5;
+}
+
+.error-msg::before {
+    background-color: var(--danger-color);
+}
+
+.error-msg .msg-header {
+    color: var(--danger-color);
+}
+
+.error-msg .msg-header i {
+    color: var(--danger-color);
+}
+
+.error-msg .msg-content {
+    color: #c53030;
+}
+
+[data-theme="dark"] .error-msg {
+    background-color: rgba(255, 107, 107, 0.1);
+}
+
+[data-theme="dark"] .error-msg .msg-content {
+    color: #ffbaba;
+}
+
+
+/* 実行ボタン */
+.execute-btn {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    margin-top: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.execute-btn:hover {
+    background-color: #218838;
+}
+
+.execute-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+/* 実行結果 */
+.success-msg,
+.error-msg {
+    padding: 10px;
+    border-radius: 6px;
+    margin-top: 10px;
+}
+
+.success-msg {
+    background-color: #e9f7ef;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.error-msg {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+[data-theme="dark"] .success-msg {
+    background-color: rgba(40, 167, 69, 0.1);
+    color: #a7d7b4;
+}
+
+[data-theme="dark"] .error-msg {
+    background-color: rgba(220, 53, 69, 0.1);
+    color: #f1b0b7;
+}
+
+
+/* チャット入力エリア */
+#chat-input-container {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+#chat-input {
+    border: none;
+    outline: none;
+    background-color: var(--bg-white);
+    color: var(--text-primary);
+}
+
+#chat-input:focus {
+    box-shadow: none;
+}
+
+#send-chat-btn {
+    background-color: var(--primary-color);
+    border: none;
+    color: white;
+}
+
+#send-chat-btn:hover {
+    background-color: var(--primary-color-hover);
 }

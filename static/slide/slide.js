@@ -4443,8 +4443,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 6. Appの初期化
     await App.loadIconData();
-    App.aiHandler = new AIHandler(App);
     App.init();
+    App.aiHandler = new AIHandler(App);
 
     // 7. App初期化後のイベントリスナー設定
     const bottomPane = document.getElementById('bottom-pane');

@@ -1371,8 +1371,9 @@
                 
                 // コンテナのサイズを取得
                 const containerRect = container.getBoundingClientRect();
-                const availableWidth = containerRect.width - 48; // パディング分を除く
-                const availableHeight = containerRect.height - 48;
+                // box-sizing: border-box が適用されている前提で、paddingを別途引かない
+                const availableWidth = containerRect.width;
+                const availableHeight = containerRect.height;
                 
                 // アスペクト比を維持しながらフィットするスケールを計算
                 const scaleX = availableWidth / canvasWidth;

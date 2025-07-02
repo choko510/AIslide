@@ -258,7 +258,9 @@ if (this.elements.autoExecuteToggle?.checked && aiResponseElements.executeBtn) {
                 <i class="${iconClass}"></i>
                 <strong>${title}</strong>
             </div>
-            <div class="msg-content">${content}</div>
+            <div class="msg-content">${
+                (type === 'ai' || type === 'system' && subTitle !== '') ? content : this.escapeHTML(content)
+            }</div>
         `;
 
         messagesContainer.appendChild(msgDiv);

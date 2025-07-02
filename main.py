@@ -202,8 +202,16 @@ async def upload_file_unified(
     if file_type not in allowed_file_types:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid file type: {file_type}")
 
-    destination_subfolder = f"{file_type}s"
+    # file_typeの値を正規化し、パストラバーサル防止
+    safe_file_type = os.path.basename(file_type)
+    destination_subfolder = f"{safe_file_type}s"
     destination_folder = os.path.join(UPLOAD_DIR, destination_subfolder)
+    # パス検証: 許可ディレクトリ配下のみ
+    uploads_root = os.path.abspath(UPLOAD_DIR)
+    abs_dest_folder = os.path.abspath(destination_folder)
+    if not abs_dest_folder.startswith(uploads_root):
+        logger.error(f"Attempted to create/access folder outside uploads dir: {abs_dest_folder}")
+        raise HTTPException(status_code=400, detail="Invalid destination folder path.")
     os.makedirs(destination_folder, exist_ok=True)
 
     db_file = UploadedFile(

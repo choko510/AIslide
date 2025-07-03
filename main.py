@@ -25,6 +25,7 @@ import module.auth as auth
 from module.database import engine, get_db
 from module.models import Base, User, UploadedFile, Slide
 
+os.makedirs("data", exist_ok=True)
 # Create DB tables
 Base.metadata.create_all(bind=engine)
 
@@ -69,14 +70,16 @@ class AIPrompt(BaseModel):
 
 app = FastAPI()
 
-# Mount static files and templates
-app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 # --- Root Endpoint ---
 @app.get("/", response_class=HTMLResponse)
 async def read_index(request: Request):
     return templates.TemplateResponse("main.html", {"request": request, "slides": []})
+
+@app.get("/slide/", response_class=HTMLResponse)
+async def read_index(request: Request):
+    return templates.TemplateResponse("slide.html", {"request": request})
 
 # --- User Account Endpoints ---
 @app.post("/auth/register", response_model=UserResponse)
@@ -358,6 +361,8 @@ async def websocket_collaborate(websocket: WebSocket, slide_id: str, *, token: O
         logger.info(f"WebSocket connection closed for slide {slide_id}, user {user.username}: {e}")
     finally:
         logger.info(f"User {user.username} disconnected from slide {slide_id}")
+
+app.mount("/", StaticFiles(directory="static"), name="static")
 
 # --- Uvicorn startup ---
 if __name__ == "__main__":

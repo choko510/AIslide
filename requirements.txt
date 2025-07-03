@@ -6,3 +6,4 @@ google-generativeai
 python-jose[cryptography]
 werkzeug
 pillow
+passlib[bcrypt]

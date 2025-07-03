@@ -256,6 +256,7 @@
 
                     ui: {
                         sidebarWidth: 340,
+                        rightSidebarWidth: 300,
                         leftSidebarCollapsed: false
                     }
                 };
@@ -398,29 +399,15 @@
 
             undo() {
                 if (this._undoStack.length === 0) return false;
-                
                 this._redoStack.push(Utils.deepClone(this.state));
-                const previousState = this._undoStack.pop();
-                
-                this._skipHistory = true;
-                this.state = previousState;
-                this._notifyListeners('*', this.state); // 全体の変更を通知
-                this._skipHistory = false;
-                
+                this.state = this._undoStack.pop();
                 return true;
             }
 
             redo() {
                 if (this._redoStack.length === 0) return false;
-                
                 this._undoStack.push(Utils.deepClone(this.state));
-                const nextState = this._redoStack.pop();
-                
-                this._skipHistory = true;
-                this.state = nextState;
-                this._notifyListeners('*', this.state); // 全体の変更を通知
-                this._skipHistory = false;
-                
+                this.state = this._redoStack.pop();
                 return true;
             }
 
@@ -430,6 +417,30 @@
                 this._redoStack = [];
             }
 
+            // 台本パネルの表示/非表示を切り替える
+            toggleScriptPanel() {
+                const rightSidebar = this.elements.rightSidebar;
+                if (!rightSidebar) return;
+
+                const isVisible = rightSidebar.style.display !== 'none';
+                rightSidebar.style.display = isVisible ? 'none' : 'flex';
+                localStorage.setItem('webSlideMakerScriptPanelVisible', !isVisible);
+            }
+
+            // 台本パネルの表示状態をロード
+            _loadScriptPanelState() {
+                const rightSidebar = this.elements.rightSidebar;
+                if (!rightSidebar) return;
+
+                const savedState = localStorage.getItem('webSlideMakerScriptPanelVisible');
+                if (savedState === 'true') {
+                    rightSidebar.style.display = 'flex';
+                } else if (savedState === 'false') {
+                    rightSidebar.style.display = 'none';
+                }
+                // savedStateがnullの場合はHTMLのデフォルト（display: none）が適用される
+            }
+
             // 状態のリセット
             reset() {
                 this.state = this._createInitialState();
@@ -437,19 +448,21 @@
                 this._notifyListeners('*', this.state);
             }
         }
+        window.StateManager = StateManager; // StateManagerクラスをグローバルに公開
 
         // =================================================================
         // ユーティリティ関数群
         // =================================================================
-        const Utils = {
+        const Utils = window.Utils = { // Utilsオブジェクトをグローバルに公開
             generateId: (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             
             debounce: (func, wait = CONFIG.DEBOUNCE_DELAY) => {
                 let timeout;
                 return function executedFunction(...args) {
+                    const context = this; // thisをキャプチャ
                     const later = () => {
                         clearTimeout(timeout);
-                        func(...args);
+                        func.apply(context, args); // キャプチャしたthisを適用
                     };
                     clearTimeout(timeout);
                     timeout = setTimeout(later, wait);
@@ -981,7 +994,7 @@
         // =================================================================
         // App: メインアプリケーション（リファクタリング版）
         // =================================================================
-        const App = {
+        const App = window.App = { // Appオブジェクトをグローバルに公開
             // 新しい状態管理システム
             stateManager: null,
             
@@ -1132,6 +1145,7 @@
                     toolbar: document.getElementById('toolbar'),
                     appBody: document.getElementById('app-body'),
                     leftSidebar: document.getElementById('left-sidebar'),
+                    rightSidebar: document.getElementById('right-sidebar'),
                     mainCanvasArea: document.getElementById('main-canvas-area'),
                     
                     // サイドバー関連
@@ -1140,10 +1154,11 @@
                     inspector: document.getElementById('inspector'),
                     noSelectionMessage: document.getElementById('no-selection-message'),
                     chatPanel: document.getElementById('chat-panel'),
-                    
                     // ツールバーボタン
                     addSlideBtn: document.getElementById('add-slide-btn'),
                     deleteSlideBtn: document.getElementById('delete-slide-btn'),
+                    undoBtn: document.getElementById('undo-btn'),
+                    redoBtn: document.getElementById('redo-btn'),
                     saveBtn: document.getElementById('save-btn'),
                     presentBtn: document.getElementById('present-btn'),
                     exportBtn: document.getElementById('export-btn'),
@@ -1195,6 +1210,10 @@
                     const savedData = localStorage.getItem('webSlideMakerData');
                     if (savedData) {
                         const presentation = JSON.parse(savedData);
+                        // 既存のデータにscriptプロパティがない場合、空文字列で初期化
+                        if (presentation.script === undefined) {
+                            presentation.script = '';
+                        }
                         this.stateManager.batch({
                             'presentation': presentation,
                             'activeSlideId': presentation.slides[0]?.id || null,
@@ -1220,12 +1239,6 @@
                 try {
                     const presentation = this.state.presentation;
                     if (!presentation) return;
-
-                    // StateManagerの履歴機能を使用しない場合の従来の履歴管理
-                    if (!this._skipHistory) {
-                        // 従来のundoStack管理をStateManagerに移行
-                        this.stateManager._saveToHistory();
-                    }
                     
                     localStorage.setItem('webSlideMakerData', JSON.stringify(presentation));
                     
@@ -1359,6 +1372,10 @@
                 alignButtons.forEach(btn => btn.disabled = selectedCount < 2);
                 const distributeButtons = [this.elements.distributeHBtn, this.elements.distributeVBtn];
                 distributeButtons.forEach(btn => btn.disabled = selectedCount < 3);
+
+                // Undo/Redoボタンの状態更新
+                this.elements.undoBtn.disabled = this.stateManager._undoStack.length === 0;
+                this.elements.redoBtn.disabled = this.stateManager._redoStack.length === 0;
             },
 
             renderThumbnails() {
@@ -1605,6 +1622,7 @@
                 Object.assign(box.style, { left: `${bounds.left}%`, top: `${bounds.top}%`, width: `${bounds.width}%`, height: `${bounds.height}%` });
                 this.elements.slideCanvas.appendChild(box);
             },
+
             createElementDOM(elData) {
                 const el = document.createElement('div');
                 el.className = `slide-element ${elData.type}`;
@@ -2226,6 +2244,16 @@
                 // スライド操作ボタン
                 this.elements.addSlideBtn.addEventListener('click', () => this.addSlide());
                 this.elements.deleteSlideBtn.addEventListener('click', () => this.deleteSlide());
+                this.elements.undoBtn.addEventListener('click', () => {
+                    if (this.stateManager.undo()) {
+                        this.render();
+                    }
+                });
+                this.elements.redoBtn.addEventListener('click', () => {
+                    if (this.stateManager.redo()) {
+                        this.render();
+                    }
+                });
                 
                 // 要素追加ボタン
                 this.elements.addTextBtn.addEventListener('click', () => this.addElement('text'));
@@ -2313,6 +2341,9 @@
                         }
                     });
                 }
+
+                // 右サイドバーリサイズ
+                this._bindRightSidebarResize();
 
                 // ページCSS保存ボタン
                 const saveGlobalCssBtn = document.getElementById('save-global-css-btn');
@@ -2540,6 +2571,39 @@
 
                 // インスペクター入力イベント
                 this.elements.inspector.addEventListener('input', e => this.handleInspectorInput(e));
+            },
+
+            _bindRightSidebarResize() {
+                const sidebar = this.elements.rightSidebar;
+                const handle = document.getElementById('right-sidebar-resize-handle');
+                let isResizing = false;
+                let startX = 0;
+                let startWidth = 0;
+
+                if (handle) {
+                    handle.addEventListener('mousedown', (e) => {
+                        isResizing = true;
+                        startX = e.clientX;
+                        startWidth = sidebar.offsetWidth;
+                        document.body.style.cursor = 'ew-resize';
+                        e.preventDefault();
+                    });
+                }
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!isResizing) return;
+                    let newWidth = startWidth - (e.clientX - startX);
+                    newWidth = Math.max(200, Math.min(newWidth, 600)); // 最小・最大幅
+                    sidebar.style.width = `${newWidth}px`;
+                    this.state.ui.rightSidebarWidth = newWidth;
+                });
+
+                document.addEventListener('mouseup', () => {
+                    if (isResizing) {
+                        isResizing = false;
+                        document.body.style.cursor = '';
+                    }
+                });
             },
 
             _bindGlobalEvents() {
@@ -2830,6 +2894,7 @@
             },
 
             startInteraction(e) {
+                this.stateManager._saveToHistory();
                 const isTouch = e.type.startsWith('touch');
                 const point = isTouch ? e.touches[0] : e;
                 const canvasRect = this.elements.slideCanvas.getBoundingClientRect();
@@ -3148,6 +3213,19 @@
                             this.pasteCopiedElements();
                         }
                     }
+                    // Undo/Redo
+                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                        e.preventDefault();
+                        if (this.stateManager.undo()) {
+                            this.render();
+                        }
+                    }
+                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                        e.preventDefault();
+                        if (this.stateManager.redo()) {
+                            this.render();
+                        }
+                    }
                 }
             },
             handleKeyUp(e) { if (e.key === 'Control' || e.key === 'Meta') this.state.interaction.isCtrlPressed = false; },
@@ -3165,7 +3243,11 @@
                 const editableEl = this.elements.slideCanvas.querySelector('[contenteditable="true"]');
                 if (editableEl && save) {
                     const elData = this.getSelectedElement();
-                    if (elData) elData.content = editableEl.innerText;
+                    if (elData && elData.content !== editableEl.innerText) {
+                        this.stateManager._saveToHistory();
+                        elData.content = editableEl.innerText;
+                        this.saveState();
+                    }
                 }
                 this.state.isEditingText = false;
             },
@@ -3225,11 +3307,14 @@
             },
 
             addSlide(silent = false) {
+                if (!silent) this.stateManager._saveToHistory();
                 const newId = this.generateId('slide');
                 const newSlide = { id: newId, elements: [] };
                 const activeIndex = this.state.presentation.slides.findIndex(s => s.id === this.state.activeSlideId);
                 const insertionIndex = activeIndex === -1 ? this.state.presentation.slides.length : activeIndex + 1;
+                
                 this.state.presentation.slides.splice(insertionIndex, 0, newSlide);
+
                 if (!silent) {
                     this.state.activeSlideId = newId;
                     this.state.selectedElementIds = [];
@@ -3248,11 +3333,14 @@
                 if (!silent && !confirm(`スライド(ID: ${targetId})を削除しますか？`)) {
                     return { success: false, message: '削除がキャンセルされました。' };
                 }
+                if (!silent) this.stateManager._saveToHistory();
                 const idx = this.state.presentation.slides.findIndex(s => s.id === targetId);
                 if (idx === -1) {
                      return { success: false, message: `スライド(ID: ${targetId})が見つかりません。` };
                 }
+                
                 this.state.presentation.slides.splice(idx, 1);
+                
                 if (this.state.activeSlideId === targetId) {
                     this.state.activeSlideId = this.state.presentation.slides[Math.max(0, idx - 1)]?.id;
                 }
@@ -3282,6 +3370,7 @@
                 return newEl;
             },
             addElement(type, content) { // This is for user interaction
+                this.stateManager._saveToHistory();
                 const slide = this.getActiveSlide();
                 if (!slide) return;
                 const newEl = {
@@ -3359,10 +3448,11 @@
                 }
             },
 
-            deleteSelectedElements() { if (!confirm(`${this.state.selectedElementIds.length}個の要素を削除しますか？`)) return; const slide = this.getActiveSlide(); if (!slide) return; slide.elements = slide.elements.filter(el => !this.state.selectedElementIds.includes(el.id)); this.state.selectedElementIds = []; this.render(); this.saveState(); },
+            deleteSelectedElements() { if (!confirm(`${this.state.selectedElementIds.length}個の要素を削除しますか？`)) return; this.stateManager._saveToHistory(); const slide = this.getActiveSlide(); if (!slide) return; slide.elements = slide.elements.filter(el => !this.state.selectedElementIds.includes(el.id)); this.state.selectedElementIds = []; this.render(); this.saveState(); },
 
             alignElements(type) {
                 const elementsData = this.getSelectedElementsData(); if (elementsData.length < 2) return;
+                this.stateManager._saveToHistory();
                 const pixelElements = this.getElementsWithPixelRects(elementsData); const bounds = this.calculatePixelBounds(pixelElements); const canvasRect = this.state.slideCanvasRect;
                 pixelElements.forEach(el => {
                     let newLeft, newTop;
@@ -3379,6 +3469,7 @@
 
             distributeElements(direction) {
                 const elementsData = this.getSelectedElementsData(); if (elementsData.length < 3) return;
+                this.stateManager._saveToHistory();
                 const pixelElements = this.getElementsWithPixelRects(elementsData); const canvasRect = this.state.slideCanvasRect;
                 let guidePositions = [];
                 if (direction === 'horizontal') {
@@ -3480,6 +3571,7 @@
 
             // --- 複数コピー ---
             copySelectedElements() {
+                this.stateManager._saveToHistory();
                 const slide = this.getActiveSlide();
                 if (!slide || this.state.selectedElementIds.length === 0) return;
                 const newIds = [];
@@ -3520,40 +3612,31 @@
             },
             handleThumbnailClick(e) { const thumb = e.target.closest('.slide-thumbnail'); if (thumb) { this.state.activeSlideId = thumb.dataset.id; this.state.selectedElementIds = []; this.render(); } },
 handleInspectorInput(e) {
-    // Stop the event from bubbling up, just in case.
     e.stopPropagation();
-
-    // CodeMirror固有のイベント判定削除
-
     const el = this.getSelectedElement();
     if (!el) return;
 
     const prop = e.target.dataset.prop;
     if (!prop || prop === 'customCss') return;
 
-let value;
-if (e.target.type === 'checkbox') {
-    value = e.target.checked;
-} else if (e.target.type === 'number') {
-    value = parseFloat(e.target.value);
-} else {
-    value = e.target.value;
-}
+    if (!this._inspectorInputTimeout) {
+        this.stateManager._saveToHistory();
+    }
+    if (this._inspectorInputTimeout) {
+        clearTimeout(this._inspectorInputTimeout);
+    }
+
+    let value;
+    if (e.target.type === 'checkbox') {
+        value = e.target.checked;
+    } else if (e.target.type === 'number') {
+        value = parseFloat(e.target.value);
+    } else {
+        value = e.target.value;
+    }
 
     if (el.style.hasOwnProperty(prop)) {
         el.style[prop] = value;
-
-        if (el.type === 'icon' && prop === 'fontSize') {
-            const canvasWidth = this.state.presentation.settings.width || CANVAS_WIDTH;
-            const canvasHeight = this.state.presentation.settings.height || CANVAS_HEIGHT;
-            const newSize = parseFloat(value);
-            if (!isNaN(newSize)) {
-                el.style.width = (newSize / canvasWidth) * 100;
-                el.style.height = (newSize / canvasHeight) * 100;
-            }
-        }
-        
-        // アニメーション選択時は見本として再生
         if (prop === 'animation') {
             const domEl = this.elements.slideCanvas.querySelector(`[data-id="${el.id}"]`);
             if (domEl) {
@@ -3572,21 +3655,15 @@ if (e.target.type === 'checkbox') {
         }
     }
 
-    // Update the element on the canvas for real-time feedback
     const domEl = this.elements.slideCanvas.querySelector(`[data-id="${el.id}"]`);
     if (domEl) {
         this.applyStyles(domEl, el.style);
     }
 
-    // Save state with debounce to avoid excessive calls during rapid input
-    // We are NOT calling render(), which is the expensive operation that causes focus loss.
-    if (this._saveStateTimeout) {
-        clearTimeout(this._saveStateTimeout);
-    }
-    this._saveStateTimeout = setTimeout(() => {
+    this._inspectorInputTimeout = setTimeout(() => {
         this.saveState();
-        this._saveStateTimeout = null;
-    }, 300); // 300msのデバウンス
+        this._inspectorInputTimeout = null;
+    }, 300);
 },
             generateId: (p) => `${p}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             getActiveSlide() { return this.state.presentation?.slides.find(s => s.id === this.state.activeSlideId); },
@@ -3659,6 +3736,12 @@ if (e.target.type === 'checkbox') {
             
                 slide.elements.forEach(elData => {
                     const el = this.createElementDOM(elData);
+
+                    // customCssをインラインスタイルとして適用
+                    if (elData.style.customCss) {
+                        el.style.cssText += elData.style.customCss;
+                    }
+
                     // アニメーション付与
                     if (elData.style.animation) {
                         el.classList.remove('animate__animated', elData.style.animation);
@@ -3736,8 +3819,8 @@ if (e.target.type === 'checkbox') {
                     worker.terminate();
                 };
             },
-            moveSlide(fromId, toId) { const s = this.state.presentation.slides; const fromIdx = s.findIndex(s => s.id === fromId), toIdx = s.findIndex(s => s.id === toId); if (fromIdx === -1 || toIdx === -1) return; const [moved] = s.splice(fromIdx, 1); s.splice(toIdx, 0, moved); this.render(); this.saveState(); },
-            duplicateSlide(slideId) { const s = this.state.presentation.slides; const idx = s.findIndex(s => s.id === slideId); if (idx === -1) return; const newSlide = JSON.parse(JSON.stringify(s[idx])); newSlide.id = this.generateId('slide'); newSlide.elements.forEach(el => el.id = this.generateId('el')); s.splice(idx + 1, 0, newSlide); this.state.activeSlideId = newSlide.id; this.state.selectedElementIds = []; this.render(); this.saveState(); },
+            moveSlide(fromId, toId) { this.stateManager._saveToHistory(); const s = this.state.presentation.slides; const fromIdx = s.findIndex(s => s.id === fromId), toIdx = s.findIndex(s => s.id === toId); if (fromIdx === -1 || toIdx === -1) return; const [moved] = s.splice(fromIdx, 1); s.splice(toIdx, 0, moved); this.render(); this.saveState(); },
+            duplicateSlide(slideId) { this.stateManager._saveToHistory(); const s = this.state.presentation.slides; const idx = s.findIndex(s => s.id === slideId); if (idx === -1) return; const newSlide = JSON.parse(JSON.stringify(s[idx])); newSlide.id = this.generateId('slide'); newSlide.elements.forEach(el => el.id = this.generateId('el')); s.splice(idx + 1, 0, newSlide); this.state.activeSlideId = newSlide.id; this.state.selectedElementIds = []; this.render(); this.saveState(); },
             showContextMenu(e, id, content, handlers) { const oldMenu = document.getElementById(id); if (oldMenu) oldMenu.remove(); const menu = document.createElement('div'); menu.id = id; Object.assign(menu.style, { position: 'fixed', zIndex: 99999, left: e.clientX + 'px', top: e.clientY + 'px', background: '#fff', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-md)', padding: '4px' }); menu.innerHTML = content; document.body.appendChild(menu); Object.entries(handlers).forEach(([btnId, handler]) => document.getElementById(btnId).onclick = () => { handler(); menu.remove(); }); setTimeout(() => document.addEventListener('click', function h(ev) { if (!menu.contains(ev.target) && !App.elements.exportBtn.contains(ev.target)) { menu.style.display = 'none'; document.removeEventListener('click', h); } }, { once: true }), 10); },
             showSlideContextMenu(e, slideId) { this.showContextMenu(e, 'slide-context-menu', `<div style="padding:8px 12px;cursor:pointer;" id="slide-duplicate-btn">複製</div><div style="padding:8px 12px;cursor:pointer;color:var(--danger-color);" id="slide-delete-btn">削除</div>`, { 'slide-duplicate-btn': () => this.duplicateSlide(slideId), 'slide-delete-btn': () => { this.state.activeSlideId = slideId; this.deleteSlide(); } }); },
             showPasteContextMenu(e) {
@@ -3810,6 +3893,7 @@ if (e.target.type === 'checkbox') {
             },
             // 複製（現状のコピー機能）
             duplicateElement(elId) {
+                this.stateManager._saveToHistory();
                 const slide = this.getActiveSlide();
                 if (!slide) return;
                 const idx = slide.elements.findIndex(el => el.id === elId);
@@ -3834,6 +3918,7 @@ if (e.target.type === 'checkbox') {
             },
             // クリップボードペースト
             pasteFromClipboard() {
+                this.stateManager._saveToHistory();
                 const slide = this.getActiveSlide();
                 if (!slide || !window._slideClipboard) return;
                 const newEl = JSON.parse(JSON.stringify(window._slideClipboard));
@@ -4022,6 +4107,7 @@ if (e.target.type === 'checkbox') {
             },
             // Inspectorでアイコンのスタイルを変更する関数
             updateIconStyle(element, newStylePrefix) {
+                this.stateManager._saveToHistory();
                 if (element.iconType === 'fa') {
                     // Font Awesomeの場合、クラス名を更新
                     element.content = element.content.replace(/^(fas|far|fal|fat)\s/, newStylePrefix + ' ');
@@ -4035,6 +4121,7 @@ if (e.target.type === 'checkbox') {
 
         // 要素を最前面へ (配列の末尾に移動)
         bringElementToFront(elId) {
+            this.stateManager._saveToHistory();
             const slide = this.getActiveSlide();
             if (!slide) return;
             const fromIndex = slide.elements.findIndex(el => el.id === elId);
@@ -4045,6 +4132,7 @@ if (e.target.type === 'checkbox') {
         },
         // 要素を最背面へ (配列の先頭に移動)
         sendElementToBack(elId) {
+            this.stateManager._saveToHistory();
             const slide = this.getActiveSlide();
             if (!slide) return;
             const fromIndex = slide.elements.findIndex(el => el.id === elId);
@@ -4056,6 +4144,7 @@ if (e.target.type === 'checkbox') {
 
         // 要素を一つ前面へ (配列内で一つ後ろに)
         bringElementForward(elId) {
+            this.stateManager._saveToHistory();
             const slide = this.getActiveSlide();
             if (!slide) return;
             const fromIndex = slide.elements.findIndex(el => el.id === elId);
@@ -4067,6 +4156,7 @@ if (e.target.type === 'checkbox') {
 
         // 要素を一つ背面へ (配列内で一つ前に)
         sendElementBackward(elId) {
+            this.stateManager._saveToHistory();
             const slide = this.getActiveSlide();
             if (!slide) return;
             const fromIndex = slide.elements.findIndex(el => el.id === elId);
@@ -4465,7 +4555,7 @@ if (e.target.type === 'checkbox') {
         // スナップ機能の有効/無効チェック
         isSnapEnabled() {
             return localStorage.getItem('webSlideMakerSnap') !== 'false';
-        },
+        }
         };
 
         // 画像編集モーダルを開く関数

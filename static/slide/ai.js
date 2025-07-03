@@ -106,11 +106,12 @@ class AIHandler {
                 add_qrcode: `<add_qrcode text="..." size="..." color="..." bgColor="..." [slide_id="..."]>\n  <style ... />\n  <customCss>...</customCss>\n</add_qrcode>: QRコード画像を生成し追加（カスタムCSSも指定可）`,
                 question: `<question type="free_text|multiple_choice">...</question>: 計画立案に必要な情報をユーザーに質問する`,
                 view_slide_as_image: `<view_slide_as_image slide_id="..." />: 指定されたスライドを画像として認識する。これにより、AIはスライドの視覚的なレイアウトを理解できる。`,
+                reorder_slides: `<reorder_slides order="slide_id_1,slide_id_2,slide_id_3" />: スライドの表示順序を変更する。カンマ区切りのスライドIDで新しい順序を指定する。`,
                 complete: '<complete>完了報告</complete>: 全てのタスクが完了したことを報告する'
             },
             
             modeCommands: {
-                design: ['sequence', 'create_slide', 'delete_slide', 'edit_element', 'view_slide', 'add_element', 'add_chart', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'view_slide_as_image', 'complete', 'question'],
+                design: ['sequence', 'create_slide', 'delete_slide', 'edit_element', 'view_slide', 'add_element', 'add_chart', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'view_slide_as_image', 'reorder_slides', 'complete', 'question'],
                 plan: ['sequence', 'view_slide', 'switch_ai_mode', 'question', 'view_slide_as_image', 'complete'],
                 ask: ['sequence', 'view_slide', 'view_slide_as_image']
             },
@@ -786,7 +787,7 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
         const knownCommands = [
             'create_slide', 'delete_slide', 'edit_element', 'view_slide', 'sequence',
             'add_element', 'add_chart', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'question',
-            'view_slide_as_image', 'complete'
+            'view_slide_as_image', 'reorder_slides', 'complete'
         ];
         if (!knownCommands.includes(commandName)) {
             return { isValid: false, error: `不明なコマンド'${commandName}'です。` };
@@ -849,9 +850,20 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
             case 'switch_ai_mode': return this.handleSwitchAiMode(commandNode);
             case 'question': return { success: true, message: '質問はUIで処理されるため、実行はスキップされました。' };
             case 'view_slide_as_image': return this.handleViewSlideAsImage(commandNode);
+            case 'reorder_slides': return this.handleReorderSlides(commandNode);
             case 'complete': return { success: true, message: commandNode.textContent.trim() || 'タスクが完了しました。' };
             default: throw new Error(`不明なコマンド: ${commandName}`);
         }
+    }
+
+    handleReorderSlides(commandNode) {
+        const orderAttr = commandNode.getAttribute('order');
+        if (!orderAttr) {
+            throw new Error('order属性が指定されていません。');
+        }
+        const slideIds = orderAttr.split(',').map(id => id.trim());
+        this.app.reorderSlides(slideIds);
+        return { success: true, message: `スライドの順序を${orderAttr}に並べ替えました。` };
     }
 
     async handleViewSlideAsImage(commandNode) {

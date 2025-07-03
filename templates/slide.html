@@ -10,10 +10,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://site-assets.fontawesome.com">
     <!-- Preload critical CSS -->
-    <link rel="preload" as="style" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/all.css" onload="this.rel='stylesheet'">
+    <link rel="preload" as="style" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/all.css"
+        onload="this.rel='stylesheet'">
     <link rel="preload" as="style" href="slide.css" onload="this.rel='stylesheet'">
     <link rel="preload" as="style" href="imgedit.css" onload="this.rel='stylesheet'">
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" onload="this.rel='stylesheet'">
+    <link rel="preload" as="style"
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap"
+        onload="this.rel='stylesheet'">
     <!-- Google Fonts for imgedit.html -->
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
@@ -38,9 +41,13 @@
                 <button id="distribute-v-btn" title="垂直方向へ等間隔に配置"><i class="fas fa-grip-lines-vertical"></i></button>
             </div>
             <div class="separator"></div>
+            <button id="undo-btn" title="元に戻す (Ctrl+Z)"><i class="fas fa-undo"></i></button>
+            <button id="redo-btn" title="やり直し (Ctrl+Y)"><i class="fas fa-redo"></i></button>
+            <div class="separator"></div>
             <button id="save-btn" title="保存"><i class="fas fa-save"></i><span>保存</span></button>
             <button id="present-btn" title="プレゼンテーション開始"><i class="fas fa-play"></i><span>開始</span></button>
             <button id="export-btn" title="エクスポート"><i class="fas fa-download"></i><span>エクスポート</span></button>
+            <button id="toggle-script-panel-btn" title="台本パネル表示/非表示"><i class="fas fa-book"></i><span>台本</span></button>
             <div id="export-menu"
                 style="display:none;position:absolute;z-index:10000;background:#fff;border:1px solid var(--border-color);box-shadow:var(--shadow-md);min-width:160px;">
             </div>
@@ -77,7 +84,7 @@
                             <i class="fas fa-cog"></i>
                             <span>設定</span>
                         </button>
-                        
+
                     </div>
                     <div id="sidebar-content">
                         <div class="sidebar-tab-content active" data-tab-content="elements">
@@ -201,7 +208,8 @@
                                             <div class="settings-description">UIのフォントサイズを調整します</div>
                                         </label>
                                         <div class="settings-control">
-                                            <select id="font-size-setting" style="padding: 4px 8px; border-radius: 4px;">
+                                            <select id="font-size-setting"
+                                                style="padding: 4px 8px; border-radius: 4px;">
                                                 <option value="small">小</option>
                                                 <option value="normal" selected>標準</option>
                                                 <option value="large">大</option>
@@ -258,7 +266,8 @@
                                             <div class="settings-description">プレゼンテーションデータをJSONファイルとして保存</div>
                                         </label>
                                         <div class="settings-control">
-                                            <button id="export-data-btn" class="sidebar-add-btn" style="padding: 6px 12px; font-size: 12px;">
+                                            <button id="export-data-btn" class="sidebar-add-btn"
+                                                style="padding: 6px 12px; font-size: 12px;">
                                                 <i class="fas fa-download"></i> エクスポート
                                             </button>
                                         </div>
@@ -269,8 +278,10 @@
                                             <div class="settings-description">JSONファイルからプレゼンテーションデータを読み込み</div>
                                         </label>
                                         <div class="settings-control">
-                                            <input type="file" id="import-data-input" accept=".json" style="display: none;">
-                                            <button id="import-data-btn" class="sidebar-add-btn" style="padding: 6px 12px; font-size: 12px;">
+                                            <input type="file" id="import-data-input" accept=".json"
+                                                style="display: none;">
+                                            <button id="import-data-btn" class="sidebar-add-btn"
+                                                style="padding: 6px 12px; font-size: 12px;">
                                                 <i class="fas fa-upload"></i> インポート
                                             </button>
                                         </div>
@@ -281,7 +292,8 @@
                                             <div class="settings-description">すべてのプレゼンテーションデータを削除</div>
                                         </label>
                                         <div class="settings-control">
-                                            <button id="clear-data-btn" class="sidebar-add-btn" style="padding: 6px 12px; font-size: 12px; background-color: var(--danger-color); border-color: var(--danger-color);">
+                                            <button id="clear-data-btn" class="sidebar-add-btn"
+                                                style="padding: 6px 12px; font-size: 12px; background-color: var(--danger-color); border-color: var(--danger-color);">
                                                 <i class="fas fa-trash"></i> 全削除
                                             </button>
                                         </div>
@@ -293,7 +305,8 @@
                             <div id="chat-panel">
                                 <div id="ai-controls"
                                     style="margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px;">
-                                    <div id="ai-mode-selector" style="display: flex; justify-content: space-around; background: var(--bg-secondary); padding: 4px; border-radius: var(--border-radius);">
+                                    <div id="ai-mode-selector"
+                                        style="display: flex; justify-content: space-around; background: var(--bg-secondary); padding: 4px; border-radius: var(--border-radius);">
                                         <button class="ai-mode-btn active" data-mode="design" title="デザインモード">
                                             <i class="fas fa-palette"></i>
                                             <span>デザイン</span>
@@ -308,7 +321,8 @@
                                         </button>
                                     </div>
                                     <div style="display: flex; gap: 8px;">
-                                        <button id="reset-chat-btn" class="sidebar-add-btn" title="チャット履歴をリセットします" style="flex-grow: 1; justify-content: center;">
+                                        <button id="reset-chat-btn" class="sidebar-add-btn" title="チャット履歴をリセットします"
+                                            style="flex-grow: 1; justify-content: center;">
                                             <i class="fas fa-sync-alt"></i> チャットをリセット
                                         </button>
                                     </div>
@@ -334,9 +348,12 @@
                                     </div>
                                 </div>
                                 <!-- 自律モード用UI -->
-                                <div id="autonomous-goal-container" style="display:none; flex-direction:column; gap:8px; margin-bottom:10px;">
-                                    <input type="text" id="autonomous-goal-input" placeholder="最終目標を入力..." style="padding:8px; border-radius:6px; border:1px solid var(--border-color);">
-                                    <button id="start-autonomous-btn" class="sidebar-add-btn" style="align-self:flex-end;">開始</button>
+                                <div id="autonomous-goal-container"
+                                    style="display:none; flex-direction:column; gap:8px; margin-bottom:10px;">
+                                    <input type="text" id="autonomous-goal-input" placeholder="最終目標を入力..."
+                                        style="padding:8px; border-radius:6px; border:1px solid var(--border-color);">
+                                    <button id="start-autonomous-btn" class="sidebar-add-btn"
+                                        style="align-self:flex-end;">開始</button>
                                 </div>
                                 <div id="chat-messages"
                                     style="height: 60vh; max-height: 700px; overflow-y: auto; border: 1px solid var(--border-color); padding: 10px; margin-bottom: 10px; border-radius: var(--border-radius);">
@@ -358,6 +375,19 @@
                         <div id="slide-canvas"></div>
                     </div>
                 </div>
+                <aside id="right-sidebar"
+                    style="position: relative; width: 300px; background-color: var(--bg-white); border-left: 1px solid var(--border-color); display: none; flex-direction: column; overflow: hidden;">
+                    <div id="right-sidebar-resize-handle"
+                        style="position: absolute; top: 0; left: 0; width: 6px; height: 100%; cursor: ew-resize; z-index: 10; background: transparent;">
+                    </div>
+                    <div id="script-panel"
+                        style="padding: 16px; display: flex; flex-direction: column; flex-grow: 1; overflow-y: auto;">
+                        <h3 style="margin-top: 0; margin-bottom: 12px; font-size: 16px;">台本</h3>
+                        <div id="script-display" contenteditable="false"
+                            style="flex-grow: 1; border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 8px; overflow-y: auto; min-height: 100px;">
+                        </div>
+                    </div>
+                </aside>
             </div>
             <div id="bottom-pane"
                 style="flex-shrink: 0; height: 140px; background-color: var(--bg-white); border-top: 1px solid var(--border-color); padding: 8px; overflow: hidden; display: flex; align-items: center;">
@@ -527,27 +557,38 @@
     <!-- 図形選択用モーダル -->
     <div class="modal micromodal-slide" id="shape-modal" aria-hidden="true">
         <div class="modal__overlay" tabindex="-1" data-micromodal-close>
-            <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="shape-modal-title" style="max-width: 500px;">
-                <button class="modal__close" aria-label="Close modal" data-micromodal-close style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; color: #6c757d; cursor: pointer; z-index: 1001;">&times;</button>
+            <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="shape-modal-title"
+                style="max-width: 500px;">
+                <button class="modal__close" aria-label="Close modal" data-micromodal-close
+                    style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; color: #6c757d; cursor: pointer; z-index: 1001;">&times;</button>
                 <header class="modal__header">
                     <h2 class="modal__title" id="shape-modal-title">図形を選択</h2>
                 </header>
                 <main class="modal__content" id="shape-modal-content" style="padding: 24px;">
-                    <div id="shape-selection-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 16px;">
+                    <div id="shape-selection-container"
+                        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 16px;">
                         <button class="shape-select-btn" data-shape="rectangle">
-                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;"><rect x="10" y="25" width="80" height="50" fill="#ccc"></rect></svg>
+                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
+                                <rect x="10" y="25" width="80" height="50" fill="#ccc"></rect>
+                            </svg>
                             <span>四角形</span>
                         </button>
                         <button class="shape-select-btn" data-shape="circle">
-                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;"><circle cx="50" cy="50" r="40" fill="#ccc"></circle></svg>
+                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
+                                <circle cx="50" cy="50" r="40" fill="#ccc"></circle>
+                            </svg>
                             <span>円</span>
                         </button>
                         <button class="shape-select-btn" data-shape="triangle">
-                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;"><polygon points="50,10 90,90 10,90" fill="#ccc"></polygon></svg>
+                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
+                                <polygon points="50,10 90,90 10,90" fill="#ccc"></polygon>
+                            </svg>
                             <span>三角形</span>
                         </button>
                         <button class="shape-select-btn" data-shape="line">
-                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;"><line x1="10" y1="50" x2="90" y2="50" stroke="#ccc" stroke-width="5"></line></svg>
+                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
+                                <line x1="10" y1="50" x2="90" y2="50" stroke="#ccc" stroke-width="5"></line>
+                            </svg>
                             <span>線</span>
                         </button>
                     </div>
@@ -741,37 +782,32 @@
     </div>
 
     <!-- AI提案ポップオーバー -->
-    <div id="ai-suggestion-popover" style="display: none; position: fixed; z-index: 10001; background: var(--bg-white); border: 1px solid var(--border-color); box-shadow: var(--shadow-md); border-radius: var(--border-radius); padding: 12px; max-width: 300px;">
+    <div id="ai-suggestion-popover"
+        style="display: none; position: fixed; z-index: 10001; background: var(--bg-white); border: 1px solid var(--border-color); box-shadow: var(--shadow-md); border-radius: var(--border-radius); padding: 12px; max-width: 300px;">
         <div id="ai-suggestion-content"></div>
         <div id="ai-suggestion-actions" style="margin-top: 10px; text-align: right;">
-            <button id="ai-suggestion-cancel" style="padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: transparent; cursor: pointer;">キャンセル</button>
-            <button id="ai-suggestion-apply" style="padding: 4px 8px; border-radius: 4px; border: none; background: var(--primary-color); color: white; cursor: pointer; margin-left: 8px;">適用</button>
+            <button id="ai-suggestion-cancel"
+                style="padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: transparent; cursor: pointer;">キャンセル</button>
+            <button id="ai-suggestion-apply"
+                style="padding: 4px 8px; border-radius: 4px; border: none; background: var(--primary-color); color: white; cursor: pointer; margin-left: 8px;">適用</button>
         </div>
     </div>
 
-    <script>
-      document.addEventListener('DOMContentLoaded', function() {
-        // 既存のAppインスタンス生成・AIHandler初期化処理をここに移動
-        if (window.App) {
-          window.appInstance = new App();
-          window.aiHandler = new AIHandler(window.appInstance);
-        }
-      });
-    </script>
     <script src="ai.js" defer></script>
     <script src="slide.js" type="module"></script>
+    <script src="slideScript.js" type="module"></script>
 
     <link href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
     <link rel="stylesheet" href="mainmodal.css">
     <script src="https://cdn.jsdelivr.net/npm/micromodal@0.6.1/dist/micromodal.min.js" defer></script>
-    
+
     <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.9.2/lib/qr-code-styling.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.1.0/dist/fuse.min.js" defer></script>
-    
+
     <script src="imgedit.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js" defer></script>
 </body>
 
 </html>

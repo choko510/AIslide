@@ -18,6 +18,10 @@
             DEBOUNCE_DELAY: 300
         };
 
+        // キャンバスのデフォルトサイズ定数
+        const CANVAS_WIDTH = 1280;
+        const CANVAS_HEIGHT = 720;
+
         // =================================================================
         // Error Handling
         // =================================================================
@@ -222,7 +226,7 @@
             _createInitialState() {
                 return {
                     presentation: {
-                        settings: { width: 1280, height: 720, globalCss: '' },
+                        settings: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT, globalCss: '' },
                         slides: []
                     },
                     activeSlideId: null,
@@ -907,7 +911,6 @@
             
             elements: {},
             config: {},
-            cmInstances: {}, // CodeMirrorインスタンスを保持
             guideLineManager: null,
 
             init() {
@@ -1139,7 +1142,7 @@
                 try {
                     const firstSlideId = this.generateId('slide');
                     const newPresentation = {
-                        settings: { width: 1280, height: 720, globalCss: '' },
+                        settings: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT, globalCss: '' },
                         slides: [{
                             id: firstSlideId,
                             elements: [{
@@ -1213,11 +1216,7 @@
             switchToTab(tabName) {
                 if (!this.elements.sidebarTabs || !this.elements.sidebarContent) return;
 
-                // Destroy CodeMirror instance if it exists
-                if (this.cmInstances.elementCssEditor) {
-                    this.cmInstances.elementCssEditor.destroy();
-                    this.cmInstances.elementCssEditor = null;
-                }
+                // CodeMirrorエディタ破棄不要
 
                 // Update tab buttons state
                 this.elements.sidebarTabs.querySelectorAll('.sidebar-tab-button').forEach(btn => {
@@ -1366,8 +1365,8 @@
                 if (!canvas || !container) return;
                 
                 // キャンバスの実際のサイズ（1280x720）
-                const canvasWidth = 1280;
-                const canvasHeight = 720;
+                const canvasWidth = CANVAS_WIDTH;
+                const canvasHeight = CANVAS_HEIGHT;
                 
                 // コンテナのサイズを取得
                 const containerRect = container.getBoundingClientRect();
@@ -2340,28 +2339,13 @@
             },
 
             _handleGlobalCssSave() {
-                if (!this.cmInstances.globalCssEditor) return;
-
                 try {
-                    const view = this.cmInstances.globalCssEditor;
-                    const css = view.state.doc.toString();
-                    
-                    // Lint結果を取得
-                    let diagnostics = [];
-                    if (view.state.field && window.codemirror.lint && window.codemirror.lint.linter) {
-                        try {
-                            diagnostics = window.codemirror.langs.cssLinter(view.state);
-                        } catch (e) {
-                            diagnostics = [];
-                        }
-                    }
-                    
-                    const hasError = diagnostics && diagnostics.some(d => d.severity === "error");
-                    if (hasError) {
-                        alert('CSSに構文エラーがあります。修正してください。');
-                        return;
-                    }
-                    
+                    const container = document.getElementById('global-css-input');
+                    if (!container) return;
+                    const textarea = container.querySelector('textarea');
+                    if (!textarea) return;
+                    const css = textarea.value;
+
                     this.state.presentation.settings.globalCss = css;
                     this.applyCustomCss();
                     this.saveState();
@@ -2514,7 +2498,7 @@
                     btn.style.position = 'absolute';
                     btn.style.right = '24px';
                     btn.style.top = '24px';
-                    btn.style.zIndex = 10001;
+                    btn.style.zIndex = 100;
                     btn.style.background = '#fff';
                     btn.style.border = '1px solid #ccc';
                     btn.style.borderRadius = '6px';
@@ -2539,7 +2523,7 @@
                     disp.style.position = 'absolute';
                     disp.style.right = '24px';
                     disp.style.top = '60px';
-                    disp.style.zIndex = 10001;
+                    disp.style.zIndex = 100;
                     disp.style.background = '#fff';
                     disp.style.border = '1px solid #ccc';
                     disp.style.borderRadius = '6px';
@@ -2673,8 +2657,8 @@
                     this.handleDragMove(dx, dy);
                 } else if (interaction.isResizing) {
                     // 固定キャンバスサイズを使用してパーセント計算
-                    const dxPercent = dx / 1280 * 100;
-                    const dyPercent = dy / 720 * 100;
+                    const dxPercent = dx / CANVAS_WIDTH * 100;
+                    const dyPercent = dy / CANVAS_HEIGHT * 100;
                     this.performResize(dxPercent, dyPercent);
                 }
             },
@@ -2685,8 +2669,8 @@
                 const draggingElementsInitialStates = interaction.initialStates;
 
                 // キャンバスの実際のサイズ（固定）を使用
-                const canvasWidth = 1280;
-                const canvasHeight = 720;
+                const canvasWidth = CANVAS_WIDTH;
+                const canvasHeight = CANVAS_HEIGHT;
 
                 let snapOffset = { x: 0, y: 0 };
                 let guides = [];
@@ -3002,7 +2986,7 @@
                     }
                 };
                  if (type === 'text' && !style?.fontSize) newEl.style.fontSize = 24;
-                 if (type === 'image' && !style?.height) newEl.style.height = 30;
+                 if (type === 'image' && style.height === undefined) newEl.style.height = 30;
 
                 slide.elements.push(newEl);
                 return newEl;
@@ -3230,10 +3214,7 @@ handleInspectorInput(e) {
     // Stop the event from bubbling up, just in case.
     e.stopPropagation();
 
-    // Ignore events from CodeMirror, it has its own handler.
-    if (e.target.closest('.cm-editor')) {
-        return;
-    }
+    // CodeMirror固有のイベント判定削除
 
     const el = this.getSelectedElement();
     if (!el) return;
@@ -3254,8 +3235,8 @@ if (e.target.type === 'checkbox') {
         el.style[prop] = value;
 
         if (el.type === 'icon' && prop === 'fontSize') {
-            const canvasWidth = this.state.presentation.settings.width || 1280;
-            const canvasHeight = this.state.presentation.settings.height || 720;
+            const canvasWidth = this.state.presentation.settings.width || CANVAS_WIDTH;
+            const canvasHeight = this.state.presentation.settings.height || CANVAS_HEIGHT;
             const newSize = parseFloat(value);
             if (!isNaN(newSize)) {
                 el.style.width = (newSize / canvasWidth) * 100;
@@ -3614,13 +3595,14 @@ if (e.target.type === 'checkbox') {
                 });
             },
 
-            addIconElement(iconType, iconClass) {
+            addIconElement(iconType, iconClass, style = {}) {
                 const slide = this.getActiveSlide();
                 if (!slide) return;
 
-                const fontSize = 48; // Default font size for new icons
-                const canvasWidth = this.state.presentation.settings.width || 1280;
-                const canvasHeight = this.state.presentation.settings.height || 720;
+                const defaultFontSize = 48;
+                const fontSize = style.fontSize || defaultFontSize;
+                const canvasWidth = this.state.presentation.settings.width || CANVAS_WIDTH;
+                const canvasHeight = this.state.presentation.settings.height || CANVAS_HEIGHT;
 
                 const newEl = {
                     id: this.generateId('el'),
@@ -3636,7 +3618,8 @@ if (e.target.type === 'checkbox') {
                         rotation: 0,
                         color: '#212529',
                         fontSize: fontSize,
-                        animation: ''
+                        animation: '',
+                        ...style // 渡されたスタイルで上書き
                     }
                 };
 
@@ -3693,66 +3676,150 @@ if (e.target.type === 'checkbox') {
             }
         },
         
-        async initGlobalCssEditor() {
-            if (this.cmInstances.globalCssEditor) return;
+        // CodeMirror廃止: textareaベースに置換
+        initGlobalCssEditor() {
             const container = document.getElementById('global-css-input');
-            if (!container || !window.codemirror) return;
-            const cssLang = window.codemirror.langs.css();
-            this.cmInstances.globalCssEditor = new window.codemirror.EditorView({
-                doc: this.state.presentation.settings.globalCss || '',
-                extensions: [
-                    cssLang,
-                    window.codemirror.basicSetup,
-                    window.codemirror.lint.linter(window.codemirror.langs.cssLinter),
-                    window.codemirror.lint.lintGutter()
-                ],
-                parent: container
+            if (!container) return;
+
+            // 行番号divを用意
+            let lineNumbers = container.querySelector('.line-numbers');
+            let textarea = container.querySelector('textarea');
+            if (!lineNumbers) {
+                lineNumbers = document.createElement('div');
+                lineNumbers.className = 'line-numbers';
+                lineNumbers.style.width = '40px';
+                lineNumbers.style.background = '#f7f7f7';
+                lineNumbers.style.color = '#888';
+                lineNumbers.style.textAlign = 'right';
+                lineNumbers.style.padding = '12px 4px 12px 0';
+                lineNumbers.style.fontFamily = 'monospace';
+                lineNumbers.style.fontSize = '14px';
+                lineNumbers.style.userSelect = 'none';
+                lineNumbers.style.height = '100%';
+                lineNumbers.style.overflow = 'hidden';
+                lineNumbers.style.boxSizing = 'border-box';
+                lineNumbers.style.borderRadius = 'var(--border-radius) 0 0 var(--border-radius)';
+                container.insertBefore(lineNumbers, textarea || null);
+            }
+
+            // containerをflexに
+            container.style.display = 'flex';
+            container.style.flexDirection = 'row';
+            container.style.overflow = 'hidden';
+
+            if (!textarea) {
+                textarea = document.createElement('textarea');
+                textarea.style.width = '100%';
+                textarea.style.height = '100%';
+                textarea.style.fontFamily = 'monospace';
+                textarea.style.fontSize = '14px';
+                textarea.style.boxSizing = 'border-box';
+                textarea.style.resize = 'none';
+                textarea.style.border = 'none';
+                textarea.style.borderRadius = '0 var(--border-radius) var(--border-radius) 0';
+                textarea.style.background = 'transparent';
+                textarea.style.color = 'inherit';
+                textarea.style.padding = '12px';
+                textarea.style.outline = 'none';
+                textarea.style.flex = '1';
+                textarea.style.marginLeft = '0';
+                container.appendChild(textarea);
+            }
+            textarea.style.flex = '1';
+            textarea.style.marginLeft = '0';
+
+            textarea.value = this.state.presentation.settings.globalCss || '';
+
+            // 行番号更新関数
+            function updateLineNumbers() {
+                const lines = textarea.value.split('\n').length;
+                lineNumbers.innerHTML = Array.from({length: lines}, (_, i) => (i+1)).join('<br>');
+            }
+            textarea.addEventListener('input', updateLineNumbers);
+            textarea.addEventListener('scroll', () => {
+                lineNumbers.scrollTop = textarea.scrollTop;
             });
+            updateLineNumbers();
+
+            textarea.oninput = () => {
+                this.state.presentation.settings.globalCss = textarea.value;
+                this.applyCustomCss();
+                this.saveState();
+            };
         },
 
-        async initElementCssEditor(initialContent) {
-            if (this.cmInstances.elementCssEditor) {
-                this.cmInstances.elementCssEditor.destroy();
-            }
+        initElementCssEditor(initialContent) {
             const container = document.getElementById('element-css-editor-container');
-            if (!container || !window.codemirror) return;
-            const cssLang = window.codemirror.langs.css();
-            const updateListener = window.codemirror.EditorView.updateListener.of((update) => {
-                if (update.docChanged) {
-                    const el = this.getSelectedElement();
-                    if (el) {
-                        // Lint結果を取得
-                        let diagnostics = [];
-                        if (window.codemirror.langs && window.codemirror.langs.cssLinter) {
-                            try {
-                                diagnostics = window.codemirror.langs.cssLinter(update.state);
-                            } catch (e) {
-                                diagnostics = [];
-                            }
-                        }
-                        const hasError = diagnostics && diagnostics.some(d => d.severity === "error");
-                        if (hasError) {
-                            alert('カスタムCSSに構文エラーがあります。修正してください。');
-                            return;
-                        }
-                        el.style.customCss = update.state.doc.toString();
-                        this.applyCustomCss();
-                        this.saveState();
-                    }
-                }
-            });
+            if (!container) return;
 
-            this.cmInstances.elementCssEditor = new window.codemirror.EditorView({
-                doc: initialContent,
-                extensions: [
-                    cssLang,
-                    window.codemirror.basicSetup,
-                    updateListener,
-                    window.codemirror.lint.linter(window.codemirror.langs.cssLinter),
-                    window.codemirror.lint.lintGutter()
-                ],
-                parent: container
+            // 行番号divを用意
+            let lineNumbers = container.querySelector('.line-numbers');
+            let textarea = container.querySelector('textarea');
+            if (!lineNumbers) {
+                lineNumbers = document.createElement('div');
+                lineNumbers.className = 'line-numbers';
+                lineNumbers.style.width = '40px';
+                lineNumbers.style.background = '#f7f7f7';
+                lineNumbers.style.color = '#888';
+                lineNumbers.style.textAlign = 'right';
+                lineNumbers.style.padding = '12px 4px 12px 0';
+                lineNumbers.style.fontFamily = 'monospace';
+                lineNumbers.style.fontSize = '14px';
+                lineNumbers.style.userSelect = 'none';
+                lineNumbers.style.height = '100%';
+                lineNumbers.style.overflow = 'hidden';
+                lineNumbers.style.boxSizing = 'border-box';
+                lineNumbers.style.borderRadius = 'var(--border-radius) 0 0 var(--border-radius)';
+                container.insertBefore(lineNumbers, textarea || null);
+            }
+
+            // containerをflexに
+            container.style.display = 'flex';
+            container.style.flexDirection = 'row';
+            container.style.overflow = 'hidden';
+
+            if (!textarea) {
+                textarea = document.createElement('textarea');
+                textarea.style.width = '100%';
+                textarea.style.height = '100%';
+                textarea.style.fontFamily = 'monospace';
+                textarea.style.fontSize = '14px';
+                textarea.style.boxSizing = 'border-box';
+                textarea.style.resize = 'none';
+                textarea.style.border = 'none';
+                textarea.style.borderRadius = '0 var(--border-radius) var(--border-radius) 0';
+                textarea.style.background = 'transparent';
+                textarea.style.color = 'inherit';
+                textarea.style.padding = '12px';
+                textarea.style.outline = 'none';
+                textarea.style.flex = '1';
+                textarea.style.marginLeft = '0';
+                container.appendChild(textarea);
+            }
+            textarea.style.flex = '1';
+            textarea.style.marginLeft = '0';
+
+            textarea.value = initialContent || '';
+
+            // 行番号更新関数
+            function updateLineNumbers() {
+                const lines = textarea.value.split('\n').length;
+                lineNumbers.innerHTML = Array.from({length: lines}, (_, i) => (i+1)).join('<br>');
+            }
+            textarea.addEventListener('input', updateLineNumbers);
+            textarea.addEventListener('scroll', () => {
+                lineNumbers.scrollTop = textarea.scrollTop;
             });
+            updateLineNumbers();
+
+            textarea.oninput = () => {
+                const el = this.getSelectedElement();
+                if (el) {
+                    el.style.customCss = textarea.value;
+                    this.applyCustomCss();
+                    this.saveState();
+                }
+            };
         },
 
         applyCustomCss() {
@@ -4409,17 +4476,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // 3. CodeMirrorの動的インポート
-    const { EditorView } = await import('https://esm.sh/@codemirror/view');
-    const { basicSetup } = await import('https://esm.sh/codemirror');
-    const { css, cssLinter } = await import('https://esm.sh/@codemirror/lang-css');
-    const { linter, lintGutter } = await import('https://esm.sh/@codemirror/lint');
-    
-    window.codemirror = {
-        EditorView, basicSetup,
-        langs: { css, cssLinter },
-        lint: { linter, lintGutter }
-    };
+    // 3. CodeMirrorの動的インポート削除（不要）
 
     // 4. カスタムCSS適用用のstyleタグをheadに準備
     document.head.appendChild(Object.assign(document.createElement('style'), { id: 'global-custom-styles' }));

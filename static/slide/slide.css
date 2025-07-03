@@ -1010,6 +1010,106 @@ body.presentation-mode {
     background-color: var(--primary-color-hover);
 }
 
+/* --- AI Question UI Styles --- */
+
+.question-container-wrapper {
+    padding: 15px;
+    background-color: #f7f8fa;
+    border-radius: 8px;
+    margin-top: 12px;
+    border: 1px solid #e0e0e0;
+}
+
+.question-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.question-container p {
+    margin: 0 0 5px 0;
+    font-weight: 500;
+    color: #2c3e50;
+    line-height: 1.5;
+}
+
+.question-input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 1rem;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.question-input:focus {
+    outline: none;
+    border-color: #4a6cf7;
+    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
+}
+
+.question-submit-btn {
+    align-self: flex-end;
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 10px 20px;
+    background-color: #4a6cf7;
+    color: #fff;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.question-submit-btn:hover {
+    background-color: #3a5ce6;
+    transform: translateY(-1px);
+}
+
+.question-submit-btn:disabled {
+    background-color: #bdc3c7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.question-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 5px;
+}
+
+.question-option-btn {
+    font-size: 0.9rem;
+    padding: 10px 18px;
+    background-color: #fff;
+    color: #34495e;
+    border: 1px solid #bdc3c7;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.question-option-btn:hover {
+    background-color: #ecf0f1;
+    border-color: #4a6cf7;
+    color: #4a6cf7;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.question-option-btn:disabled {
+    background-color: #4a6cf7;
+    border-color: #4a6cf7;
+    color: #fff;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+    opacity: 0.8;
+}
+
 /* --- レスポンシブデザイン --- */
 @media (min-width: 1400px) {
     #left-sidebar {
@@ -1038,119 +1138,326 @@ body.presentation-mode {
     }
 
     #app-body {
-        /* main was flex-direction: column */
         flex-direction: column;
         height: auto;
+        /* viewport height will be managed by app-container */
         flex-grow: 1;
-        overflow: hidden;
+        overflow-y: auto;
+        /* Allow vertical scroll for the whole app-body if content overflows */
+    }
+
+    #center-content {
+        /* This wraps sidebar and canvas area */
+        flex-direction: column;
+        overflow-y: visible;
+        /* Allow content to determine height */
+        flex-grow: 1;
     }
 
     #left-sidebar {
-        /* Was #left-pane and #right-pane */
         width: 100%;
-        border: none;
+        /* Take full width */
+        border-right: none;
+        /* Remove border for mobile */
+        border-bottom: 1px solid var(--border-color);
+        /* Add bottom border to separate from canvas */
         box-shadow: none;
         order: 2;
-        /* Sidebar content (like slides, elements) can come after canvas */
-        border-top: 1px solid var(--border-color);
-        /* height: auto; /* Let content define height */
-        /* padding: 0; /* sidebar-content handles padding */
+        /* Canvas first, then sidebar */
+        height: auto;
+        /* Adjust height based on content */
+        max-height: 40vh;
+        /* Limit height to prevent it from taking too much space */
+        display: flex;
+        /* Ensure flex properties apply */
+        flex-direction: row;
+        /* Tabs on left, content on right */
+        overflow: hidden;
+        /* Prevent internal content from breaking layout */
     }
 
     #sidebar-tabs {
-        /* Potentially make tabs scrollable horizontally if too many */
-        overflow-x: auto;
+        overflow-y: auto;
+        /* Allow vertical scroll for tabs if they exceed height */
+        flex-shrink: 0;
+        padding: 4px;
+        /* Reduce padding for smaller screens */
     }
 
     .sidebar-tab-button {
-        font-size: 12px;
+        font-size: 11px;
         /* Smaller tabs on mobile */
-        padding: 10px 6px;
+        padding: 8px 4px;
+        /* Adjust padding */
+        min-height: 50px;
+        /* Ensure tabs are tappable */
     }
 
-    /* #left-pane-header was display:none, but now it's part of a tab. */
-    /* It should be visible if its tab is active. */
+    .sidebar-tab-button i {
+        font-size: 16px;
+        /* Adjust icon size */
+    }
+
+    .sidebar-tab-button span {
+        font-size: 9px;
+        /* Adjust text size */
+    }
+
+    #sidebar-content {
+        flex-grow: 1;
+        overflow-y: auto;
+        /* Allow content within tab to scroll */
+        padding: 8px;
+        /* Reduce padding */
+    }
+
+    #element-add-buttons-container {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        /* More flexible grid for add buttons */
+        gap: 8px;
+    }
+
+    .sidebar-add-btn {
+        font-size: 12px;
+        /* Smaller text for add buttons */
+        padding: 8px;
+    }
+
+    .sidebar-add-btn i {
+        font-size: 14px;
+    }
+
+    /* Specific adjustments for icon sections */
+    #fa-icon-list-container,
+    #mi-icon-list-container {
+        max-height: 250px;
+        /* Reduce max height for icon lists */
+    }
+
+    #fa-icon-category-filter button,
+    #mi-icon-category-filter button {
+        padding: 3px 6px;
+        font-size: 10px;
+    }
+
+    #inspector {
+        padding: 8px;
+        /* Reduce padding for inspector */
+    }
+
+    .inspector-group input[type="text"],
+    .inspector-group input[type="number"],
+    .inspector-group input[type="color"],
+    .inspector-group select {
+        padding: 6px 8px;
+        font-size: 13px;
+    }
+
+    .inspector-group label {
+        font-size: 11px;
+    }
+
+
+    /* Slide list at the bottom */
+    #bottom-pane {
+        order: 3;
+        /* Sidebar, then canvas, then bottom pane */
+        height: 120px;
+        /* Slightly reduce height */
+        padding: 4px;
+    }
+
+    #slide-list-container {
+        /* This is the direct child of bottom-pane */
+        width: 100%;
+    }
+
     #slide-list {
-        /* Copied from old #slide-list for mobile */
-        display: flex;
-        flex-direction: row;
-        overflow-x: auto;
-        padding: 12px;
-        /* Keep padding for horizontal scroll items */
+        /* This is the ul inside slide-list-container */
+        padding: 8px;
         align-items: center;
+        overflow-x: auto;
+        /* Ensure horizontal scroll for thumbnails */
+        overflow-y: hidden;
+        height: 100%;
     }
 
     .slide-thumbnail {
-        /* Copied from old .slide-thumbnail for mobile */
         flex-shrink: 0;
-        width: 120px;
-        margin-right: 12px;
+        width: 100px;
+        /* Smaller thumbnails */
+        height: calc(100px * 9 / 16 + 28px);
+        /* Adjust height based on new width and some padding for index */
+        margin-right: 8px;
         margin-bottom: 0;
+        /* Already set */
+    }
+
+    .slide-thumbnail-wrapper {
+        border-radius: 3px;
+        /* Slightly smaller radius */
+    }
+
+    .thumbnail-index {
+        width: 18px;
+        height: 18px;
+        line-height: 18px;
+        font-size: 10px;
     }
 
     #main-canvas-area {
-        /* Was #main-pane */
-        padding: 12px;
+        padding: 8px;
+        /* Reduce padding */
         order: 1;
-        /* Canvas comes first on mobile */
+        /* Canvas comes first */
+        flex-grow: 1;
+        /* Allow canvas area to take remaining space */
+        min-height: 300px;
+        /* Ensure minimum height for canvas */
+        overflow: hidden;
+        /* Important to contain the scaled canvas */
     }
 
     #slide-wrapper {
-        max-width: 100vw;
-        /* Full width on mobile */
+        max-width: 100%;
         width: 100%;
-        /* Ensure it takes full width */
-        /* aspect-ratio: 16 / 9; /* This should be fine */
+        height: 100%;
+        /* Allow wrapper to fill main-canvas-area */
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     #slide-canvas {
-        /* width: 1280px; These are base, scaling should handle it */
-        /* height: 720px; */
         max-width: 100%;
         max-height: 100%;
-        /* aspect-ratio: 16 / 9; */
+        /* aspect-ratio will be handled by JS or specific scaling logic for mobile */
     }
 
-    /* #right-pane specific styles are removed or adapted */
     #toolbar {
         flex-wrap: wrap;
-        padding: 8px;
+        /* Allow toolbar buttons to wrap */
+        padding: 6px;
+        justify-content: center;
+        /* Center buttons when they wrap */
     }
 
     #toolbar button {
         margin-bottom: 4px;
+        padding: 6px 8px;
+        /* Adjust button padding */
     }
 
     #toolbar button span {
-        /* Hides text on mobile */
         display: none;
+        /* Text is already hidden, ensure it stays that way */
+    }
+
+    #toolbar button i {
+        font-size: 16px;
+        /* Ensure icons are reasonably sized */
     }
 
     #toolbar .separator {
-        margin: 0 8px;
+        margin: 0 6px;
+        /* Adjust separator margin */
     }
+
+    /* Chat panel specific adjustments */
+    #chat-messages {
+        max-height: 200px;
+        /* Limit height of chat messages */
+    }
+
+    #ai-mode-selector button {
+        padding: 4px 6px;
+        font-size: 10px;
+    }
+
+    #ai-mode-selector button i {
+        font-size: 14px;
+    }
+
+    #autonomous-goal-input,
+    #chat-input {
+        padding: 6px;
+        font-size: 13px;
+    }
+
+    #send-chat-btn {
+        padding: 6px 10px;
+    }
+
 }
 
 /* Targeting landscape on smaller devices */
 @media (max-width: 768px) and (orientation: landscape) {
+    #app-body {
+        /* For landscape, we might want main content (canvas + sidebar) side-by-side if possible,
+           but given the complexity, keeping column might be safer and then adjust heights. */
+        flex-direction: column;
+        /* Keep column for simplicity, adjust heights below */
+    }
+
+    #center-content {
+        flex-direction: row;
+        /* Attempt to put sidebar and canvas side-by-side */
+        flex-grow: 1;
+    }
+
+    #left-sidebar {
+        width: 220px;
+        /* Fixed width for sidebar in landscape */
+        height: 100%;
+        /* Take full height of center-content */
+        max-height: none;
+        /* Override previous max-height */
+        border-right: 1px solid var(--border-color);
+        /* Restore border */
+        border-bottom: none;
+        order: 1;
+        /* Sidebar first in landscape */
+    }
+
+    #main-canvas-area {
+        order: 2;
+        /* Canvas after sidebar */
+        flex-grow: 1;
+        height: 100%;
+        /* Take full height of center-content */
+        padding: 8px;
+    }
+
+    #bottom-pane {
+        height: 100px;
+        /* Further reduce height in landscape */
+        order: 3;
+        /* Comes after center-content */
+    }
+
+    .slide-thumbnail {
+        width: 90px;
+        /* Slightly smaller thumbnails in landscape */
+        height: calc(90px * 9 / 16 + 24px);
+    }
+
     #toolbar {
-        padding: 4px 8px;
-        /* Reduce padding */
         flex-wrap: nowrap;
-        /* Try to keep toolbar items in one line if possible */
+        /* Try to keep toolbar items in one line */
         overflow-x: auto;
         /* Allow horizontal scroll if they don't fit */
+        justify-content: flex-start;
+        /* Align to start */
+        padding: 4px 8px;
     }
 
     #toolbar button {
         padding: 4px 6px;
-        /* Smaller buttons */
         gap: 4px;
     }
 
     #toolbar button i {
         font-size: 14px;
-        /* Slightly smaller icons */
     }
 
     #toolbar .separator {
@@ -1158,25 +1465,46 @@ body.presentation-mode {
         height: 20px;
     }
 
+    /* Landscape specific adjustments for sidebar content */
     #left-sidebar {
-        width: 200px;
-        /* Narrower sidebar in landscape mobile */
+        width: 240px;
+        /* Increase sidebar width for better usability */
     }
 
-    .sidebar-tab-button {
-        font-size: 11px;
-        /* Even smaller tab text */
-        padding: 8px 4px;
+    .sidebar-tab-button span {
+        font-size: 10px;
+        /* Slightly larger text for tabs */
     }
 
-    #slide-list {
-        /* Ensure slide list items are small enough */
-        padding: 8px;
+    #sidebar-content {
+        padding: 6px;
+        /* Adjust padding */
     }
 
-    .slide-thumbnail {
-        width: 100px;
-        margin-right: 8px;
+    #element-add-buttons-container {
+        grid-template-columns: 1fr;
+        /* Single column for add buttons */
+        gap: 6px;
+        /* Reduce gap */
+    }
+
+    .sidebar-add-btn {
+        justify-content: flex-start;
+        /* Align button content to start */
+    }
+
+    #fa-icon-list-container,
+    #mi-icon-list-container {
+        max-height: calc(100vh - 280px);
+        /* Adjust max height based on viewport, considering other elements */
+    }
+
+    .inspector-group input[type="text"],
+    .inspector-group input[type="number"],
+    .inspector-group input[type="color"],
+    .inspector-group select {
+        font-size: 12px;
+        /* Smaller font for inspector inputs */
     }
 }
 
@@ -1480,4 +1808,31 @@ input:checked+.slider:before {
 
 #send-chat-btn:hover {
     background-color: var(--primary-color-hover);
+}
+
+/* --- AI Complete Message --- */
+.complete-msg-container {
+    background-color: #e9f7ef;
+    border-left: 4px solid #28a745;
+    padding: 12px 16px;
+    border-radius: var(--border-radius);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #155724;
+}
+
+.complete-msg-container i {
+    font-size: 20px;
+    color: #28a745;
+}
+
+[data-theme="dark"] .complete-msg-container {
+    background-color: rgba(40, 167, 69, 0.15);
+    border-left-color: #3ddc84;
+    color: #a7d7b4;
+}
+
+[data-theme="dark"] .complete-msg-container i {
+    color: #3ddc84;
 }

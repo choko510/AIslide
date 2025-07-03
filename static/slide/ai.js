@@ -35,7 +35,6 @@ class AIHandler {
         this.elements.aiChatOutput = document.getElementById('chat-messages');
         
         // コントロール
-        this.elements.restoreCheckpointBtn = document.getElementById('restore-checkpoint-btn');
         this.elements.resetChatBtn = document.getElementById('reset-chat-btn');
         this.elements.autonomousModeToggle = document.getElementById('autonomous-mode-toggle');
         this.elements.autoExecuteToggle = document.getElementById('auto-execute-toggle');
@@ -62,9 +61,13 @@ class AIHandler {
             if (e.target.classList.contains('execute-btn')) {
                 await this.handleExecuteCommandClick(e.target);
             }
+            const restoreBtn = e.target.closest('.restore-checkpoint-btn-inline');
+            if (restoreBtn && !restoreBtn.disabled) {
+                const checkpointId = restoreBtn.dataset.checkpointId;
+                this.restoreAICheckpoint(checkpointId);
+            }
         });
 
-        this.elements.restoreCheckpointBtn.addEventListener('click', () => this.restoreAICheckpoint());
         this.elements.resetChatBtn.addEventListener('click', () => this.resetChat());
         
         this.elements.autonomousModeToggle.addEventListener('change', (e) => {
@@ -97,22 +100,31 @@ class AIHandler {
                 edit_element: `<edit_element element_id="..." slide_id="...">\n  <content>...</content>\n  <style ... />\n  <customCss>...</customCss>\n</edit_element>: 要素を編集する（カスタムCSSも編集可）`,
                 view_slide: '<view_slide slide_id="..." />: スライドを閲覧する',
                 switch_ai_mode: '<switch_ai_mode mode="design|plan|ask" />: AIのモードを指定されたモードに切り替える',
-                add_element: `<add_element type="text|image|video|chart|table|icon|iframe|qrcode" [slide_id="..."]>\n  <content><![CDATA[...]]></content>\n  <style top, left, width, heightは0-100の%指定。fontSizeは数値(px)のみ。 top="..." left="..." width="..." height="..." zIndex="..." color="..." fontSize="..." fontFamily="..." rotation="..." animation="..." />\n  <customCss>...</customCss>\n</add_element>: アクティブまたは指定スライドに要素を追加。HTMLを含む場合はcontentを子要素としCDATAで囲む。`,
+                add_element: `<add_element type="text|image|video|table|icon|iframe|qrcode" [slide_id="..."]>\\n  <content><![CDATA[...]]></content>\\n  <style top, left, width, heightは0-100の%指定。fontSizeは数値(px)のみ。 top="..." left="..." width="..." height="..." zIndex="..." color="..." fontSize="..." fontFamily="..." rotation="..." animation="アニメーション名 継続時間 タイミング関数 遅延時間 イテレーション回数 方向 フィルモード (例: fadeIn 1s ease-out 0.5s forwards)" />\\n  <customCss>...</customCss>\\n</add_element>: アクティブまたは指定スライドに要素を追加。HTMLを含む場合はcontentを子要素としCDATAで囲む。`,
+                add_chart: `<add_chart type="bar|line|pie|doughnut|radar" [slide_id="..."]>\n  <title>グラフのタイトル</title>\n  <labels>ラベル1,ラベル2,ラベル3</labels>\n  <datasets>\n    <dataset label="データセット1" data="10,20,30" [color="#ff0000"] />\n    <dataset label="データセット2" data="15,25,35" [color="rgba(0,0,255,0.5)"] />\n  </datasets>\n  <options showLegend="true" showGrid="true" />\n  <style ... />\n</add_chart>: グラフ要素を追加。複数のデータセットも可。色は単色(#RRGGBB)またはカンマ区切りの複数色で指定。`,
                 add_icon: `<add_icon iconType="fa|mi" iconClass="..." [slide_id="..."]>\n  <style ... />\n  <customCss>...</customCss>\n</add_icon>: アイコン要素を追加（カスタムCSSも指定可）`,
                 add_qrcode: `<add_qrcode text="..." size="..." color="..." bgColor="..." [slide_id="..."]>\n  <style ... />\n  <customCss>...</customCss>\n</add_qrcode>: QRコード画像を生成し追加（カスタムCSSも指定可）`,
                 question: `<question type="free_text|multiple_choice">...</question>: 計画立案に必要な情報をユーザーに質問する`,
                 view_slide_as_image: `<view_slide_as_image slide_id="..." />: 指定されたスライドを画像として認識する。これにより、AIはスライドの視覚的なレイアウトを理解できる。`,
                 complete: '<complete>完了報告</complete>: 全てのタスクが完了したことを報告する'
             },
+            
             modeCommands: {
-                design: ['sequence', 'create_slide', 'delete_slide', 'edit_element', 'view_slide', 'add_element', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'view_slide_as_image', 'complete'],
+                design: ['sequence', 'create_slide', 'delete_slide', 'edit_element', 'view_slide', 'add_element', 'add_chart', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'view_slide_as_image', 'complete', 'question'],
                 plan: ['sequence', 'view_slide', 'switch_ai_mode', 'question', 'view_slide_as_image', 'complete'],
-                ask: []
+                ask: ['sequence', 'view_slide', 'view_slide_as_image']
             },
+
             usageExample: `
 ### 使用例
 <add_element type="text" content="タイトル">
     <style top="10" left="10" fontSize="40" />
+</add_element>
+<add_element type="text" content="アニメーションするテキスト">
+    <style top="50" left="50" fontSize="30" animation="fadeIn 1s ease-out" />
+</add_element>
+<add_element type="image" content="https://example.com/animated.gif">
+    <style top="60" left="60" width="30" height="30" animation="bounce 2s infinite" />
 </add_element>
 <add_element type="image" content="https://example.com/image.png">
     <customCss>border-radius:16px; border:2px solid #333;</customCss>
@@ -132,7 +144,16 @@ class AIHandler {
         };
 
         this.systemPromptTemplates = {
-            design: `あなたは世界クラスのプレゼンテーションデザイナーです。ユーザーの指示を解釈し、以下の洗練されたデザイン原則と厳格なレイアウトルールに基づいて、プロフェッショナルで説得力のあるスライドを作成してください。
+            design: `あなたは世界クラスのプレゼンテーションデザイナーです。ユーザーの指示を解釈し、以下の思考プロセス、対話戦略、デザイン原則、レイアウトルールに基づいて、プロフェッショナルで説得力のあるスライドを作成してください。
+
+### 思考プロセス
+1.  **目的の理解**: このスライドの目的は何か？（情報提供、説得、意思決定など）
+2.  **ターゲットの想定**: 誰に向けたスライドか？（専門家、初心者、経営層など）
+3.  **文脈の把握**: ユーザーの指示から、デザインのトーン＆マナー（フォーマル、クリエイティブなど）を読み取る。
+
+### 対話戦略
+- **曖昧さの解消**: ユーザーの指示が曖昧な場合（例：「いい感じにして」）、具体的なデザインの方向性を確認するために、\`<question>\`コマンドを使って質問してください。
+- **積極的な提案**: 指示がなくても、より良いデザインになるような提案（例：アイコンの追加、グラフの視覚化）をXMLコメントとして常に含めてください。提案は \`<!-- 追加提案: ... -->\` の形式で記述してください。
 
 ### 基本デザイン原則
 - **1スライド・1メッセージ**: 伝えたいことを一つに絞り、情報を詰め込みすぎない。
@@ -148,15 +169,38 @@ class AIHandler {
 - **余白の戦略的活用**: スライドの端から最低でも5%の余白（セーフエリア）を設ける。要素を端ギリギリに配置しない。
 - **整列**: 複数の要素を配置する場合、左揃え、中央揃え、右揃えのいずれかで整列させ、視覚的な安定感を生み出す。
 
+### アニメーション活用原則
+- **実装方法**: アニメーションは、animate.cssを用いて実装されています。。
+- **目的**: アニメーションは情報の強調、注意の喚起、状態変化の明示など、明確な目的を持って使用する。過度なアニメーションは避ける。
+- **一貫性**: 同じ種類の要素や目的には、一貫したアニメーションスタイルを適用する。
+- **一般的なアニメーションの一部の例**:
+    - \`fadeIn\`: 要素がフェードインして表示される。
+    - \`slideInUp\`: 要素が下からスライドインして表示される。
+    - \`bounce\`: 要素が跳ねるように表示される。
+    - \`rotateIn\`: 要素が回転しながら表示される。
+
 ### 重要ルール
+- **提案の根拠**: なぜそのデザインにしたのか、意図をXMLコメント(\`<!-- ... -->\`)で簡潔に説明してください。例: \`<!-- メインメッセージを強調するため、中央に大きく配置しました -->\`
+- **フィードバックへの対応**: ユーザーからの修正依頼（「もっとこうしてほしい」など）があった場合は、チャット履歴を注意深く参照し、意図を汲み取って柔軟に提案を修正してください。
 - **厳格なXML出力**: あなたの応答は、必ずルート要素を1つだけ持つ有効なXMLでなければなりません。XMLタグの外側には、いかなるテキスト、コメント、空白、改行も含めないでください。
 - **CDATAの使用**: contentにHTMLタグ(\`<p>\`, \`<h3>\`など)や特殊文字を含める場合は、必ず \`<![CDATA[...]]>\` で囲んでください。これはXMLパースエラーを防ぐために非常に重要です。
+- **改行の制御**: キャッチコピーや短い見出しのようなテキストを生成する際は、意図しない\`<br>\`タグなどの改行を含めないでください。
 - **単一コマンドの原則**: 一度の応答には、'<sequence>'や'<create_slide>'などのコマンドを一つだけ含めてください。'<sequence>'と'<complete>'を同時に返すようなことは絶対にしないでください。
 - 全ての要素は必ずキャンバス内(top, left, width, heightが0-100の範囲)に収まるように配置してください。
 - **スライド1枚毎の出力**: 原則として、1枚のスライドに関する全てのコマンド（例: <create_slide>とその内部の<add_element>など）を1つの<sequence>ブロックにまとめて出力してください。
-- **完了報告**: ユーザーから与えられたタスクが完了したと判断した場合のみ、**必ず** '<complete>完了した報告の文章</complete>' という形式で報告してください。例えば「スライドを3枚作って」という指示であれば、3枚作り終えたら、それ以上は何もせずに`<complete>`タグで報告します。不必要にスライドを追加し続けるなどの無限ループは絶対に避けてください。それ以外の途中経過の報告は一切不要です。
+- **完了報告**: ユーザーから与えられたタスクが完了したと判断した場合のみ、**必ず** '<complete>完了した報告の文章</complete>' という形式で報告してください。例えば「スライドを3枚作って」という指示であれば、3枚作り終えたら、それ以上は何もせずに\`<complete>\`タグで報告します。不必要にスライドを追加し続けるなどの無限ループは絶対に避けてください。それ以外の途中経過の報告は一切不要です。
+- **エラーからの自己修正**: もしあなたの生成したコマンドがエラーになった場合は、エラーメッセージを分析し、**どこが間違っていたのか**をXMLコメントで説明した上で、修正したコマンドを再生成してください。
 `,
-            plan: `あなたは優秀なプロジェクトプランナーです。ユーザーの最終目標に基づき、具体的な行動計画を立案する役割を担います。計画はステップバイステップで考え、それをXMLの<sequence>タグ内にXMLコメントとして記述して提案してください。
+            plan: `あなたは優秀なプロジェクトプランナーです。ユーザーの最終目標に基づき、具体的で実行可能な行動計画を立案する役割を担います。
+
+### 計画立案の原則
+- **目標の分解**: 最終目標を、具体的なスライド作成のステップに分解します。
+- **情報の網羅性**: 各スライドで「何を」「どのように」伝えるかを明確に記述します。
+- **確認ステップ**: 重要な意思決定（デザインの方向性、コンテンツの骨子など）が必要な場合は、計画の途中でユーザーに確認するステップを設けてください。
+- **成果物の明確化**: 最終的にどのようなプレゼンテーションが完成するのか、全体像がわかるように計画を立ててください。
+
+計画はステップバイステップで考え、それをXMLの<sequence>タグ内にXMLコメントとして記述して提案してください。
+
 ### 質問機能
 計画に必要な情報が不足している場合は、ユーザーに質問してください。質問は<question>タグを使用します。
 **重要: ユーザーの手間を省くため、可能な限り選択肢形式('multiple_choice')を使用してください。** 自由回答('free_text')は、選択肢を提示することが困難な場合にのみ使用してください。
@@ -167,6 +211,8 @@ class AIHandler {
 例:
 <sequence>
   <!-- 1. プレゼンテーションの基本方針を決定する -->
+  <!-- 2. タイトルスライドを作成する。タイトルは「〇〇」、サブタイトルは「△△」とする -->
+  <!-- 3. 会社概要スライドを作成する。内容は～とする -->
 </sequence>
 <question type="multiple_choice">
   <text>このプレゼンの主な目的は何ですか？</text>
@@ -178,7 +224,7 @@ class AIHandler {
 重要: このモードでは、スライドを直接編集するコマンドは絶対に使用できません。使用可能なコマンドは上記「コマンド定義」に記載されているもののみです。
 ユーザーが計画に同意したら、次の応答で<switch_ai_mode mode="design" />コマンドを生成し、デザインモードに移行してください。一度の応答で計画とモードスイッチを両方含めないでください。XML以外の説明やテキストは絶対に含めないでください。
 `,
-            ask: `あなたはスライドエディタに関する質問に答えるAIアシスタントです。ユーザーの質問に対して、現在の状態を参考にし、自然言語で分かりやすく回答してください。XMLコマンドは絶対に生成しないでください。
+            ask: `あなたはスライドエディタに関する質問に答えたり、簡単な操作を支援したりするAIアシスタントです。ユーザーの質問に対して、現在の状態を参考にし、必要であればコマンドを使用して回答や操作を行ってください。基本的には自然言語で分かりやすく回答しますが、操作を実行する場合はXMLコマンドを生成してください。
 `
         };
     }
@@ -217,10 +263,6 @@ class AIHandler {
     async _processAIResponse(aiResponse) {
         this._addHistory('assistant', aiResponse);
 
-        if (this.aiMode === 'ask') {
-            this.displayMessage(aiResponse, 'ai');
-            return;
-        }
 
         const aiResponseElements = this.displayAIResponse(aiResponse);
         if (aiResponseElements.executeBtn) {
@@ -378,6 +420,10 @@ class AIHandler {
                 iconClass = 'fas fa-info-circle';
                 title = subTitle || 'システム';
                 break;
+            case 'checkpoint':
+                iconClass = 'fas fa-flag';
+                title = subTitle || 'チェックポイント';
+                break;
         }
 
         const headerDiv = document.createElement('div');
@@ -388,7 +434,7 @@ class AIHandler {
         contentDiv.className = 'msg-content';
 
         // AIからの応答や特定のシステムメッセージはHTMLとして扱う
-        if (type === 'ai' || (type === 'system' && subTitle !== '')) {
+        if (type === 'ai' || (type === 'system' && subTitle !== '') || type === 'checkpoint') {
             contentDiv.innerHTML = content;
         } else {
             // それ以外は安全なテキストとして扱う
@@ -596,7 +642,7 @@ class AIHandler {
         }
 
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            const currentSystemPrompt = systemPrompt + (lastError ? `\n### 前回の試行エラー\n前回の試行で以下のエラーが発生しました。内容を確認し、必ず修正してください。\nエラー: ${lastError}` : '');
+            const currentSystemPrompt = systemPrompt + (lastError ? `\n### 前回の試行エラー\n前回の試行で以下のエラーが発生しました。内容を分析し、**どこが間違っていたのか**をXMLコメントで説明した上で、修正したコマンドを再生成してください。\nエラー: ${lastError}` : '');
             const payload = { messages: [{ role: "system", content: currentSystemPrompt }, ...messages] };
 
             try {
@@ -619,7 +665,6 @@ class AIHandler {
                 if (messagesOverride) return content;
 
                 // 通常のフローではモードに応じて処理
-                if (this.aiMode === 'ask') return content;
                 return this._extractAndValidateCommand(content);
 
             } catch (error) {
@@ -642,13 +687,47 @@ class AIHandler {
             return questionMatch[0];
         }
 
-        // 応答から最初の有効なXMLブロックを抽出
-        const xmlMatch = rawResponse.match(/<(\w+)(?:\s+[^>]*?)?>[\s\S]*?<\/\1>|<(\w+)\s*[^>]*?\/>/s);
-        if (!xmlMatch) {
+        // 応答からXMLコメントや前後のテキストを除いた、最初のXML要素を抽出する
+        let startIndex = -1;
+        let currentIndex = 0;
+        while (currentIndex < rawResponse.length) {
+            const i = rawResponse.indexOf('<', currentIndex);
+            if (i === -1) break;
+            if (rawResponse.substring(i, i + 4) !== '<!--') {
+                startIndex = i;
+                break;
+            }
+            const commentEndIndex = rawResponse.indexOf('-->', i);
+            currentIndex = (commentEndIndex !== -1) ? commentEndIndex + 3 : i + 4;
+        }
+
+        if (startIndex === -1) {
             throw new Error(`AIからの応答に有効なXMLコマンドが含まれていませんでした。\nAIの応答:\n${rawResponse}`);
         }
+
+        const potentialXml = rawResponse.substring(startIndex);
+        // ルート要素にマッチさせるための正規表現
+        const xmlMatch = potentialXml.match(/<(\w+)(?:[\s\S]*?)>[\s\S]*?<\/\1>|<(\w+)(?:[\s\S]*?)\/>/s);
+
+        if (!xmlMatch) {
+            throw new Error(`AIからの応答に有効なXMLコマンドが含まれていませんでした。\n抽出試行ブロック:\n${potentialXml}\n\n元のAIの応答:\n${rawResponse}`);
+        }
         
-        const xmlCommand = xmlMatch[0].trim();
+        let xmlCommand = xmlMatch[0].trim();
+
+        // 応急処置: AIが誤って content="<![CDATA[...]]>" という属性を生成した場合、
+        // これを <content><![CDATA[...]]></content> という子要素に変換する。
+        const regex = /(<add_element[^>]*?)(\s*content="<!\[CDATA\[([\s\S]*?)\]\]>")(.*?)(\/?>)/g;
+        xmlCommand = xmlCommand.replace(regex, (match, start, attr, cdata, rest, end) => {
+            const restoredEnd = end || ''; // endがundefinedの場合に備える
+            if (restoredEnd === '/>') {
+                // 自己完結タグ <add_element ... /> を <add_element ...><content>...</content></add_element> に変換
+                return `${start}${rest}><content><![CDATA[${cdata}]]></content></add_element>`;
+            }
+            // 通常の開始タグ <add_element ...> を <add_element ...><content>...</content> に変換
+            return `${start}${rest}${restoredEnd}<content><![CDATA[${cdata}]]></content>`;
+        });
+
         const validation = this.validateCommand(xmlCommand);
         if (!validation.isValid) {
             throw new Error(`生成されたコマンドの検証に失敗しました: ${validation.error}\n抽出されたコマンド:\n${xmlCommand}\n\n元のAIの応答:\n${rawResponse}`);
@@ -662,11 +741,15 @@ class AIHandler {
             ? this.state.presentation
             : { slides: [], settings: {} };
 
+        // planモードから引き継いだ計画を取得
+        const inheritedPlan = this.getInheritedPlan();
+
         const dynamicPrompt = `### 現在の状態
 - スライドのサイズ: width=${presentation.settings.width}, height=${presentation.settings.height}
 - アクティブなスライドID: ${this.state.activeSlideId || 'なし'}
 - スライド一覧 (IDと要素数):
 ${presentation.slides.length > 0 ? presentation.slides.map(s => `  - Slide(id=${s.id}): ${s.elements.length} elements`).join('\n') : 'スライドはありません'}
+${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
 `;
 
         const { allCommandDefinitions, modeCommands, usageExample } = this.basePromptContent;
@@ -678,9 +761,7 @@ ${presentation.slides.length > 0 ? presentation.slides.map(s => `  - Slide(id=${
 
         let systemPrompt = this.systemPromptTemplates[this.aiMode] || `あなたはWebスライドエディタを操作するためのAIアシスタントです。`;
         
-        if (this.aiMode !== 'ask') {
-            systemPrompt += `\n${commandDefinition}\n${usageExample}`;
-        }
+        systemPrompt += `\n${commandDefinition}\n${usageExample}`;
         systemPrompt += `\n${dynamicPrompt}`;
 
         return systemPrompt;
@@ -704,7 +785,7 @@ ${presentation.slides.length > 0 ? presentation.slides.map(s => `  - Slide(id=${
         const commandName = commandNode.tagName.toLowerCase();
         const knownCommands = [
             'create_slide', 'delete_slide', 'edit_element', 'view_slide', 'sequence',
-            'add_element', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'question',
+            'add_element', 'add_chart', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'question',
             'view_slide_as_image', 'complete'
         ];
         if (!knownCommands.includes(commandName)) {
@@ -762,6 +843,7 @@ ${presentation.slides.length > 0 ? presentation.slides.map(s => `  - Slide(id=${
             case 'edit_element': return this.handleEditElement(commandNode);
             case 'view_slide': return this.handleViewSlide(commandNode);
             case 'add_element': return this.handleAddElement(commandNode);
+            case 'add_chart': return this.handleAddChart(commandNode);
             case 'add_icon': return this.handleAddIcon(commandNode);
             case 'add_qrcode': return this.handleAddQrcode(commandNode);
             case 'switch_ai_mode': return this.handleSwitchAiMode(commandNode);
@@ -773,50 +855,54 @@ ${presentation.slides.length > 0 ? presentation.slides.map(s => `  - Slide(id=${
     }
 
     async handleViewSlideAsImage(commandNode) {
-        const slideId = commandNode.getAttribute('slide_id') || this.state.activeSlideId;
+        const slideId = commandNode.getAttribute('slide_id') || this.app.getState('activeSlideId');
         if (!slideId) {
             throw new Error('スライドIDが指定されていません。');
         }
 
-        // 対象スライドを一時的に表示する必要がある
-        const previousActiveSlideId = this.state.activeSlideId;
-        this.app.setActiveSlide(slideId);
-        
-        // レンダリングが完了するのを待つ
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        const slideCanvas = document.getElementById('slide-canvas');
-        if (!slideCanvas) {
-            throw new Error('スライドキャンバスが見つかりません。');
+        const slide = this.app.state.presentation.slides.find(s => s.id === slideId);
+        if (!slide) {
+            throw new Error(`スライドID ${slideId} が見つかりません。`);
         }
 
-        try {
-            const canvas = await html2canvas(slideCanvas, {
-                scale: 1, // スケールを1に設定
-                useCORS: true, // クロスオリジン画像を許可
-                allowTaint: true,
-                backgroundColor: '#ffffff' // 背景色を白に設定
+        return new Promise((resolve, reject) => {
+            const worker = new Worker('export.worker.js');
+
+            const slideContainer = document.createElement('div');
+            slideContainer.style.width = `${this.app.state.presentation.settings.width}px`;
+            slideContainer.style.height = `${this.app.state.presentation.settings.height}px`;
+            slide.elements.forEach(elData => {
+                const el = this.app.createElementDOM(elData);
+                slideContainer.appendChild(el);
             });
-            const imageDataUrl = canvas.toDataURL('image/png');
-            
-            // 元のアクティブスライドに戻す
-            if (previousActiveSlideId !== slideId) {
-                this.app.setActiveSlide(previousActiveSlideId);
-            }
 
-            return {
-                success: true,
-                message: `スライド ${slideId} を画像としてキャプチャしました。`,
-                imageData: imageDataUrl
+            worker.postMessage({
+                type: 'png',
+                slideHTML: slideContainer.innerHTML,
+                settings: this.app.state.presentation.settings,
+                slideId: slide.id
+            });
+
+            worker.onmessage = (event) => {
+                if (event.data.success) {
+                    resolve({
+                        success: true,
+                        message: `スライド ${slideId} を画像としてキャプチャしました。`,
+                        imageData: event.data.dataUrl
+                    });
+                } else {
+                    console.error('スライドの画像キャプチャに失敗しました(Worker):', event.data.error);
+                    reject(new Error(`スライドの画像キャプチャに失敗しました: ${event.data.error}`));
+                }
+                worker.terminate();
             };
-        } catch (error) {
-            // 元のアクティブスライドに戻す
-            if (previousActiveSlideId !== slideId) {
-                this.app.setActiveSlide(previousActiveSlideId);
-            }
-            console.error('スライドの画像キャプチャに失敗しました:', error);
-            throw new Error(`スライドの画像キャプチャに失敗しました: ${error.message}`);
-        }
+
+            worker.onerror = (error) => {
+                console.error('Worker for image capture failed:', error);
+                reject(new Error(`画像キャプチャWorkerでエラーが発生しました: ${error.message}`));
+                worker.terminate();
+            };
+        });
     }
 
     handleSwitchAiMode(commandNode) {
@@ -824,6 +910,30 @@ ${presentation.slides.length > 0 ? presentation.slides.map(s => `  - Slide(id=${
         if (!['design', 'plan', 'ask'].includes(mode)) {
             throw new Error(`無効なAIモードです: ${mode}`);
         }
+
+        // plan -> design の場合、計画をstateに保存
+        if (this.aiMode === 'plan' && mode === 'design') {
+            const lastPlan = this.chatHistory
+                .filter(h => h.role === 'assistant' && h.content.includes('<sequence>'))
+                .pop()?.content;
+            
+            if (lastPlan) {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(lastPlan, "text/xml");
+                const comments = [];
+                const walker = document.createTreeWalker(xmlDoc, NodeFilter.SHOW_COMMENT);
+                while(walker.nextNode()) {
+                    comments.push(walker.currentNode.nodeValue.trim());
+                }
+                if (comments.length > 0) {
+                    this.state.inheritedPlan = comments.map(c => `- ${c}`).join('\n');
+                }
+            }
+        } else if (mode !== 'plan') {
+            // planモード以外に切り替わったら計画をリセット
+            this.state.inheritedPlan = null;
+        }
+
         this.setAIMode(mode);
         return { success: true, message: `${mode}モードに切り替えました。` };
     }
@@ -1019,6 +1129,81 @@ ${presentation.slides.length > 0 ? presentation.slides.map(s => `  - Slide(id=${
         });
     }
 
+    handleAddChart(commandNode) {
+        const slideId = commandNode.getAttribute('slide_id') || this.state.activeSlideId;
+        const slide = this.state.presentation.slides.find(s => s.id === slideId);
+        if (!slide) throw new Error(`Slide ${slideId} not found.`);
+
+        const chartType = commandNode.getAttribute('type');
+        const title = commandNode.querySelector('title')?.textContent || '';
+        const labels = (commandNode.querySelector('labels')?.textContent || '').split(',').map(l => l.trim());
+        const datasetNodes = Array.from(commandNode.querySelectorAll('dataset'));
+        
+        const datasets = datasetNodes.map(node => {
+            const label = node.getAttribute('label');
+            const data = (node.getAttribute('data') || '').split(',').map(d => parseFloat(d.trim()) || 0);
+            const colorAttr = node.getAttribute('color');
+            
+            // 色の処理: 単色または複数色
+            const colors = colorAttr ? colorAttr.split(',').map(c => c.trim()) : [];
+            const backgroundColor = ['pie', 'doughnut'].includes(chartType) ? colors : (colors[0] || this._getRandomColor());
+            const borderColor = ['pie', 'doughnut'].includes(chartType) ? colors : (colors[0] || this._getRandomColor());
+
+            return {
+                label,
+                data,
+                backgroundColor,
+                borderColor,
+                borderWidth: 1
+            };
+        });
+
+        const optionsNode = commandNode.querySelector('options');
+        const showLegend = optionsNode?.getAttribute('showLegend') !== 'false';
+        const showGrid = optionsNode?.getAttribute('showGrid') !== 'false';
+
+        const chartConfig = {
+            type: chartType,
+            data: {
+                labels: labels,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: showLegend },
+                    title: { display: !!title, text: title }
+                },
+                scales: ['pie', 'doughnut'].includes(chartType) ? {} : {
+                    y: { beginAtZero: true, grid: { display: showGrid } },
+                    x: { grid: { display: showGrid } }
+                }
+            }
+        };
+        
+        const styleNode = commandNode.querySelector('style');
+        const style = { width: 50, height: 40 }; // Default size
+        if (styleNode) {
+            for (const attr of styleNode.attributes) {
+                style[attr.name] = isNaN(Number(attr.value)) ? attr.value : parseFloat(attr.value);
+            }
+        }
+
+        const newEl = this.app.addElementToSlide(slideId, 'chart', chartConfig, style);
+        if (!newEl) throw new Error('グラフ要素の追加に失敗しました');
+
+        return { success: true, message: `グラフ(type=${chartType})を追加しました。`, element: newEl };
+    }
+
+    _getRandomColor() {
+        const letters = '0123456789ABCDEF';
+        let color = '#';
+        for (let i = 0; i < 6; i++) {
+            color += letters[Math.floor(Math.random() * 16)];
+        }
+        return color;
+    }
 
     // --- 状態管理と自律モード ---
 
@@ -1031,17 +1216,63 @@ ${presentation.slides.length > 0 ? presentation.slides.map(s => `  - Slide(id=${
     }
 
     createAICheckpoint() {
+        const checkpointId = `cp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const pres = this.state.presentation || {};
-        this.state.aiCheckpoint = JSON.parse(JSON.stringify(pres));
-        this.elements.restoreCheckpointBtn.disabled = false;
-        console.log("AI Checkpoint created.");
+        if (!this.state.aiCheckpoints) {
+            this.state.aiCheckpoints = {};
+        }
+        this.state.aiCheckpoints[checkpointId] = JSON.parse(JSON.stringify(pres));
+
+        const checkpointMsgContent = `
+            <div class="checkpoint-controls">
+                <button class="restore-checkpoint-btn-inline" data-checkpoint-id="${checkpointId}">
+                    <i class="fas fa-undo"></i> この時点に戻す
+                </button>
+            </div>
+        `;
+        this.displayMessage(checkpointMsgContent, 'checkpoint', 'チェックポイント');
+        console.log(`AI Checkpoint created: ${checkpointId}`);
     }
 
-    restoreAICheckpoint() {
-        if (this.state.aiCheckpoint) {
-            if (confirm('AIによる直前の操作を元に戻しますか？')) {
-                // ... (以前のコードと同じ)
+    restoreAICheckpoint(checkpointId) {
+        if (!this.state.aiCheckpoints || !this.state.aiCheckpoints[checkpointId]) {
+            alert('復元ポイントが見つかりません。');
+            return;
+        }
+
+        if (confirm('このチェックポイントの状態に復元しますか？\nこれ以降のチェックポイントは無効になります。')) {
+            this.state.presentation = JSON.parse(JSON.stringify(this.state.aiCheckpoints[checkpointId]));
+            
+            // 復元後のアクティブスライドIDを安全に設定
+            if (this.state.presentation.slides && this.state.presentation.slides.length > 0) {
+                const activeSlideExists = this.state.presentation.slides.some(s => s.id === this.state.activeSlideId);
+                if (!activeSlideExists) {
+                    this.state.activeSlideId = this.state.presentation.slides[0].id;
+                }
+            } else {
+                this.state.activeSlideId = null;
             }
+
+            this.app.render();
+            this.app.saveState();
+            this.displayMessage(`チェックポイントに復元しました。`, 'system', 'システム');
+
+            // UI更新
+            const allCheckpoints = document.querySelectorAll('.checkpoint-msg');
+            const targetTimestamp = parseInt(checkpointId.split('-')[1]);
+
+            allCheckpoints.forEach(cpMsgDiv => {
+                const button = cpMsgDiv.querySelector('.restore-checkpoint-btn-inline');
+                if (!button) return;
+                
+                const currentTimestamp = parseInt(button.dataset.checkpointId.split('-')[1]);
+
+                if (currentTimestamp >= targetTimestamp) {
+                    button.disabled = true;
+                    button.innerHTML = `<i class="fas fa-history"></i> 復元済み`;
+                    cpMsgDiv.classList.add('disabled');
+                }
+            });
         }
     }
     
@@ -1098,6 +1329,9 @@ ${presentation.slides.length > 0 ? presentation.slides.map(s => `  - Slide(id=${
             ask: '聞くモード'
         };
         this.displayMessage(`${modeMap[newMode]}に切り替えました。`, 'system', 'モード変更');
+    }
+    getInheritedPlan() {
+        return this.state.inheritedPlan || null;
     }
 }
 
@@ -1203,4 +1437,130 @@ class AutonomousAgent {
         // 自律モードではコマンドの検証が必須
         return this.handler._extractAndValidateCommand(rawResponse);
     }
+
+    async processTextWithAI(processType, text, elementId) {
+        if (!text) {
+            alert('テキストが空です。');
+            return;
+        }
+
+        this.displayMessage(`${processType} を実行中...`, 'loading');
+
+        const prompts = {
+            catchphrase: `以下のテキストの魅力を引き出す、クリエイティブなキャッチコピーを3つ提案してください。結果は必ずJSON配列形式（例: ["案1", "案2", "案3"]）で返してください。\n\nテキスト:\n「${text}」`,
+            summarize: `以下のテキストを、スライドに適した簡潔な文章に要約してください。\n\nテキスト:\n「${text}」`,
+            proofread: `以下のテキストを校正し、より自然で分かりやすい表現に修正してください。\n\nテキスト:\n「${text}」`
+        };
+
+        const prompt = prompts[processType];
+        if (!prompt) {
+            console.error('無効な処理タイプです:', processType);
+            return;
+        }
+
+        try {
+            // テキスト処理専用のAPIリクエスト
+            const messages = [{ role: 'user', content: prompt }];
+            const aiResponse = await this._requestToAI(messages, 0); // リトライなし
+
+            // ローディングメッセージを消す
+            const loadingMsg = document.querySelector('.loading-msg');
+            if (loadingMsg) loadingMsg.remove();
+
+            this.showSuggestionPopover(processType, aiResponse, elementId);
+
+        } catch (error) {
+            const loadingMsg = document.querySelector('.loading-msg');
+            if (loadingMsg) loadingMsg.remove();
+            this.displayMessage(`エラー: ${error.message}`, 'error');
+            console.error('AIテキスト処理エラー:', error);
+        }
+    }
+
+    showSuggestionPopover(processType, aiResponse, elementId) {
+        const popover = document.getElementById('ai-suggestion-popover');
+        const contentDiv = document.getElementById('ai-suggestion-content');
+        const applyBtn = document.getElementById('ai-suggestion-apply');
+        const cancelBtn = document.getElementById('ai-suggestion-cancel');
+
+        if (!popover || !contentDiv || !applyBtn || !cancelBtn) return;
+        
+        let selectedSuggestion = null;
+
+        if (processType === 'catchphrase') {
+            try {
+                const suggestions = JSON.parse(aiResponse);
+                contentDiv.innerHTML = '<strong>キャッチコピー案:</strong>';
+                const list = document.createElement('ul');
+                list.style.listStyle = 'none';
+                list.style.padding = '0';
+                list.style.margin = '8px 0 0 0';
+
+                suggestions.forEach(suggestion => {
+                    const item = document.createElement('li');
+                    // DOMPurifyでサニタイズしてからinnerHTMLに設定
+                    item.innerHTML = DOMPurify.sanitize(suggestion);
+                    item.style.padding = '6px';
+                    item.style.border = '1px solid var(--border-color)';
+                    item.style.borderRadius = '4px';
+                    item.style.marginBottom = '4px';
+                    item.style.cursor = 'pointer';
+                    item.style.wordBreak = 'break-word'; // UI崩れ対策
+                    item.style.lineHeight = '1.5';      // UI崩れ対策
+                    item.onclick = () => {
+                        list.querySelectorAll('li').forEach(li => li.style.backgroundColor = 'transparent');
+                        item.style.backgroundColor = 'var(--primary-color-hover)';
+                        selectedSuggestion = suggestion;
+                    };
+                    list.appendChild(item);
+                });
+                contentDiv.appendChild(list);
+                applyBtn.textContent = '選択した案を適用';
+
+            } catch (e) {
+                console.error("キャッチコピーのJSONパースに失敗:", e);
+                contentDiv.textContent = `エラー: AIからの応答形式が正しくありません。\n${aiResponse}`;
+                applyBtn.style.display = 'none';
+            }
+        } else {
+            // DOMPurifyでサニタイズ
+            const sanitizedResponse = DOMPurify.sanitize(aiResponse);
+            contentDiv.innerHTML = `<strong>提案:</strong><p style="margin-top:4px; padding:8px; background-color: var(--bg-light); border-radius:4px; word-break: break-word; line-height: 1.5;">${sanitizedResponse}</p>`;
+            selectedSuggestion = aiResponse; // 元の応答を保持
+            applyBtn.textContent = '適用';
+        }
+
+        const applyHandler = () => {
+            if (selectedSuggestion) {
+                const element = this.app.getActiveSlide()?.elements.find(el => el.id === elementId);
+                if (element) {
+                    element.content = selectedSuggestion;
+                    this.app.render();
+                    this.app.saveState();
+                }
+            }
+            popover.style.display = 'none';
+        };
+
+        const cancelHandler = () => {
+            popover.style.display = 'none';
+        };
+        
+        // イベントリスナーを一度削除してから再設定
+        applyBtn.replaceWith(applyBtn.cloneNode(true));
+        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+        document.getElementById('ai-suggestion-apply').onclick = applyHandler;
+        document.getElementById('ai-suggestion-cancel').onclick = cancelHandler;
+
+
+        const targetElement = document.querySelector(`[data-id="${elementId}"]`);
+        if (targetElement) {
+            const rect = targetElement.getBoundingClientRect();
+            popover.style.left = `${rect.right + 10}px`;
+            popover.style.top = `${rect.top}px`;
+        }
+
+        popover.style.display = 'block';
+    }
 }
+

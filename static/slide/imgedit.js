@@ -10,7 +10,7 @@ filterSliders = document.querySelectorAll('.filter-slider'), loadingOverlay = do
 loadingText = document.getElementById('imgedit-loading-text'), progressBar = document.getElementById('imgedit-progress-bar');
 
 // Paint Element References
-const paintCanvas = document.getElementById('imgedit-paint-canvas'), paintCtx = paintCanvas.getContext('2d'),
+const paintCanvas = document.getElementById('imgedit-paint-canvas'),
 togglePaintSessionBtn = document.getElementById('imgedit-toggle-paint-session'),
 paintToolsPanel = document.getElementById('imgedit-paint-tools-panel'),
 paintToolButtons = document.querySelectorAll('.imgedit-tool-btn'),
@@ -20,394 +20,403 @@ brushSizeSlider = document.getElementById('imgedit-brush-size'), brushColorInput
 eraserSizeSlider = document.getElementById('imgedit-eraser-size'), clearPaintBtn = document.getElementById('imgedit-clear-paint'),
 cancelPaintBtn = document.getElementById('imgedit-cancel-paint');
 
-// State Variables
-let cropper = null;
-let originalImageDataURL = '', currentImageDataURL = '', imageBeforePaintURL = '';
-let isDrawing = false, lastX = 0, lastY = 0, startX = 0, startY = 0;
-let isPaintSessionActive = false;
-let currentTool = 'brush'; // 'brush', 'eraser', 'line', 'fill'
-let currentLinePreview = null;
+// Constants
+const CONSTANTS = {
+    TOOLS: { BRUSH: 'brush', ERASER: 'eraser', LINE: 'line', FILL: 'fill' },
+    CSS_CLASSES: { HIDDEN: 'hidden', ACTIVE: 'active', DRAG_OVER: 'drag-over', PRIMARY_BTN: 'imgedit-primary-btn', SECONDARY_BTN: 'imgedit-secondary-btn', SUCCESS_BTN: 'imgedit-success-btn' }
+};
+
+// State Management
+const State = {
+    cropper: null, originalImageDataURL: '', currentImageDataURL: '', isDrawing: false,
+    isPaintSessionActive: false, currentTool: CONSTANTS.TOOLS.BRUSH, historyStack: [],
+    paintCanvasSize: { width: 0, height: 0, naturalWidth: 0, naturalHeight: 0 }
+};
+let paintWorker = null;
+let undoBtn = null; // Will be initialized in setupEventListeners
+
+// =================================
+// Worker Communication & Events
+// =================================
+function initPaintWorker() {
+    if (paintWorker) return;
+    paintWorker = new Worker('./paint.worker.js');
+    paintWorker.onmessage = (e) => {
+        const { type, payload } = e.data;
+        if (type === 'image_loaded') {
+            State.paintCanvasSize.naturalWidth = payload.width;
+            State.paintCanvasSize.naturalHeight = payload.height;
+            // Canvas size is already set. Just switch visibility.
+            imageToEdit.classList.add(CONSTANTS.CSS_CLASSES.HIDDEN);
+            paintCanvas.classList.remove(CONSTANTS.CSS_CLASSES.HIDDEN);
+            hideLoading();
+        } else if (type === 'load_error') {
+            alert('ペイント用画像の読み込みに失敗しました。');
+            endPaintSession(false);
+            hideLoading();
+        }
+    };
+}
+
+function getScaledCoords(e) {
+    const rect = paintCanvas.getBoundingClientRect();
+    if (!State.paintCanvasSize.naturalWidth || !State.paintCanvasSize.naturalHeight) {
+        return { x: 0, y: 0 };
+    }
+    const scaleX = State.paintCanvasSize.naturalWidth / rect.width;
+    const scaleY = State.paintCanvasSize.naturalHeight / rect.height;
+    return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+    };
+}
+
+// =================================
+// History (Undo) Management
+// =================================
+function undo() {
+    if (State.historyStack.length === 0) return;
+    if (State.cropper) {
+        State.cropper.destroy(); State.cropper = null;
+        cropBtn.textContent = 'トリミング';
+        cropBtn.classList.replace(CONSTANTS.CSS_CLASSES.PRIMARY_BTN, CONSTANTS.CSS_CLASSES.SECONDARY_BTN);
+        setControlsDisabled(false);
+    }
+    if (State.isPaintSessionActive) endPaintSession(false);
+
+    const lastAction = State.historyStack.pop();
+    if (lastAction && typeof lastAction.undo === 'function') lastAction.undo();
+    
+    resetAllSettings();
+    updateUndoButton();
+}
+
+function updateUndoButton() {
+    if (undoBtn) undoBtn.disabled = State.historyStack.length === 0;
+}
 
 // =================================
 // Initial Setup & Image Loading
 // =================================
 function setupEventListeners() {
-fileInput.addEventListener('change', handleFileSelect);
-dropZone.addEventListener('click', () => fileInput.click());
-dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-dropZone.addEventListener('dragleave', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); });
-dropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropZone.classList.remove('drag-over');
-    if (e.dataTransfer.files.length) {
-        fileInput.files = e.dataTransfer.files;
-        handleFileSelect({ target: fileInput });
-    }
-});
-
-resetBtn.addEventListener('click', resetAll);
-downloadBtn.addEventListener('click', downloadImage);
-bgRemoveBtn.addEventListener('click', handleBackgroundRemoval);
-cropBtn.addEventListener('click', toggleCropper);
-
-[rotateLeftBtn, rotateRightBtn, flipHBtn, flipVBtn].forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        if (!cropper) return;
-        const action = e.currentTarget.id;
-        if (action === 'imgedit-rotate-left') cropper.rotate(-90);
-        if (action === 'imgedit-rotate-right') cropper.rotate(90);
-        if (action === 'imgedit-flip-h') cropper.scaleX(-cropper.getData().scaleX || -1);
-        if (action === 'imgedit-flip-v') cropper.scaleY(-cropper.getData().scaleY || -1);
+    undoBtn = document.getElementById('imgedit-undo-btn');
+    fileInput.addEventListener('change', handleFileSelect);
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add(CONSTANTS.CSS_CLASSES.DRAG_OVER); });
+    dropZone.addEventListener('dragleave', e => { e.preventDefault(); dropZone.classList.remove(CONSTANTS.CSS_CLASSES.DRAG_OVER); });
+    dropZone.addEventListener('drop', e => {
+        e.preventDefault(); dropZone.classList.remove(CONSTANTS.CSS_CLASSES.DRAG_OVER);
+        if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; handleFileSelect({ target: fileInput }); }
     });
-});
 
-filterSliders.forEach(slider => {
-    slider.addEventListener('input', () => {
-        const unit = slider.dataset.unit || '%';
-        slider.nextElementSibling.textContent = `${slider.value}${unit}`;
-        applyFiltersToImage();
+    if(undoBtn) undoBtn.addEventListener('click', undo);
+    resetBtn.addEventListener('click', resetAll);
+    downloadBtn.addEventListener('click', downloadImage);
+    bgRemoveBtn.addEventListener('click', handleBackgroundRemoval);
+    cropBtn.addEventListener('click', toggleCropper);
+
+    [rotateLeftBtn, rotateRightBtn, flipHBtn, flipVBtn].forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            if (!State.cropper) return;
+            const action = e.currentTarget.id;
+            if (action === 'imgedit-rotate-left') State.cropper.rotate(-90);
+            if (action === 'imgedit-rotate-right') State.cropper.rotate(90);
+            if (action === 'imgedit-flip-h') State.cropper.scaleX(-State.cropper.getData().scaleX || -1);
+            if (action === 'imgedit-flip-v') State.cropper.scaleY(-State.cropper.getData().scaleY || -1);
+        });
     });
-});
 
-// Paint Listeners
-togglePaintSessionBtn.addEventListener('click', togglePaintSession);
-paintToolButtons.forEach(btn => btn.addEventListener('click', () => selectTool(btn.dataset.tool)));
-[brushSizeSlider, eraserSizeSlider].forEach(slider => {
-    slider.addEventListener('input', () => {
-        slider.nextElementSibling.textContent = `${slider.value}${slider.dataset.unit}`;
+    filterSliders.forEach(slider => {
+        slider.addEventListener('input', () => {
+            const unit = slider.dataset.unit || '%';
+            slider.nextElementSibling.textContent = `${slider.value}${unit}`;
+            applyFiltersToImage();
+        });
     });
-});
-clearPaintBtn.addEventListener('click', clearPaint);
-cancelPaintBtn.addEventListener('click', () => endPaintSession(false));
 
-paintCanvas.addEventListener('mousedown', startDrawing);
-paintCanvas.addEventListener('mousemove', draw);
-paintCanvas.addEventListener('mouseup', stopDrawing);
-paintCanvas.addEventListener('mouseout', stopDrawing);
+    togglePaintSessionBtn.addEventListener('click', togglePaintSession);
+    paintToolButtons.forEach(btn => btn.addEventListener('click', () => selectTool(btn.dataset.tool)));
+    [brushSizeSlider, brushColorInput, eraserSizeSlider].forEach(el => el.addEventListener('input', updatePaintSettings));
+    clearPaintBtn.addEventListener('click', () => paintWorker?.postMessage({ type: 'clear' }));
+    cancelPaintBtn.addEventListener('click', () => endPaintSession(false));
+
+    paintCanvas.addEventListener('mousedown', startDrawing);
+    paintCanvas.addEventListener('mousemove', draw);
+    paintCanvas.addEventListener('mouseup', stopDrawing);
+    paintCanvas.addEventListener('mouseout', stopDrawing);
 }
 
 function handleFileSelect(event) {
-const file = event.target.files[0];
-if (!file || !file.type.startsWith('image/')) return;
-const reader = new FileReader();
-reader.onload = e => {
-    originalImageDataURL = e.target.result;
-    initEditor();
-};
-reader.readAsDataURL(file);
+    const file = event.target.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = e => { State.originalImageDataURL = e.target.result; initEditor(); };
+    reader.readAsDataURL(file);
 }
 
 function initEditor() {
-if (isPaintSessionActive) endPaintSession(false);
-if (cropper) stopCropper();
+    if (State.isPaintSessionActive) endPaintSession(false);
+    if (State.cropper) stopCropper();
 
-currentImageDataURL = originalImageDataURL;
-imageToEdit.src = currentImageDataURL;
-imageToEdit.onload = () => {
-    resetAllSettings();
-    dropZoneContainer.classList.add('hidden');
-    imageWorkspace.classList.remove('hidden');
-    editorControls.classList.remove('hidden');
-};
-if (imageToEdit.complete) imageToEdit.onload();
+    State.currentImageDataURL = State.originalImageDataURL;
+    State.historyStack = [];
+    updateUndoButton();
+
+    imageToEdit.onerror = () => {
+        alert('画像の読み込みに失敗しました。');
+        dropZoneContainer.classList.remove(CONSTANTS.CSS_CLASSES.HIDDEN);
+        imageWorkspace.classList.add(CONSTANTS.CSS_CLASSES.HIDDEN);
+        editorControls.classList.add(CONSTANTS.CSS_CLASSES.HIDDEN);
+    };
+
+    imageToEdit.onload = () => {
+        resetAllSettings();
+        dropZoneContainer.classList.add(CONSTANTS.CSS_CLASSES.HIDDEN);
+        imageWorkspace.classList.remove(CONSTANTS.CSS_CLASSES.HIDDEN);
+        editorControls.classList.remove(CONSTANTS.CSS_CLASSES.HIDDEN);
+    };
+    imageToEdit.src = State.currentImageDataURL;
+    if (imageToEdit.complete) imageToEdit.onload();
 }
 
 // =================================
-// Edit Functions (BG Remove, Filter, Crop)
+// Edit Functions
 // =================================
 async function handleBackgroundRemoval() {
-if (!currentImageDataURL) return;
-showLoading('背景を削除中...', true);
-try {
-    const { removeBackground } = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.6.0/+esm');
-    const blob = await removeBackground(currentImageDataURL, {
-        publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.6.0/dist/',
-        onProgress: (progress) => {
-            const percent = Math.round(progress * 100);
-            progressBar.style.width = `${percent}%`;
-            loadingText.textContent = `モデルをDL中... ${percent}%`;
-            if (percent === 100) loadingText.textContent = '画像を処理中...';
-        },
-    });
-    currentImageDataURL = URL.createObjectURL(blob);
-    imageToEdit.src = currentImageDataURL;
-    resetAllSettings();
-} catch (error) {
-    console.error('Background removal failed:', error);
-    alert(`背景の削除に失敗しました: ${error.message}`);
-} finally {
-    hideLoading();
-}
+    if (!State.currentImageDataURL) return;
+    const oldImageDataURL = State.currentImageDataURL;
+    showLoading('背景を削除中...', true);
+    try {
+        const { removeBackground } = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.6.0/+esm');
+        const blob = await removeBackground(State.currentImageDataURL, {
+            publicPath: 'https://staticimgly.com/@imgly/background-removal-data/1.6.0/dist/',
+            onProgress: (p, t) => { const pct = Math.round(p/t*100); progressBar.style.width = `${pct}%`; loadingText.textContent = `モデルをDL中... ${pct}%`; if (pct === 100) loadingText.textContent = '画像を処理中...'; },
+        });
+        State.currentImageDataURL = URL.createObjectURL(blob);
+        imageToEdit.src = State.currentImageDataURL;
+        State.historyStack.push({ type: 'bg-remove', undo: () => { State.currentImageDataURL = oldImageDataURL; imageToEdit.src = oldImageDataURL; }});
+        updateUndoButton();
+        resetAllSettings();
+    } catch (error) {
+        console.error('Background removal failed:', error);
+        alert(`背景の削除に失敗しました: ${error.message}`);
+        imageToEdit.src = oldImageDataURL;
+    } finally {
+        hideLoading();
+    }
 }
 
 function getFilterString() {
-return Array.from(filterSliders).map(s => `${s.id.replace('imgedit-', '')}(${s.value}${s.dataset.unit})`).join(' ');
+    return Array.from(filterSliders).map(s => `${s.id.replace('imgedit-', '')}(${s.value}${s.dataset.unit})`).join(' ');
 }
 
-function applyFiltersToImage() {
-imageToEdit.style.filter = getFilterString();
-}
+function applyFiltersToImage() { imageToEdit.style.filter = getFilterString(); }
 
-function toggleCropper() {
-if (cropper) stopCropper(); else startCropper();
-}
+function toggleCropper() { if (State.cropper) stopCropper(); else startCropper(); }
 
-function startCropper() {
-if (cropper || isPaintSessionActive) return;
-cropper = new Cropper(imageToEdit, { viewMode: 1, autoCropArea: 0.9, background: false, responsive: true });
-cropBtn.textContent = 'トリミング適用';
-cropBtn.classList.replace('imgedit-secondary-btn', 'imgedit-primary-btn');
-setControlsDisabled(true, ['imgedit-crop-btn', 'imgedit-rotate-left', 'imgedit-rotate-right', 'imgedit-flip-h', 'imgedit-flip-v', 'imgedit-reset-btn', 'imgedit-download-btn']);
+async function startCropper() {
+  if (State.cropper || State.isPaintSessionActive) return;
+  if (!window.Cropper) await import('https://cdn.jsdelivr.net/npm/cropperjs@2.0.0/dist/cropper.min.js');
+  State.cropper = new window.Cropper(imageToEdit, { viewMode: 1, autoCropArea: 0.9, background: false, responsive: true });
+  cropBtn.textContent = 'トリミング適用';
+  cropBtn.classList.replace(CONSTANTS.CSS_CLASSES.SECONDARY_BTN, CONSTANTS.CSS_CLASSES.PRIMARY_BTN);
+  setControlsDisabled(true, ['imgedit-crop-btn', 'imgedit-rotate-left', 'imgedit-rotate-right', 'imgedit-flip-h', 'imgedit-flip-v', 'imgedit-reset-btn', 'imgedit-download-btn']);
 }
 
 function stopCropper() {
-if (!cropper) return;
-const croppedCanvas = cropper.getCroppedCanvas();
-if (croppedCanvas) {
-    currentImageDataURL = croppedCanvas.toDataURL('image/png');
-    imageToEdit.src = currentImageDataURL;
-}
-cropper.destroy();
-cropper = null;
-imageToEdit.style.filter = ''; // Reset CSS filter after cropping
-resetAllSettings();
-cropBtn.textContent = 'トリミング';
-cropBtn.classList.replace('imgedit-primary-btn', 'imgedit-secondary-btn');
-setControlsDisabled(false);
+    if (!State.cropper) return;
+    const oldImageDataURL = State.currentImageDataURL;
+    const croppedCanvas = State.cropper.getCroppedCanvas();
+    if (croppedCanvas) {
+        State.currentImageDataURL = croppedCanvas.toDataURL('image/png');
+        State.historyStack.push({ type: 'crop', undo: () => { State.currentImageDataURL = oldImageDataURL; imageToEdit.src = oldImageDataURL; }});
+        updateUndoButton();
+        imageToEdit.src = State.currentImageDataURL;
+    }
+    State.cropper.destroy(); State.cropper = null;
+    imageToEdit.style.filter = '';
+    resetAllSettings();
+    cropBtn.textContent = 'トリミング';
+    cropBtn.classList.replace(CONSTANTS.CSS_CLASSES.PRIMARY_BTN, CONSTANTS.CSS_CLASSES.SECONDARY_BTN);
+    setControlsDisabled(false);
 }
 
 // =================================
 // Paint Mode Logic
 // =================================
-function togglePaintSession() {
-if (isPaintSessionActive) endPaintSession(true); else startPaintSession();
-}
+function togglePaintSession() { if (State.isPaintSessionActive) endPaintSession(true); else startPaintSession(); }
 
 function startPaintSession() {
-if (cropper) stopCropper();
-isPaintSessionActive = true;
-imageBeforePaintURL = currentImageDataURL;
+    if (State.cropper) stopCropper();
+    showLoading('描画モードを準備中...', false);
+    State.isPaintSessionActive = true;
+    
+    initPaintWorker();
 
-document.body.classList.add('imgedit-paint-session-active');
-togglePaintSessionBtn.textContent = '描画を完了';
-togglePaintSessionBtn.classList.replace('imgedit-primary-btn', 'imgedit-success-btn');
-paintToolsPanel.classList.remove('hidden');
-selectTool('brush'); // Default to brush
-
-// Prepare canvas with filtered image
-const img = new Image();
-img.onload = () => {
-    const tempCanvas = document.createElement('canvas');
-    const tempCtx = tempCanvas.getContext('2d');
-    tempCanvas.width = img.naturalWidth;
-    tempCanvas.height = img.naturalHeight;
-    tempCtx.filter = getFilterString();
-    tempCtx.drawImage(img, 0, 0);
-
+    // Set canvas size on main thread BEFORE transferring control
     const displayRect = imageToEdit.getBoundingClientRect();
     paintCanvas.width = displayRect.width;
     paintCanvas.height = displayRect.height;
-    paintCtx.drawImage(tempCanvas, 0, 0, paintCanvas.width, paintCanvas.height);
+    State.paintCanvasSize.width = displayRect.width;
+    State.paintCanvasSize.height = displayRect.height;
 
-    imageToEdit.classList.add('hidden');
-    paintCanvas.classList.remove('hidden');
-};
-img.src = currentImageDataURL;
+    const offscreen = paintCanvas.transferControlToOffscreen();
+    paintWorker.postMessage({ type: 'init', payload: { canvas: offscreen } }, [offscreen]);
+    
+    const imageURLToLoad = State.currentImageDataURL;
+    paintWorker.postMessage({ type: 'load_image', payload: { imageUrl: imageURLToLoad, filter: getFilterString() } });
+
+    document.body.classList.add('imgedit-paint-session-active');
+    togglePaintSessionBtn.textContent = '描画を完了';
+    togglePaintSessionBtn.classList.replace(CONSTANTS.CSS_CLASSES.PRIMARY_BTN, CONSTANTS.CSS_CLASSES.SUCCESS_BTN);
+    paintToolsPanel.classList.remove(CONSTANTS.CSS_CLASSES.HIDDEN);
+    selectTool(CONSTANTS.TOOLS.BRUSH);
 }
 
-function endPaintSession(saveChanges) {
-if (!isPaintSessionActive) return;
-isPaintSessionActive = false;
+async function endPaintSession(saveChanges) {
+    if (!State.isPaintSessionActive) return;
 
-if (saveChanges) {
-    currentImageDataURL = paintCanvas.toDataURL('image/png');
-    resetFilters();
-}
-imageToEdit.src = currentImageDataURL;
+    if (saveChanges) {
+        showLoading('描画を保存中...', false);
+        const oldImageDataURL = State.currentImageDataURL;
+        
+        const blob = await new Promise(resolve => {
+            const listener = (e) => {
+                if (e.data.type === 'generated_blob') {
+                    paintWorker.removeEventListener('message', listener);
+                    resolve(e.data.payload);
+                }
+            };
+            paintWorker.addEventListener('message', listener);
+            paintWorker.postMessage({ type: 'get_blob' });
+        });
 
-document.body.classList.remove('imgedit-paint-session-active');
-togglePaintSessionBtn.textContent = '描画を開始';
-togglePaintSessionBtn.classList.replace('imgedit-success-btn', 'imgedit-primary-btn');
-paintToolsPanel.classList.add('hidden');
+        if (blob) {
+            State.currentImageDataURL = URL.createObjectURL(blob);
+            State.historyStack.push({ type: 'paint', undo: () => { State.currentImageDataURL = oldImageDataURL; imageToEdit.src = oldImageDataURL; }});
+            updateUndoButton();
+            resetFilters();
+        }
+        hideLoading();
+    }
+    imageToEdit.src = State.currentImageDataURL;
 
-paintCanvas.classList.add('hidden');
-imageToEdit.classList.remove('hidden');
-paintCtx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
+    State.isPaintSessionActive = false;
+    document.body.classList.remove('imgedit-paint-session-active');
+    togglePaintSessionBtn.textContent = '描画を開始';
+    togglePaintSessionBtn.classList.replace(CONSTANTS.CSS_CLASSES.SUCCESS_BTN, CONSTANTS.CSS_CLASSES.PRIMARY_BTN);
+    paintToolsPanel.classList.add(CONSTANTS.CSS_CLASSES.HIDDEN);
+
+    paintCanvas.classList.add(CONSTANTS.CSS_CLASSES.HIDDEN);
+    imageToEdit.classList.remove(CONSTANTS.CSS_CLASSES.HIDDEN);
+    // When using OffscreenCanvas, the main context is no longer used for clearing.
 }
 
 function selectTool(tool) {
-currentTool = tool;
-paintToolButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.tool === tool));
-paintCanvas.className = `cursor-${tool}`;
-brushSettings.classList.toggle('hidden', tool === 'eraser');
-eraserSettings.classList.toggle('hidden', tool !== 'eraser');
+    State.currentTool = tool;
+    paintToolButtons.forEach(btn => btn.classList.toggle(CONSTANTS.CSS_CLASSES.ACTIVE, btn.dataset.tool === tool));
+    paintCanvas.className = `cursor-${tool}`;
+    brushSettings.classList.toggle(CONSTANTS.CSS_CLASSES.HIDDEN, tool === CONSTANTS.TOOLS.ERASER);
+    eraserSettings.classList.toggle(CONSTANTS.CSS_CLASSES.HIDDEN, tool !== CONSTANTS.TOOLS.ERASER);
+    updatePaintSettings();
 }
 
-function clearPaint() {
-// Re-draw the initial state of the paint session
-startPaintSession();
+function updatePaintSettings() {
+    if (!paintWorker) return;
+    paintWorker.postMessage({ type: 'update_settings', payload: {
+        tool: State.currentTool,
+        brushColor: brushColorInput.value,
+        brushSize: brushSizeSlider.value,
+        eraserSize: eraserSizeSlider.value
+    }});
 }
 
-// --- Drawing Handlers ---
 function startDrawing(e) {
-if (!isPaintSessionActive) return;
-isDrawing = true;
-const rect = paintCanvas.getBoundingClientRect();
-[startX, startY] = [e.clientX - rect.left, e.clientY - rect.top];
-[lastX, lastY] = [startX, startY];
-
-paintCtx.lineJoin = 'round';
-paintCtx.lineCap = 'round';
-
-if (currentTool === 'brush' || currentTool === 'line') {
-    paintCtx.globalCompositeOperation = 'source-over';
-    paintCtx.strokeStyle = brushColorInput.value;
-    paintCtx.lineWidth = brushSizeSlider.value;
-} else if (currentTool === 'eraser') {
-    paintCtx.globalCompositeOperation = 'destination-out';
-    paintCtx.lineWidth = eraserSizeSlider.value;
-}
-
-if (currentTool === 'line') {
-    currentLinePreview = paintCtx.getImageData(0, 0, paintCanvas.width, paintCanvas.height);
-} else if (currentTool === 'fill') {
-    floodFill(Math.floor(e.clientX - rect.left), Math.floor(e.clientY - rect.top), hexToRgb(brushColorInput.value));
-    isDrawing = false;
-}
+    if (!State.isPaintSessionActive) return;
+    State.isDrawing = true;
+    const coords = getScaledCoords(e);
+    paintWorker.postMessage({ type: 'draw_start', payload: coords });
 }
 
 function draw(e) {
-if (!isDrawing) return;
-const rect = paintCanvas.getBoundingClientRect();
-const [currentX, currentY] = [e.clientX - rect.left, e.clientY - rect.top];
-
-if (currentTool === 'brush' || currentTool === 'eraser') {
-    paintCtx.beginPath();
-    paintCtx.moveTo(lastX, lastY);
-    paintCtx.lineTo(currentX, currentY);
-    paintCtx.stroke();
-    [lastX, lastY] = [currentX, currentY];
-} else if (currentTool === 'line') {
-    paintCtx.putImageData(currentLinePreview, 0, 0);
-    paintCtx.beginPath();
-    paintCtx.moveTo(startX, startY);
-    paintCtx.lineTo(currentX, currentY);
-    paintCtx.stroke();
-}
+    if (!State.isDrawing) return;
+    const coords = getScaledCoords(e);
+    paintWorker.postMessage({ type: 'draw_move', payload: coords });
 }
 
 function stopDrawing(e) {
-if (!isDrawing) return;
-if (currentTool === 'line') {
-    paintCtx.putImageData(currentLinePreview, 0, 0);
-    paintCtx.beginPath();
-    const rect = paintCanvas.getBoundingClientRect();
-    paintCtx.moveTo(startX, startY);
-    paintCtx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
-    paintCtx.stroke();
-}
-isDrawing = false;
-currentLinePreview = null;
-}
-
-// --- Fill Algorithm ---
-function floodFill(x, y, newColor) {
-// Flood fill logic remains complex, providing a simplified but effective version
-const imageData = paintCtx.getImageData(0, 0, paintCanvas.width, paintCanvas.height);
-const { data } = imageData;
-const stack = [[x, y]];
-const startIdx = (y * paintCanvas.width + x) * 4;
-const startColor = [data[startIdx], data[startIdx + 1], data[startIdx + 2], data[startIdx + 3]];
-
-if (newColor.r === startColor[0] && newColor.g === startColor[1] && newColor.b === startColor[2]) return;
-
-while (stack.length) {
-    const [curX, curY] = stack.pop();
-    if (curX < 0 || curX >= paintCanvas.width || curY < 0 || curY >= paintCanvas.height) continue;
-
-    const idx = (curY * paintCanvas.width + curX) * 4;
-    if (data[idx] === startColor[0] && data[idx + 1] === startColor[1] &&
-        data[idx + 2] === startColor[2] && data[idx + 3] === startColor[3]) {
-
-        data[idx] = newColor.r; data[idx + 1] = newColor.g;
-        data[idx + 2] = newColor.b; data[idx + 3] = 255;
-
-        stack.push([curX + 1, curY], [curX - 1, curY], [curX, curY + 1], [curX, curY - 1]);
-    }
-}
-paintCtx.putImageData(imageData, 0, 0);
-}
-function hexToRgb(hex) {
-const bigint = parseInt(hex.slice(1), 16);
-return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
+    if (!State.isDrawing) return;
+    State.isDrawing = false;
+    const coords = getScaledCoords(e);
+    paintWorker.postMessage({ type: 'draw_end', payload: coords });
 }
 
 // =================================
 // Main Actions & Helpers
 // =================================
 function resetAll() {
-if (isPaintSessionActive) endPaintSession(false);
-if (cropper) stopCropper();
-currentImageDataURL = originalImageDataURL;
-imageToEdit.src = currentImageDataURL;
-resetAllSettings();
+    if (State.isPaintSessionActive) endPaintSession(false);
+    if (State.cropper) { State.cropper.destroy(); State.cropper = null; }
+    State.currentImageDataURL = State.originalImageDataURL;
+    imageToEdit.src = State.currentImageDataURL;
+    State.historyStack = [];
+    updateUndoButton();
+    resetAllSettings();
 }
 
-function resetAllSettings() {
-resetFilters();
-applyFiltersToImage();
-}
+function resetAllSettings() { resetFilters(); applyFiltersToImage(); }
 
 function resetFilters() {
-filterSliders.forEach(slider => {
-    const defaultValue = ['imgedit-brightness', 'imgedit-contrast', 'imgedit-saturate'].includes(slider.id) ? '100' : '0';
-    slider.value = defaultValue;
-    slider.nextElementSibling.textContent = `${defaultValue}${slider.dataset.unit}`;
-});
+    filterSliders.forEach(slider => {
+        const defaultValue = ['imgedit-brightness', 'imgedit-contrast', 'imgedit-saturate'].includes(slider.id) ? '100' : '0';
+        slider.value = defaultValue;
+        const unit = slider.dataset.unit || '%';
+        slider.nextElementSibling.textContent = `${defaultValue}${unit}`;
+    });
 }
 
 function downloadImage() {
-showLoading('画像を生成中...', false);
-const finalCanvas = document.createElement('canvas');
-const finalCtx = finalCanvas.getContext('2d');
-const img = new Image();
-img.onload = () => {
-    finalCanvas.width = img.naturalWidth;
-    finalCanvas.height = img.naturalHeight;
-    finalCtx.filter = isPaintSessionActive ? 'none' : getFilterString();
-    finalCtx.drawImage(img, 0, 0);
+    showLoading('画像を生成中...', false);
+    const finalCanvas = document.createElement('canvas');
+    const finalCtx = finalCanvas.getContext('2d');
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+        finalCanvas.width = img.naturalWidth;
+        finalCanvas.height = img.naturalHeight;
+        finalCtx.filter = getFilterString();
+        finalCtx.drawImage(img, 0, 0);
 
-    // overrideImageDownload 関数を呼び出す
-    if (window.overrideImageDownload) {
-        window.overrideImageDownload(finalCanvas.toDataURL('image/png'));
-    } else {
-        // フォールバックとしてダウンロード
-        const link = document.createElement('a');
-        link.download = `edited-image_${Date.now()}.png`;
-        link.href = finalCanvas.toDataURL('image/png');
-        link.click();
-    }
-    hideLoading();
-};
-img.src = currentImageDataURL;
+        if (window.overrideImageDownload) {
+            window.overrideImageDownload(finalCanvas.toDataURL('image/png'));
+        } else {
+            const link = document.createElement('a');
+            link.download = `edited-image_${Date.now()}.png`;
+            link.href = finalCanvas.toDataURL('image/png');
+            link.click();
+        }
+        hideLoading();
+    };
+    img.onerror = () => { alert('画像の書き出しに失敗しました。'); hideLoading(); }
+    img.src = State.currentImageDataURL;
 }
 
 function showLoading(text, showProgress) {
-loadingText.textContent = text;
-progressBar.style.width = '0%';
-progressBar.parentElement.style.display = showProgress ? 'block' : 'none';
-loadingOverlay.classList.remove('hidden');
+    loadingText.textContent = text;
+    progressBar.style.width = '0%';
+    progressBar.parentElement.style.display = showProgress ? 'block' : 'none';
+    loadingOverlay.classList.remove(CONSTANTS.CSS_CLASSES.HIDDEN);
 }
 
-function hideLoading() {
-loadingOverlay.classList.add('hidden');
-}
+function hideLoading() { loadingOverlay.classList.add(CONSTANTS.CSS_CLASSES.HIDDEN); }
 
 function setControlsDisabled(disabled, whitelist = []) {
-editorControls.querySelectorAll('button, input').forEach(el => {
-    el.disabled = whitelist.includes(el.id) ? false : disabled;
-});
+    editorControls.querySelectorAll('button, input').forEach(el => {
+        if (el.id === 'imgedit-undo-btn') return;
+        el.disabled = whitelist.includes(el.id) ? false : disabled;
+    });
 }
 
-// Initialize the application
+// Initialize
 setupEventListeners();
+updateUndoButton();

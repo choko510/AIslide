@@ -10,13 +10,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://site-assets.fontawesome.com">
     <!-- Preload critical CSS -->
-    <link rel="preload" as="style" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/all.css"
-        onload="this.rel='stylesheet'">
+    <link rel="preload" as="style" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/all.css" onload="this.rel='stylesheet'">
     <link rel="preload" as="style" href="slide.css" onload="this.rel='stylesheet'">
     <link rel="preload" as="style" href="imgedit.css" onload="this.rel='stylesheet'">
-    <link rel="preload" as="style"
-        href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap"
-        onload="this.rel='stylesheet'">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" onload="this.rel='stylesheet'">
     <!-- Google Fonts for imgedit.html -->
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
@@ -80,7 +77,7 @@
                             <i class="fas fa-cog"></i>
                             <span>設定</span>
                         </button>
-
+                        
                     </div>
                     <div id="sidebar-content">
                         <div class="sidebar-tab-content active" data-tab-content="elements">
@@ -103,6 +100,8 @@
                                         class="fas fa-code fa-fw"></i><span>埋め込み</span></button>
                                 <button id="add-qr-btn" class="sidebar-add-btn"><i
                                         class="fas fa-qrcode fa-fw"></i><span>QRコード</span></button>
+                                <button id="add-shape-btn" class="sidebar-add-btn"><i
+                                        class="fas fa-shapes fa-fw"></i><span>図形</span></button>
                             </div>
                         </div>
                         <div class="sidebar-tab-content" data-tab-content="icons">
@@ -202,8 +201,7 @@
                                             <div class="settings-description">UIのフォントサイズを調整します</div>
                                         </label>
                                         <div class="settings-control">
-                                            <select id="font-size-setting"
-                                                style="padding: 4px 8px; border-radius: 4px;">
+                                            <select id="font-size-setting" style="padding: 4px 8px; border-radius: 4px;">
                                                 <option value="small">小</option>
                                                 <option value="normal" selected>標準</option>
                                                 <option value="large">大</option>
@@ -260,8 +258,7 @@
                                             <div class="settings-description">プレゼンテーションデータをJSONファイルとして保存</div>
                                         </label>
                                         <div class="settings-control">
-                                            <button id="export-data-btn" class="sidebar-add-btn"
-                                                style="padding: 6px 12px; font-size: 12px;">
+                                            <button id="export-data-btn" class="sidebar-add-btn" style="padding: 6px 12px; font-size: 12px;">
                                                 <i class="fas fa-download"></i> エクスポート
                                             </button>
                                         </div>
@@ -272,10 +269,8 @@
                                             <div class="settings-description">JSONファイルからプレゼンテーションデータを読み込み</div>
                                         </label>
                                         <div class="settings-control">
-                                            <input type="file" id="import-data-input" accept=".json"
-                                                style="display: none;">
-                                            <button id="import-data-btn" class="sidebar-add-btn"
-                                                style="padding: 6px 12px; font-size: 12px;">
+                                            <input type="file" id="import-data-input" accept=".json" style="display: none;">
+                                            <button id="import-data-btn" class="sidebar-add-btn" style="padding: 6px 12px; font-size: 12px;">
                                                 <i class="fas fa-upload"></i> インポート
                                             </button>
                                         </div>
@@ -286,8 +281,7 @@
                                             <div class="settings-description">すべてのプレゼンテーションデータを削除</div>
                                         </label>
                                         <div class="settings-control">
-                                            <button id="clear-data-btn" class="sidebar-add-btn"
-                                                style="padding: 6px 12px; font-size: 12px; background-color: var(--danger-color); border-color: var(--danger-color);">
+                                            <button id="clear-data-btn" class="sidebar-add-btn" style="padding: 6px 12px; font-size: 12px; background-color: var(--danger-color); border-color: var(--danger-color);">
                                                 <i class="fas fa-trash"></i> 全削除
                                             </button>
                                         </div>
@@ -299,8 +293,7 @@
                             <div id="chat-panel">
                                 <div id="ai-controls"
                                     style="margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px;">
-                                    <div id="ai-mode-selector"
-                                        style="display: flex; justify-content: space-around; background: var(--bg-secondary); padding: 4px; border-radius: var(--border-radius);">
+                                    <div id="ai-mode-selector" style="display: flex; justify-content: space-around; background: var(--bg-secondary); padding: 4px; border-radius: var(--border-radius);">
                                         <button class="ai-mode-btn active" data-mode="design" title="デザインモード">
                                             <i class="fas fa-palette"></i>
                                             <span>デザイン</span>
@@ -315,11 +308,7 @@
                                         </button>
                                     </div>
                                     <div style="display: flex; gap: 8px;">
-                                        <button id="restore-checkpoint-btn" class="sidebar-add-btn"
-                                            title="AIによる直前の変更を取り消します" style="flex-grow: 1; justify-content: center;"
-                                            disabled><i class="fas fa-undo"></i> AIの変更を戻す</button>
-                                        <button id="reset-chat-btn" class="sidebar-add-btn" title="チャット履歴をリセットします"
-                                            style="flex-grow: 1; justify-content: center;">
+                                        <button id="reset-chat-btn" class="sidebar-add-btn" title="チャット履歴をリセットします" style="flex-grow: 1; justify-content: center;">
                                             <i class="fas fa-sync-alt"></i> チャットをリセット
                                         </button>
                                     </div>
@@ -345,12 +334,9 @@
                                     </div>
                                 </div>
                                 <!-- 自律モード用UI -->
-                                <div id="autonomous-goal-container"
-                                    style="display:none; flex-direction:column; gap:8px; margin-bottom:10px;">
-                                    <input type="text" id="autonomous-goal-input" placeholder="最終目標を入力..."
-                                        style="padding:8px; border-radius:6px; border:1px solid var(--border-color);">
-                                    <button id="start-autonomous-btn" class="sidebar-add-btn"
-                                        style="align-self:flex-end;">開始</button>
+                                <div id="autonomous-goal-container" style="display:none; flex-direction:column; gap:8px; margin-bottom:10px;">
+                                    <input type="text" id="autonomous-goal-input" placeholder="最終目標を入力..." style="padding:8px; border-radius:6px; border:1px solid var(--border-color);">
+                                    <button id="start-autonomous-btn" class="sidebar-add-btn" style="align-self:flex-end;">開始</button>
                                 </div>
                                 <div id="chat-messages"
                                     style="height: 60vh; max-height: 700px; overflow-y: auto; border: 1px solid var(--border-color); padding: 10px; margin-bottom: 10px; border-radius: var(--border-radius);">
@@ -538,6 +524,38 @@
         </div>
     </div>
 
+    <!-- 図形選択用モーダル -->
+    <div class="modal micromodal-slide" id="shape-modal" aria-hidden="true">
+        <div class="modal__overlay" tabindex="-1" data-micromodal-close>
+            <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="shape-modal-title" style="max-width: 500px;">
+                <button class="modal__close" aria-label="Close modal" data-micromodal-close style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; color: #6c757d; cursor: pointer; z-index: 1001;">&times;</button>
+                <header class="modal__header">
+                    <h2 class="modal__title" id="shape-modal-title">図形を選択</h2>
+                </header>
+                <main class="modal__content" id="shape-modal-content" style="padding: 24px;">
+                    <div id="shape-selection-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 16px;">
+                        <button class="shape-select-btn" data-shape="rectangle">
+                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;"><rect x="10" y="25" width="80" height="50" fill="#ccc"></rect></svg>
+                            <span>四角形</span>
+                        </button>
+                        <button class="shape-select-btn" data-shape="circle">
+                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;"><circle cx="50" cy="50" r="40" fill="#ccc"></circle></svg>
+                            <span>円</span>
+                        </button>
+                        <button class="shape-select-btn" data-shape="triangle">
+                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;"><polygon points="50,10 90,90 10,90" fill="#ccc"></polygon></svg>
+                            <span>三角形</span>
+                        </button>
+                        <button class="shape-select-btn" data-shape="line">
+                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;"><line x1="10" y1="50" x2="90" y2="50" stroke="#ccc" stroke-width="5"></line></svg>
+                            <span>線</span>
+                        </button>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </div>
+
     <!-- 画像編集用モーダル -->
     <div class="modal micromodal-slide" id="imgedit-modal" aria-hidden="true">
         <div class="modal__overlay" tabindex="-1" data-micromodal-close>
@@ -629,6 +647,15 @@
                                 </div>
                             </div>
 
+                            <!-- 元に戻す -->
+                            <div class="imgedit-control-group">
+                                <h2>操作履歴</h2>
+                                <button id="imgedit-undo-btn" class="imgedit-secondary-btn" style="width: 100%;">
+                                    <i class="fa-solid fa-undo"></i>
+                                    <span>元に戻す</span>
+                                </button>
+                            </div>
+
                             <!-- ペイント -->
                             <div class="imgedit-control-group imgedit-paint-controls">
                                 <h2>描画</h2>
@@ -713,14 +740,23 @@
         </div>
     </div>
 
+    <!-- AI提案ポップオーバー -->
+    <div id="ai-suggestion-popover" style="display: none; position: fixed; z-index: 10001; background: var(--bg-white); border: 1px solid var(--border-color); box-shadow: var(--shadow-md); border-radius: var(--border-radius); padding: 12px; max-width: 300px;">
+        <div id="ai-suggestion-content"></div>
+        <div id="ai-suggestion-actions" style="margin-top: 10px; text-align: right;">
+            <button id="ai-suggestion-cancel" style="padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: transparent; cursor: pointer;">キャンセル</button>
+            <button id="ai-suggestion-apply" style="padding: 4px 8px; border-radius: 4px; border: none; background: var(--primary-color); color: white; cursor: pointer; margin-left: 8px;">適用</button>
+        </div>
+    </div>
+
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            // 既存のAppインスタンス生成・AIHandler初期化処理をここに移動
-            if (window.App) {
-                window.appInstance = new App();
-                window.aiHandler = new AIHandler(window.appInstance);
-            }
-        });
+      document.addEventListener('DOMContentLoaded', function() {
+        // 既存のAppインスタンス生成・AIHandler初期化処理をここに移動
+        if (window.App) {
+          window.appInstance = new App();
+          window.aiHandler = new AIHandler(window.appInstance);
+        }
+      });
     </script>
     <script src="ai.js" defer></script>
     <script src="slide.js" type="module"></script>
@@ -730,14 +766,12 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
     <link rel="stylesheet" href="mainmodal.css">
     <script src="https://cdn.jsdelivr.net/npm/micromodal@0.6.1/dist/micromodal.min.js" defer></script>
-
-    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/jspdf@3.0.1/dist/jspdf.umd.js" defer></script>
-
+    
     <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.9.2/lib/qr-code-styling.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.1.0/dist/fuse.min.js" defer></script>
-
+    
     <script src="imgedit.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js" defer></script>
 </body>
 
 </html>

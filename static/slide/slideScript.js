@@ -85,11 +85,8 @@
                         noteDiv.style.minHeight = '1.2em'; // 空行でも高さを持つように
                         noteDiv.style.padding = '2px 0';
 
-                        // ノートの変更をstateに反映するイベントリスナー
-                        // debounceを使って入力頻度を制限し、パフォーマンスを向上
-                        noteDiv.addEventListener('input', Utils.debounce(() => {
-                            this._updateScriptFromDOM();
-                        }, 500));
+                        // ノートの変更をstateに反映するイベントリスナーは親要素に移動
+                        // 個別のノートにはリスナーを追加しない
 
                         scriptDisplay.appendChild(noteDiv);
                     }

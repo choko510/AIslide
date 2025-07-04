@@ -11,7 +11,7 @@
             },
             CANVAS_SCALE: {
                 min: 0.2,
-                max: 5.0,
+                max: 6.0,
                 default: 1.0
             },
             ANIMATION_DURATION: 300,
@@ -229,10 +229,12 @@
                 return {
                     presentation: {
                         settings: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT, globalCss: '' },
-                        slides: []
+                        slides: [],
+                        groups: {} // { 'slideId': [{ id: 'group-xxx', elementIds: [...] }] }
                     },
                     activeSlideId: null,
                     selectedElementIds: [],
+                    selectedGroupIds: [],
                     isEditingText: false,
                     
                     interaction: {
@@ -810,6 +812,40 @@
                         shape.setAttribute('stroke', style.stroke || '#000000');
                         shape.setAttribute('stroke-width', style.strokeWidth || 2);
                         break;
+                    case 'arrow':
+                        svg.setAttribute('viewBox', '0 0 110 100'); // ViewBoxを広げて矢じりが見えるように
+                        const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                        const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                        marker.setAttribute('id', `arrowhead-${elData.id}`);
+                        marker.setAttribute('markerWidth', '10');
+                        marker.setAttribute('markerHeight', '7');
+                        marker.setAttribute('refX', '0');
+                        marker.setAttribute('refY', '3.5');
+                        marker.setAttribute('orient', 'auto');
+                        const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                        polygon.setAttribute('points', '0 0, 10 3.5, 0 7');
+                        polygon.setAttribute('fill', style.stroke || '#000000');
+                        marker.appendChild(polygon);
+                        defs.appendChild(marker);
+                        svg.appendChild(defs);
+                        
+                        shape = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        shape.setAttribute('x1', '0');
+                        shape.setAttribute('y1', '50');
+                        shape.setAttribute('x2', '90'); // 矢じりの分だけ短く
+                        shape.setAttribute('y2', '50');
+                        shape.setAttribute('stroke', style.stroke || '#000000');
+                        shape.setAttribute('stroke-width', style.strokeWidth || 2);
+                        shape.setAttribute('marker-end', `url(#arrowhead-${elData.id})`);
+                        break;
+                    case 'star':
+                        shape = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                        shape.setAttribute('points', '50,5 61,40 98,40 68,62 79,96 50,75 21,96 32,62 2,40 39,40');
+                        break;
+                    case 'speech-bubble':
+                        shape = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        shape.setAttribute('d', 'M10 10 H 90 V 70 H 60 L 50 90 L 40 70 H 10 Z');
+                        break;
                 }
 
                 if (shape) {
@@ -968,7 +1004,9 @@
                     transform: `rotate(${styles.rotation || 0}deg)`,
                     color: styles.color,
                     fontSize: styles.fontSize ? `${styles.fontSize}px` : null,
-                    fontFamily: styles.fontFamily || ''
+                    fontFamily: styles.fontFamily || '',
+                    backgroundColor: styles.backgroundColor || 'transparent',
+                    border: styles.border || 'none'
                 });
 
                 // 縦書き対応
@@ -1064,7 +1102,19 @@
                 this.stateManager.subscribe('activeSlideId', (newId, oldId) => {
                     if (newId !== oldId) {
                         this.stateManager.set('selectedElementIds', [], { silent: true });
-                        this.render();
+                        
+                        const canvas = this.elements.slideCanvas;
+                        if (canvas) {
+                            canvas.classList.add('slide-canvas-transitioning');
+                            setTimeout(() => {
+                                this.render();
+                                setTimeout(() => {
+                                    canvas.classList.remove('slide-canvas-transitioning');
+                                }, 50);
+                            }, 300);
+                        } else {
+                            this.render();
+                        }
                     }
                 });
 
@@ -1173,6 +1223,10 @@
                     addShapeBtn: document.getElementById('add-shape-btn'),
                     imageUploadInput: document.getElementById('image-upload-input'),
 
+                    // グループ化ボタン
+                    groupBtn: document.getElementById('group-btn'),
+                    ungroupBtn: document.getElementById('ungroup-btn'),
+
                     // モーダル
                     shapeModal: document.getElementById('shape-modal'),
                     
@@ -1213,6 +1267,10 @@
                         // 既存のデータにscriptプロパティがない場合、空文字列で初期化
                         if (presentation.script === undefined) {
                             presentation.script = '';
+                        }
+                        // groupsプロパティがない場合、空のオブジェクトで初期化
+                        if (presentation.groups === undefined) {
+                            presentation.groups = {};
                         }
                         this.stateManager.batch({
                             'presentation': presentation,
@@ -1367,11 +1425,18 @@
             },
 
             updateToolbarState() {
-                const selectedCount = this.state.selectedElementIds.length;
+                const selectedElementCount = this.state.selectedElementIds.length;
+                const selectedGroupCount = this.state.selectedGroupIds.length;
+
                 const alignButtons = [this.elements.alignLeftBtn, this.elements.alignCenterHBtn, this.elements.alignRightBtn, this.elements.alignTopBtn, this.elements.alignCenterVBtn, this.elements.alignBottomBtn];
-                alignButtons.forEach(btn => btn.disabled = selectedCount < 2);
+                alignButtons.forEach(btn => btn.disabled = selectedElementCount < 2);
+                
                 const distributeButtons = [this.elements.distributeHBtn, this.elements.distributeVBtn];
-                distributeButtons.forEach(btn => btn.disabled = selectedCount < 3);
+                distributeButtons.forEach(btn => btn.disabled = selectedElementCount < 3);
+
+                // Group/Ungroup buttons
+                this.elements.groupBtn.disabled = selectedElementCount < 2;
+                this.elements.ungroupBtn.disabled = selectedGroupCount === 0;
 
                 // Undo/Redoボタンの状態更新
                 this.elements.undoBtn.disabled = this.stateManager._undoStack.length === 0;
@@ -1450,7 +1515,7 @@
                 fragment.appendChild(addLi);
 
                 // 5. DOMを一括で反映
-                slideList.innerHTML = '';
+                slideList.textContent = '';
                 slideList.appendChild(fragment);
 
                 // 6. 「追加」ボタンのスケール調整
@@ -1479,7 +1544,7 @@
                     wrapper.style.paddingTop = '';
                 }
 
-                content.innerHTML = ''; // 中身をクリア
+                content.textContent = ''; // 中身をクリア
                 content.style.width = `${settings.width}px`;
                 content.style.height = `${settings.height}px`;
                 
@@ -1503,7 +1568,7 @@
                 this.updateCanvasScale();
 
                 if (!activeSlide) {
-                    this.domElementCache.forEach(el => el.remove());
+                    this.domElementCache.forEach(cacheEntry => cacheEntry.dom.remove());
                     this.domElementCache.clear();
                     return;
                 }
@@ -1543,7 +1608,7 @@
                         // contentが変更された場合のみ中身を再生成
                         if (previousContent !== currentContent) {
                             const content = ElementFactory.createElement(elData);
-                            el.innerHTML = ''; // 中身をクリア
+                            el.textContent = ''; // 中身をクリア
                             if (content) {
                                 if (content instanceof Node) {
                                     el.appendChild(content);
@@ -1557,7 +1622,12 @@
 
                     // --- 状態に基づくクラスや属性の更新 ---
                     const isSelected = selectedElementIds.includes(elData.id);
+                    const group = this._findGroupForElement(elData.id);
+                    const isGroupSelected = group && this.state.selectedGroupIds.includes(group.id);
+
                     el.classList.toggle('selected', isSelected);
+                    el.classList.toggle('grouped', !!group);
+                    el.classList.toggle('group-selected', isGroupSelected);
 
                     // リサイズハンドル
                     const hasHandles = el.querySelector('.resize-handle');
@@ -1574,6 +1644,7 @@
                 });
 
                 this.renderSelectionBoundingBox();
+                this.renderGroupSelectionBoundingBoxes();
             },
 
             updateCanvasScale() {
@@ -1621,6 +1692,30 @@
                 box.className = 'selection-bounding-box';
                 Object.assign(box.style, { left: `${bounds.left}%`, top: `${bounds.top}%`, width: `${bounds.width}%`, height: `${bounds.height}%` });
                 this.elements.slideCanvas.appendChild(box);
+            },
+
+            renderGroupSelectionBoundingBoxes() {
+                this.elements.slideCanvas.querySelectorAll('.group-selection-bounding-box').forEach(el => el.remove());
+                const { selectedGroupIds, activeSlideId } = this.state;
+                const slideGroups = this.state.presentation.groups?.[activeSlideId] || [];
+
+                selectedGroupIds.forEach(groupId => {
+                    const group = slideGroups.find(g => g.id === groupId);
+                    if (!group) return;
+
+                    const bounds = this.getGroupBoundingBox(group.elementIds, true);
+                    if (!bounds) return;
+
+                    const box = document.createElement('div');
+                    box.className = 'group-selection-bounding-box';
+                    Object.assign(box.style, {
+                        left: `${bounds.left}%`,
+                        top: `${bounds.top}%`,
+                        width: `${bounds.width}%`,
+                        height: `${bounds.height}%`
+                    });
+                    this.elements.slideCanvas.appendChild(box);
+                });
             },
 
             createElementDOM(elData) {
@@ -1696,7 +1791,11 @@
                 this.elements.leftSidebar.style.width = '340px';
 
                 const inspectorHTML = this._buildInspectorHTML(selectedElement);
-                this.elements.inspector.innerHTML = inspectorHTML;
+                if (window.DOMPurify) {
+                    this.elements.inspector.innerHTML = DOMPurify.sanitize(inspectorHTML, { ADD_ATTR: ['data-prop', 'data-type', 'data-table-row', 'data-table-col'] });
+                } else {
+                    this.elements.inspector.innerHTML = inspectorHTML;
+                }
                 
                 this._initializeInspectorComponents(selectedElement);
             },
@@ -1712,46 +1811,34 @@
             },
 
             _buildInspectorHTML(selectedElement) {
-                const baseHTML = this._getBasePropertiesHTML(selectedElement);
-                const typeSpecificHTML = this._getTypeSpecificHTML(selectedElement);
-                const customCssHTML = this._getCustomCssHTML();
-                
-                return `${baseHTML}${typeSpecificHTML}${customCssHTML}`;
-            },
-
-            _getBasePropertiesHTML(selectedElement) {
                 const s = selectedElement.style;
-                
-                return `
-                    <div class="inspector-group">
-                        <label>位置 & サイズ</label>
-                        <div class="pos-size-grid">
-                            <div>
-                                <label for="inspector-left">X (%)</label>
-                                <input id="inspector-left" name="inspector-left" type="number" data-prop="left" value="${isFinite(Number(s.left)) ? Number(s.left).toFixed(2) : ''}" step="0.1">
-                            </div>
-                            <div>
-                                <label for="inspector-top">Y (%)</label>
-                                <input id="inspector-top" name="inspector-top" type="number" data-prop="top" value="${isFinite(Number(s.top)) ? Number(s.top).toFixed(2) : ''}" step="0.1">
-                            </div>
-                            <div>
-                                <label for="inspector-width">幅 (%)</label>
-                                <input id="inspector-width" name="inspector-width" type="number" data-prop="width" value="${isFinite(Number(s.width)) ? Number(s.width).toFixed(2) : ''}" step="0.1">
-                            </div>
-                            <div>
-                                <label for="inspector-height">高さ (%)</label>
-                                <input id="inspector-height" name="inspector-height" type="number" data-prop="height" value="${isFinite(Number(s.height)) ? Number(s.height).toFixed(2) : ''}" step="0.1" ${!['image', 'video', 'shape'].includes(selectedElement.type) ? 'disabled' : ''}>
-                            </div>
+
+                const accordionItem = (title, content, isOpen = true) => `
+                    <div class="accordion-item">
+                        <button class="accordion-header" aria-expanded="${isOpen}">
+                            ${title}
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <div class="accordion-content" ${isOpen ? '' : 'style="display: none;"'}>
+                            ${content}
                         </div>
                     </div>
+                `;
+
+                const transformContent = `
                     <div class="inspector-group">
-                        <label>回転 (deg)</label>
-                        <input type="number" data-prop="rotation" value="${s.rotation || 0}" step="1">
+                        <div class="pos-size-grid">
+                            <div><label for="inspector-left">X (%)</label><input id="inspector-left" type="number" data-prop="left" value="${(s.left || 0).toFixed(2)}" step="0.1"></div>
+                            <div><label for="inspector-top">Y (%)</label><input id="inspector-top" type="number" data-prop="top" value="${(s.top || 0).toFixed(2)}" step="0.1"></div>
+                            <div><label for="inspector-width">幅 (%)</label><input id="inspector-width" type="number" data-prop="width" value="${(s.width || 0).toFixed(2)}" step="0.1"></div>
+                            <div><label for="inspector-height">高さ (%)</label><input id="inspector-height" type="number" data-prop="height" value="${(s.height || 0).toFixed(2)}" step="0.1" ${!['image', 'video', 'shape'].includes(selectedElement.type) ? 'disabled' : ''}></div>
+                        </div>
                     </div>
-                    <div class="inspector-group">
-                        <label>重ね順</label>
-                        <input type="number" data-prop="zIndex" value="${s.zIndex}">
-                    </div>
+                    <div class="inspector-group"><label>回転 (deg)</label><input type="number" data-prop="rotation" value="${s.rotation || 0}" step="1"></div>
+                    <div class="inspector-group"><label>重ね順</label><input type="number" data-prop="zIndex" value="${s.zIndex}"></div>
+                `;
+
+                const animationContent = `
                     <div class="inspector-group">
                         <label>アニメーション</label>
                         <select data-prop="animation">
@@ -1771,17 +1858,41 @@
                         </select>
                     </div>
                 `;
+
+                const typeSpecificHTML = this._getTypeSpecificHTML(selectedElement);
+                const customCssHTML = this._getCustomCssHTML();
+
+                return `
+                    <div class="accordion">
+                        ${accordionItem('配置とサイズ', transformContent)}
+                        ${typeSpecificHTML}
+                        ${accordionItem('アニメーション', animationContent)}
+                        ${accordionItem('詳細設定', customCssHTML, false)}
+                    </div>
+                `;
             },
 
             _getTypeSpecificHTML(selectedElement) {
+                const accordionItem = (title, content, isOpen = true) => `
+                    <div class="accordion-item">
+                        <button class="accordion-header" aria-expanded="${isOpen}">
+                            ${title}
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                        <div class="accordion-content" ${isOpen ? '' : 'style="display: none;"'}>
+                            ${content}
+                        </div>
+                    </div>
+                `;
+
                 const typeHandlers = {
-                    'text': () => this._getTextPropertiesHTML(selectedElement),
-                    'icon': () => this._getIconPropertiesHTML(selectedElement),
-                    'video': () => this._getVideoPropertiesHTML(selectedElement),
-                    'chart': () => this._getChartPropertiesHTML(selectedElement),
-                    'table': () => this._getTablePropertiesHTML(selectedElement),
-                    'iframe': () => this._getIframePropertiesHTML(selectedElement),
-                    'shape': () => this._getShapePropertiesHTML(selectedElement)
+                    'text': () => accordionItem('テキストスタイル', this._getTextPropertiesHTML(selectedElement)),
+                    'icon': () => accordionItem('アイコンスタイル', this._getIconPropertiesHTML(selectedElement)),
+                    'video': () => accordionItem('動画設定', this._getVideoPropertiesHTML(selectedElement)),
+                    'chart': () => accordionItem('グラフデータ', this._getChartPropertiesHTML(selectedElement)),
+                    'table': () => accordionItem('テーブルデータ', this._getTablePropertiesHTML(selectedElement)),
+                    'iframe': () => accordionItem('埋め込み設定', this._getIframePropertiesHTML(selectedElement)),
+                    'shape': () => accordionItem('塗りつぶしと枠線', this._getShapePropertiesHTML(selectedElement))
                 };
 
                 const handler = typeHandlers[selectedElement.type];
@@ -1810,6 +1921,14 @@
                     <div class="inspector-group">
                         <label>文字色</label>
                         <input type="color" data-prop="color" value="${s.color || '#212529'}">
+                    </div>
+                    <div class="inspector-group">
+                        <label>背景の塗りつぶし</label>
+                        <input type="color" data-prop="backgroundColor" value="${s.backgroundColor || '#ffffff'}">
+                    </div>
+                    <div class="inspector-group">
+                        <label>枠線</label>
+                        <input type="text" data-prop="border" value="${s.border || '1px solid #000000'}" placeholder="例: 1px solid #000000">
                     </div>
                 `;
             },
@@ -1904,23 +2023,45 @@
 
             _getChartPropertiesHTML(selectedElement) {
                 const chartData = selectedElement.content.data;
-                
+                let tableRows = '';
+                if (chartData && chartData.labels && chartData.datasets?.[0]?.data) {
+                    for (let i = 0; i < chartData.labels.length; i++) {
+                        const label = chartData.labels[i];
+                        const value = chartData.datasets[0].data[i];
+                        tableRows += `
+                            <tr>
+                                <td style="padding: 4px;"><input type="text" data-type="label" value="${label}" style="width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;"></td>
+                                <td style="padding: 4px;"><input type="number" data-type="value" value="${value}" style="width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;"></td>
+                                <td style="text-align: center;"><button type="button" class="delete-chart-row-btn" style="background:none; border:none; color: #dc3545; cursor:pointer; font-size: 16px;">&times;</button></td>
+                            </tr>
+                        `;
+                    }
+                }
+
                 return `
                     <div class="inspector-group">
                         <label>グラフデータ編集</label>
                         <div style="margin-top: 10px;">
                             <label>データセット名</label>
-                            <input type="text" id="chart-dataset-label" value="${chartData.datasets[0].label}" style="width: 100%;">
+                            <input type="text" id="chart-dataset-label-inspector" value="${chartData.datasets[0].label}" style="width: 100%;">
                         </div>
-                        <div style="margin-top: 10px;">
-                            <label>ラベル (カンマ区切り)</label>
-                            <input type="text" id="chart-labels" value="${chartData.labels.join(',')}" style="width: 100%;">
+                        <div id="chart-data-spreadsheet-inspector" style="margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #ced4da; border-radius: 6px;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead style="position: sticky; top: 0; background: #f8f9fa;">
+                                    <tr>
+                                        <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ced4da;">ラベル</th>
+                                        <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ced4da;">値</th>
+                                        <th style="width: 40px; border-bottom: 1px solid #ced4da;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="chart-data-tbody-inspector">
+                                    ${tableRows}
+                                </tbody>
+                            </table>
                         </div>
-                        <div style="margin-top: 10px;">
-                            <label>値 (カンマ区切り)</label>
-                            <input type="text" id="chart-data" value="${chartData.datasets[0].data.join(',')}" style="width: 100%;">
+                        <div style="display: flex; gap: 8px; margin-top: 8px;">
+                            <button type="button" id="add-chart-row-btn-inspector" class="sidebar-add-btn" style="flex-grow: 1;">行を追加</button>
                         </div>
-                        <button id="update-chart-btn" style="margin-top: 10px; width: 100%; padding: 8px;">グラフを更新</button>
                     </div>
                 `;
             },
@@ -1987,12 +2128,12 @@
 
             _getCustomCssHTML() {
                 return `
-                    <div class="inspector-group" style="margin-top: 30px;">
-                        <button id="delete-element-btn">要素を削除</button>
-                    </div>
                     <div class="inspector-group">
                         <label>カスタムCSS</label>
                         <div id="element-css-editor-container" style="border: 1px solid var(--border-color); border-radius: var(--border-radius);"></div>
+                    </div>
+                    <div class="inspector-group" style="margin-top: 20px;">
+                        <button id="delete-element-btn">要素を削除</button>
                     </div>
                 `;
             },
@@ -2003,6 +2144,9 @@
                 
                 // 基本イベントハンドラーの設定
                 this._bindBasicInspectorEvents(selectedElement);
+
+                // アコーディオンのイベントリスナーを設定
+                this._bindAccordionEvents();
                 
                 // タイプ別イベントハンドラーの設定
                 this._bindTypeSpecificEvents(selectedElement);
@@ -2013,6 +2157,26 @@
                 if (deleteBtn) {
                     deleteBtn.onclick = () => this.deleteSelectedElements();
                 }
+            },
+
+            _bindAccordionEvents() {
+                const inspector = document.getElementById('inspector');
+                if (!inspector) return;
+
+                inspector.querySelectorAll('.accordion-header').forEach(button => {
+                    button.onclick = () => {
+                        const content = button.nextElementSibling;
+                        const isExpanded = button.getAttribute('aria-expanded') === 'true';
+                        
+                        button.setAttribute('aria-expanded', !isExpanded);
+                        content.style.display = isExpanded ? 'none' : 'block';
+                        
+                        const icon = button.querySelector('i');
+                        if (icon) {
+                            icon.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(180deg)';
+                        }
+                    };
+                });
             },
 
             _bindTypeSpecificEvents(selectedElement) {
@@ -2033,20 +2197,70 @@
             },
 
             _bindChartEvents(selectedElement) {
-                const updateBtn = document.getElementById('update-chart-btn');
-                if (updateBtn) {
-                    updateBtn.onclick = () => {
-                        const labels = document.getElementById('chart-labels').value.split(',').map(l => l.trim());
-                        const dataValues = document.getElementById('chart-data').value.split(',').map(d => parseFloat(d.trim()) || 0);
-                        const datasetLabel = document.getElementById('chart-dataset-label').value;
+                const inspector = document.getElementById('inspector');
 
-                        selectedElement.content.data.labels = labels;
-                        selectedElement.content.data.datasets[0].label = datasetLabel;
-                        selectedElement.content.data.datasets[0].data = dataValues;
+                const updateChartData = () => {
+                    const tableBody = inspector.querySelector('#chart-data-tbody-inspector');
+                    if (!tableBody) return;
+                    
+                    const rows = tableBody.querySelectorAll('tr');
+                    const labels = Array.from(rows).map(row => row.querySelector('input[data-type="label"]').value);
+                    const dataValues = Array.from(rows).map(row => parseFloat(row.querySelector('input[data-type="value"]').value) || 0);
+                    const datasetLabel = inspector.querySelector('#chart-dataset-label-inspector').value;
 
-                        this.saveState();
-                        this.render();
+                    selectedElement.content.data.labels = labels;
+                    selectedElement.content.data.datasets[0].label = datasetLabel;
+                    selectedElement.content.data.datasets[0].data = dataValues;
+                    
+                    this.stateManager._saveToHistory();
+                    this.saveState();
+                    this.render();
+                };
+
+                const addRowBtn = inspector.querySelector('#add-chart-row-btn-inspector');
+                if (addRowBtn) {
+                    addRowBtn.onclick = () => {
+                        const tableBody = inspector.querySelector('#chart-data-tbody-inspector');
+                        const newRow = this._createInspectorChartRow();
+                        tableBody.appendChild(newRow);
+                        this._bindInspectorChartRowEvents(newRow, updateChartData);
+                        updateChartData();
                     };
+                }
+                
+                const tableBody = inspector.querySelector('#chart-data-tbody-inspector');
+                if(tableBody) {
+                    tableBody.querySelectorAll('tr').forEach(row => {
+                         this._bindInspectorChartRowEvents(row, updateChartData);
+                    });
+                }
+                
+                const datasetLabelInput = inspector.querySelector('#chart-dataset-label-inspector');
+                if(datasetLabelInput) {
+                    datasetLabelInput.addEventListener('input', updateChartData);
+                }
+            },
+
+            _createInspectorChartRow(label = '', value = '') {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="padding: 4px;"><input type="text" data-type="label" value="${label}" style="width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;"></td>
+                    <td style="padding: 4px;"><input type="number" data-type="value" value="${value}" style="width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;"></td>
+                    <td style="text-align: center;"><button type="button" class="delete-chart-row-btn" style="background:none; border:none; color: #dc3545; cursor:pointer; font-size: 16px;">&times;</button></td>
+                `;
+                return tr;
+            },
+
+            _bindInspectorChartRowEvents(row, updateCallback) {
+                row.querySelectorAll('input').forEach(input => {
+                    input.addEventListener('input', updateCallback);
+                });
+                const deleteBtn = row.querySelector('.delete-chart-row-btn');
+                if(deleteBtn) {
+                    deleteBtn.addEventListener('click', () => {
+                        row.remove();
+                        updateCallback();
+                    });
                 }
             },
 
@@ -2233,6 +2447,7 @@
                     this._bindIconEvents();
                     this._bindCanvasEvents();
                     this._bindAlignmentEvents();
+                    this._bindGroupEvents();
                     this._bindInspectorEvents();
                     this._bindGlobalEvents();
                 } catch (error) {
@@ -2559,6 +2774,11 @@
                 });
             },
 
+            _bindGroupEvents() {
+                this.elements.groupBtn.addEventListener('click', () => this.groupSelectedElements());
+                this.elements.ungroupBtn.addEventListener('click', () => this.ungroupSelectedElements());
+            },
+
             _bindInspectorEvents() {
                 // インスペクター内のコントロールイベント伝播を停止
                 ['mousedown', 'mouseup', 'click'].forEach(eventType => {
@@ -2833,64 +3053,61 @@
             },
 
             handleCanvasMouseDown(e) {
-                // 右クリックはドラッグ・選択処理を行わない
                 if (!e.type.startsWith('touch') && e.button === 2) return;
+
                 const isTouch = e.type.startsWith('touch');
                 const point = isTouch ? e.touches[0] : e;
-                let target = point.target;
+                const target = point.target;
 
-                // Traverse up to find an Element if the target is not one (e.g., a text node)
-                while (target && target.nodeType !== Node.ELEMENT_NODE) {
-                    target = target.parentNode;
-                }
-
-                if (!target || typeof target.closest !== 'function') {
-                    console.error("handleCanvasMouseDown: target is not an Element or is null.", point.target, e);
+                if (this.state.isEditingText) {
+                    const clickedElement = target.closest('.slide-element');
+                    if (!clickedElement || !this.state.selectedElementIds.includes(clickedElement.dataset.id)) {
+                        this.stopTextEditing(true);
+                    }
                     return;
                 }
 
                 const element = target.closest('.slide-element');
                 const elementId = element ? element.dataset.id : null;
+                const clickedGroup = elementId ? this._findGroupForElement(elementId) : null;
+
                 this.state.interaction.isCtrlPressed = e.ctrlKey || e.metaKey;
 
-                if (this.state.isEditingText) {
-                    // 編集中に現在の編集要素以外をクリックした場合は編集を終了
-                    const element = e.target.closest('.slide-element');
-                    const elementId = element ? element.dataset.id : null;
-                    if (!elementId || !this.state.selectedElementIds.includes(elementId)) {
-                        this.stopTextEditing(true);
-                        this.render();
-                    }
-                    // 編集中は他の操作を禁止
-                    return;
-                }
-
-                // 複数選択時のドラッグ開始を直感的に
-                if (elementId) {
-                    if (this.state.selectedElementIds.includes(elementId)) {
-                        // 既に選択中の要素上なら選択状態維持してドラッグ開始
-                        // e.preventDefault() を削除。実際の移動が始まるMouseMove/TouchMoveで呼ぶ
-                        if (target.classList.contains('resize-handle')) {
-                            this.state.interaction.isResizing = true;
-                            this.state.interaction.handle = target.dataset.handle;
-                        } else {
-                            this.state.interaction.isDragging = true;
-                        }
-                        this.startInteraction(e);
-                        this.render();
-                        return;
+                if (clickedGroup) {
+                    this.batchUpdateState({
+                        'selectedElementIds': [],
+                        'selectedGroupIds': [clickedGroup.id]
+                    });
+                    this.state.interaction.isDragging = true;
+                    this.startInteraction(e);
+                } else if (elementId) {
+                    const isSelected = this.state.selectedElementIds.includes(elementId);
+                    if (this.state.interaction.isCtrlPressed) {
+                        this.updateState('selectedElementIds', isSelected
+                            ? this.state.selectedElementIds.filter(id => id !== elementId)
+                            : [...this.state.selectedElementIds, elementId]
+                        );
                     } else {
-                        // 未選択要素なら選択を切り替えてからドラッグ開始
-                        this.state.selectedElementIds = [elementId];
-                        this.render();
-                        // 次のmousedownでドラッグ開始
-                        return;
+                        if (!isSelected) {
+                            this.updateState('selectedElementIds', [elementId]);
+                        }
                     }
+                    this.updateState('selectedGroupIds', []);
+
+                    if (target.classList.contains('resize-handle')) {
+                        this.state.interaction.isResizing = true;
+                        this.state.interaction.handle = target.dataset.handle;
+                    } else {
+                        this.state.interaction.isDragging = true;
+                    }
+                    this.startInteraction(e);
                 } else {
-                    // キャンバス空白クリックで選択解除
-                    this.state.selectedElementIds = [];
-                    this.render();
+                    this.batchUpdateState({
+                        'selectedElementIds': [],
+                        'selectedGroupIds': []
+                    });
                 }
+                this.render();
             },
 
             startInteraction(e) {
@@ -2898,30 +3115,41 @@
                 const isTouch = e.type.startsWith('touch');
                 const point = isTouch ? e.touches[0] : e;
                 const canvasRect = this.elements.slideCanvas.getBoundingClientRect();
-                
-                // 状態管理システムでキャンバス矩形とインタラクション状態を更新
+
                 this.batchUpdateState({
                     'canvas.rect': canvasRect,
                     'interaction.startX': point.clientX,
                     'interaction.startY': point.clientY
                 });
 
-                const initialStates = this.getSelectedElementsData().map(elData => {
+                let elementsToTrack = [];
+                if (this.state.selectedGroupIds.length > 0) {
+                    const slideGroups = this.state.presentation.groups[this.state.activeSlideId] || [];
+                    this.state.selectedGroupIds.forEach(groupId => {
+                        const group = slideGroups.find(g => g.id === groupId);
+                        if (group) {
+                            elementsToTrack.push(...this.getActiveSlide().elements.filter(el => group.elementIds.includes(el.id)));
+                        }
+                    });
+                } else {
+                    elementsToTrack = this.getSelectedElementsData();
+                }
+
+                const initialStates = elementsToTrack.map(elData => {
                     const domEl = this.elements.slideCanvas.querySelector(`[data-id="${elData.id}"]`);
-                    if (domEl) {
-                        domEl.style.willChange = 'transform, width, height';
-                    }
-                    const state = {
-                        id: elData.id, startX: elData.style.left, startY: elData.style.top,
-                        startW: elData.style.width, startH: elData.style.height ?? (domEl.offsetHeight / canvasRect.height * 100),
-                        initialRect: { left: domEl.offsetLeft, top: domEl.offsetTop, width: domEl.offsetWidth, height: domEl.offsetHeight }
+                    if (domEl) domEl.style.willChange = 'transform, width, height';
+                    
+                    return {
+                        id: elData.id,
+                        startX: elData.style.left,
+                        startY: elData.style.top,
+                        startW: elData.style.width,
+                        startH: elData.style.height ?? (domEl.offsetHeight / canvasRect.height * 100),
+                        initialRect: { left: domEl.offsetLeft, top: domEl.offsetTop, width: domEl.offsetWidth, height: domEl.offsetHeight },
+                        _initialFontSize: elData.style.fontSize
                     };
-                    if (elData.type === 'text' || elData.type === 'icon') {
-                        state._initialFontSize = elData.style.fontSize;
-                    }
-                    return state;
                 });
-                
+
                 this.updateState('interaction.initialStates', initialStates);
             },
 
@@ -2960,10 +3188,13 @@
                 if (interaction.isDragging) {
                     this.handleDragMove(dx, dy);
                 } else if (interaction.isResizing) {
-                    // 固定キャンバスサイズを使用してパーセント計算
+                    // スロットリングされたリサイズ処理を呼び出す
+                    if (!this.throttledPerformResize) {
+                        this.throttledPerformResize = Utils.throttle(this.performResize.bind(this), 50); // 50ms間隔で実行
+                    }
                     const dxPercent = dx / CANVAS_WIDTH * 100;
                     const dyPercent = dy / CANVAS_HEIGHT * 100;
-                    this.performResize(dxPercent, dyPercent);
+                    this.throttledPerformResize(dxPercent, dyPercent);
                 }
             },
 
@@ -3597,18 +3828,32 @@
             getSelectedElementsBoundingBox(inPercent = false) {
                 const els = this.getSelectedElementsData();
                 if (els.length === 0) return null;
-                const pixelEls = this.getElementsWithPixelRects(els);
+                return this.getGroupBoundingBox(els.map(e => e.id), inPercent);
+            },
+
+            getGroupBoundingBox(elementIds, inPercent = false) {
+                if (!elementIds || elementIds.length === 0) return null;
+                const elements = this.getActiveSlide().elements.filter(el => elementIds.includes(el.id));
+                const pixelEls = this.getElementsWithPixelRects(elements);
+                if (pixelEls.length === 0) return null;
+
                 const bounds = this.calculatePixelBounds(pixelEls);
                 if (!inPercent) return bounds;
-                // 修正: canvasRectの取得方法を修正し、未定義ならnullを返す
-                const canvasRect = (this.getState ? this.getState('canvas.rect') : (this.state.canvas?.rect));
+
+                const canvasRect = this.getState('canvas.rect');
                 if (!canvasRect || !canvasRect.width || !canvasRect.height) return null;
+
                 return {
                     left: bounds.minX / canvasRect.width * 100,
                     top: bounds.minY / canvasRect.height * 100,
                     width: bounds.width / canvasRect.width * 100,
                     height: bounds.height / canvasRect.height * 100
                 };
+            },
+
+            _findGroupForElement(elementId) {
+                const slideGroups = this.state.presentation.groups?.[this.state.activeSlideId] || [];
+                return slideGroups.find(group => group.elementIds.includes(elementId));
             },
             handleThumbnailClick(e) { const thumb = e.target.closest('.slide-thumbnail'); if (thumb) { this.state.activeSlideId = thumb.dataset.id; this.state.selectedElementIds = []; this.render(); } },
 handleInspectorInput(e) {
@@ -3821,7 +4066,7 @@ handleInspectorInput(e) {
             },
             moveSlide(fromId, toId) { this.stateManager._saveToHistory(); const s = this.state.presentation.slides; const fromIdx = s.findIndex(s => s.id === fromId), toIdx = s.findIndex(s => s.id === toId); if (fromIdx === -1 || toIdx === -1) return; const [moved] = s.splice(fromIdx, 1); s.splice(toIdx, 0, moved); this.render(); this.saveState(); },
             duplicateSlide(slideId) { this.stateManager._saveToHistory(); const s = this.state.presentation.slides; const idx = s.findIndex(s => s.id === slideId); if (idx === -1) return; const newSlide = JSON.parse(JSON.stringify(s[idx])); newSlide.id = this.generateId('slide'); newSlide.elements.forEach(el => el.id = this.generateId('el')); s.splice(idx + 1, 0, newSlide); this.state.activeSlideId = newSlide.id; this.state.selectedElementIds = []; this.render(); this.saveState(); },
-            showContextMenu(e, id, content, handlers) { const oldMenu = document.getElementById(id); if (oldMenu) oldMenu.remove(); const menu = document.createElement('div'); menu.id = id; Object.assign(menu.style, { position: 'fixed', zIndex: 99999, left: e.clientX + 'px', top: e.clientY + 'px', background: '#fff', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-md)', padding: '4px' }); menu.innerHTML = content; document.body.appendChild(menu); Object.entries(handlers).forEach(([btnId, handler]) => document.getElementById(btnId).onclick = () => { handler(); menu.remove(); }); setTimeout(() => document.addEventListener('click', function h(ev) { if (!menu.contains(ev.target) && !App.elements.exportBtn.contains(ev.target)) { menu.style.display = 'none'; document.removeEventListener('click', h); } }, { once: true }), 10); },
+            showContextMenu(e, id, content, handlers) { const oldMenu = document.getElementById(id); if (oldMenu) oldMenu.remove(); const menu = document.createElement('div'); menu.id = id; Object.assign(menu.style, { position: 'fixed', zIndex: 99999, left: e.clientX + 'px', top: e.clientY + 'px', background: '#fff', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-md)', padding: '4px' }); if (window.DOMPurify) { menu.innerHTML = DOMPurify.sanitize(content); } else { menu.innerHTML = content; } document.body.appendChild(menu); Object.entries(handlers).forEach(([btnId, handler]) => { const btn = document.getElementById(btnId); if(btn) btn.onclick = () => { handler(); menu.remove(); }; }); setTimeout(() => document.addEventListener('click', function h(ev) { if (!menu.contains(ev.target) && !App.elements.exportBtn.contains(ev.target)) { menu.style.display = 'none'; document.removeEventListener('click', h); } }, { once: true }), 10); },
             showSlideContextMenu(e, slideId) { this.showContextMenu(e, 'slide-context-menu', `<div style="padding:8px 12px;cursor:pointer;" id="slide-duplicate-btn">複製</div><div style="padding:8px 12px;cursor:pointer;color:var(--danger-color);" id="slide-delete-btn">削除</div>`, { 'slide-duplicate-btn': () => this.duplicateSlide(slideId), 'slide-delete-btn': () => { this.state.activeSlideId = slideId; this.deleteSlide(); } }); },
             showPasteContextMenu(e) {
                 this.showContextMenu(
@@ -3885,9 +4130,25 @@ handleInspectorInput(e) {
                         const summarizeBtn = menu.querySelector('#el-ai-summarize-btn');
                         const proofreadBtn = menu.querySelector('#el-ai-proofread-btn');
 
-                        if(catchphraseBtn) catchphraseBtn.onclick = () => { if(window.aiHandler) window.aiHandler.processTextWithAI('catchphrase', elData.content, elId); menu.remove(); };
-                        if(summarizeBtn) summarizeBtn.onclick = () => { if(window.aiHandler) window.aiHandler.processTextWithAI('summarize', elData.content, elId); menu.remove(); };
-                        if(proofreadBtn) proofreadBtn.onclick = () => { if(window.aiHandler) window.aiHandler.processTextWithAI('proofread', elData.content, elId); menu.remove(); };
+                        const handleAIClick = (processType) => {
+                            console.log(`${processType} ボタンがクリックされました`);
+                            menu.remove();
+                            if (window.aiHandler) {
+                                window.aiHandler.processTextWithAI(processType, elData.content, elData.id);
+                            } else {
+                                console.error('aiHandler が見つかりません');
+                            }
+                        };
+
+                        if (catchphraseBtn) {
+                            catchphraseBtn.addEventListener('click', () => handleAIClick('catchphrase'), { once: true });
+                        }
+                        if (summarizeBtn) {
+                            summarizeBtn.addEventListener('click', () => handleAIClick('summarize'), { once: true });
+                        }
+                        if (proofreadBtn) {
+                            proofreadBtn.addEventListener('click', () => handleAIClick('proofread'), { once: true });
+                        }
                     }
                 }
             },
@@ -4555,6 +4816,53 @@ handleInspectorInput(e) {
         // スナップ機能の有効/無効チェック
         isSnapEnabled() {
             return localStorage.getItem('webSlideMakerSnap') !== 'false';
+        },
+
+        groupSelectedElements() {
+            const { selectedElementIds, activeSlideId } = this.state;
+            if (selectedElementIds.length < 2) return;
+
+            this.stateManager._saveToHistory();
+
+            const newGroupId = this.generateId('group');
+            const slideGroups = this.state.presentation.groups[activeSlideId] || [];
+            
+            slideGroups.push({
+                id: newGroupId,
+                elementIds: [...selectedElementIds]
+            });
+
+            this.state.presentation.groups[activeSlideId] = slideGroups;
+            this.state.selectedElementIds = [];
+            this.state.selectedGroupIds = [newGroupId];
+            
+            this.render();
+            this.saveState();
+        },
+
+        ungroupSelectedElements() {
+            const { selectedGroupIds, activeSlideId } = this.state;
+            if (selectedGroupIds.length === 0) return;
+
+            this.stateManager._saveToHistory();
+
+            const slideGroups = this.state.presentation.groups[activeSlideId] || [];
+            const newSelectedElementIds = [];
+
+            selectedGroupIds.forEach(groupId => {
+                const groupIndex = slideGroups.findIndex(g => g.id === groupId);
+                if (groupIndex > -1) {
+                    newSelectedElementIds.push(...slideGroups[groupIndex].elementIds);
+                    slideGroups.splice(groupIndex, 1);
+                }
+            });
+
+            this.state.presentation.groups[activeSlideId] = slideGroups;
+            this.state.selectedGroupIds = [];
+            this.state.selectedElementIds = newSelectedElementIds;
+
+            this.render();
+            this.saveState();
         }
         };
 
@@ -4661,21 +4969,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                                         <div>
                                             <label style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">ドット形状</label>
                                             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                                                <button type="button" class="qr-style-btn" data-style="square" style="padding: 12px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; text-align: center; font-size: 12px; transition: all 0.2s;">四角</button>
-                                                <button type="button" class="qr-style-btn" data-style="dots" style="padding: 12px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; text-align: center; font-size: 12px; transition: all 0.2s;">丸</button>
-                                                <button type="button" class="qr-style-btn" data-style="rounded" style="padding: 12px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; text-align: center; font-size: 12px; transition: all 0.2s;">角丸</button>
-                                                <button type="button" class="qr-style-btn" data-style="classy" style="padding: 12px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; text-align: center; font-size: 12px; transition: all 0.2s;">クラッシー</button>
-                                                <button type="button" class="qr-style-btn" data-style="classy-rounded" style="padding: 12px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; text-align: center; font-size: 12px; transition: all 0.2s;">クラッシー丸</button>
-                                                <button type="button" class="qr-style-btn" data-style="extra-rounded" style="padding: 12px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; text-align: center; font-size: 12px; transition: all 0.2s;">超丸</button>
+                                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                                                <button type="button" class="qr-style-btn" data-style="square" title="四角" style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M0 0h24v24H0z" fill="currentColor"/></svg></button>
+                                                <button type="button" class="qr-style-btn" data-style="dots" title="丸" style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="currentColor"/></svg></button>
+                                                <button type="button" class="qr-style-btn" data-style="rounded" title="角丸" style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg width="24" height="24" viewBox="0 0 24 24"><rect width="24" height="24" rx="6" fill="currentColor"/></svg></button>
+                                                <button type="button" class="qr-style-btn" data-style="classy" title="クラッシー" style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M0 12C0 5.373 5.373 0 12 0h12v12C24 18.627 18.627 24 12 24S0 18.627 0 12z" fill="currentColor"/></svg></button>
+                                                <button type="button" class="qr-style-btn" data-style="classy-rounded" title="クラッシー丸" style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M0 12C0 5.373 5.373 0 12 0h12v12C24 18.627 18.627 24 12 24S0 18.627 0 12z" clip-rule="evenodd" fill-rule="evenodd" fill="currentColor"/></svg></button>
+                                                <button type="button" class="qr-style-btn" data-style="extra-rounded" title="超丸" style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg width="24" height="24" viewBox="0 0 24 24"><rect width="24" height="24" rx="12" fill="currentColor"/></svg></button>
                                             </div>
                                         </div>
                                         
                                         <div>
                                             <label style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">枠線形状</label>
                                             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                                                <button type="button" class="qr-corner-btn" data-corner="square" style="padding: 12px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; text-align: center; font-size: 12px; transition: all 0.2s;">四角</button>
-                                                <button type="button" class="qr-corner-btn" data-corner="dot" style="padding: 12px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; text-align: center; font-size: 12px; transition: all 0.2s;">丸</button>
-                                                <button type="button" class="qr-corner-btn" data-corner="extra-rounded" style="padding: 12px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; text-align: center; font-size: 12px; transition: all 0.2s;">超丸</button>
+                                                <button type="button" class="qr-corner-btn" data-corner="square" title="四角" style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg width="24" height="24" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" stroke="currentColor" stroke-width="4" fill="transparent"/></svg></button>
+                                                <button type="button" class="qr-corner-btn" data-corner="dot" title="丸" style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="4" fill="transparent"/></svg></button>
+                                                <button type="button" class="qr-corner-btn" data-corner="extra-rounded" title="超丸" style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg width="24" height="24" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="6" stroke="currentColor" stroke-width="4" fill="transparent"/></svg></button>
                                             </div>
                                         </div>
 
@@ -4851,11 +5160,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function updateChartPreview() {
+        // スプレッドシートUIからデータを取得
+        const tableBody = document.getElementById('chart-data-tbody');
+        const rows = tableBody.querySelectorAll('tr');
+        const labels = Array.from(rows).map(row => row.querySelector('input[data-type="label"]').value);
+        const dataValues = Array.from(rows).map(row => parseFloat(row.querySelector('input[data-type="value"]').value) || 0);
+
         const selectedBtn = document.querySelector('.chart-type-btn.selected');
         let chartType = selectedBtn ? selectedBtn.dataset.type : (document.getElementById('chart-type')?.value || 'bar');
-        const labels = document.getElementById('chart-labels').value.split(',').map(s => s.trim());
         const datasetLabel = document.getElementById('chart-dataset-label').value;
-        const dataValues = document.getElementById('chart-data').value.split(',').map(s => Number(s.trim()));
         const customColors = (document.getElementById('chart-colors').value || '').split(',').map(s => s.trim());
         const lineWidth = Number(document.getElementById('chart-line-width')?.value) || 2;
         const showLegend = document.getElementById('chart-show-legend')?.checked ?? true;
@@ -4894,7 +5207,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         chartInstance = new Chart(ctx, chartConfig);
     }
 
-    const chartInputs = ['chart-type', 'chart-labels', 'chart-dataset-label', 'chart-data', 'chart-colors', 'chart-line-width', 'chart-show-legend', 'chart-title', 'chart-show-grid'];
+    const chartInputs = ['chart-type', 'chart-dataset-label', 'chart-colors', 'chart-line-width', 'chart-show-legend', 'chart-title', 'chart-show-grid'];
     chartInputs.forEach(id => {
         const input = document.getElementById(id);
         if (input) {
@@ -4977,6 +5290,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             disableScroll: true,
             onShow: modal => {
                 if (modal.id === 'chart-modal') {
+                    initChartSpreadsheet();
                     if (!document.querySelector('.chart-type-btn.selected') && chartTypeBtns.length > 0) {
                         chartTypeBtns[0].classList.add('selected');
                     }
@@ -4986,10 +5300,68 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // 新しいグラフUIのロジック
+    const chartTbody = document.getElementById('chart-data-tbody');
+    const addChartRowBtn = document.getElementById('add-chart-row-btn');
+    const pasteCsvBtn = document.getElementById('paste-csv-btn');
+    const csvPasteArea = document.getElementById('csv-paste-area');
+
+    function createChartRow(label = '', value = '') {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="padding: 4px;"><input type="text" data-type="label" value="${label}" style="width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;"></td>
+            <td style="padding: 4px;"><input type="number" data-type="value" value="${value}" style="width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;"></td>
+            <td style="text-align: center;"><button type="button" class="delete-chart-row-btn" style="background:none; border:none; color: #dc3545; cursor:pointer; font-size: 16px;">&times;</button></td>
+        `;
+        tr.querySelector('input').addEventListener('input', updateChartPreview);
+        tr.querySelector('.delete-chart-row-btn').addEventListener('click', () => {
+            tr.remove();
+            updateChartPreview();
+        });
+        return tr;
+    }
+
+    function initChartSpreadsheet() {
+        chartTbody.innerHTML = '';
+        // デフォルトで3行追加
+        chartTbody.appendChild(createChartRow('A', 10));
+        chartTbody.appendChild(createChartRow('B', 20));
+        chartTbody.appendChild(createChartRow('C', 30));
+    }
+
+    addChartRowBtn.addEventListener('click', () => {
+        chartTbody.appendChild(createChartRow());
+    });
+
+    pasteCsvBtn.addEventListener('click', () => {
+        csvPasteArea.style.display = csvPasteArea.style.display === 'none' ? 'block' : 'none';
+        if(csvPasteArea.style.display === 'block') {
+            csvPasteArea.focus();
+        }
+    });
+
+    csvPasteArea.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const text = e.clipboardData.getData('text/plain');
+        const rows = text.split('\n').filter(row => row.trim() !== '');
+        
+        chartTbody.innerHTML = ''; // 既存のデータをクリア
+        rows.forEach(row => {
+            const cols = row.split(/[\t,]/); // タブまたはカンマで分割
+            const label = cols[0] || '';
+            const value = cols[1] || '';
+            chartTbody.appendChild(createChartRow(label, value));
+        });
+        updateChartPreview();
+        csvPasteArea.style.display = 'none';
+        csvPasteArea.value = '';
+    });
+
+
     // 5. Appの初期化
     await App.loadIconData();
     App.init();
-    App.aiHandler = new AIHandler(App);
+    window.aiHandler = App.aiHandler = new AIHandler(App);
 
     // 6. 図形選択モーダルのイベントリスナー
     const shapeModal = document.getElementById('shape-modal');

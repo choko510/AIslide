@@ -1,0 +1,397 @@
+/* --- チャットUIスタイル --- */
+#chat-messages {
+    background-color: var(--bg-light);
+    padding: 10px;
+}
+
+.chat-message {
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-white);
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
+}
+
+.chat-message::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 4px;
+    height: 100%;
+}
+
+.msg-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.msg-header i {
+    font-size: 14px;
+}
+
+.msg-content {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary);
+}
+
+.msg-content pre {
+    background-color: var(--bg-light);
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    border: 1px solid var(--border-color);
+}
+
+/* ユーザーメッセージ */
+.user-msg::before {
+    background-color: var(--primary-color);
+}
+
+.user-msg .msg-header i {
+    color: var(--primary-color);
+}
+
+/* AIメッセージ */
+.ai-msg::before {
+    background-color: #28a745;
+}
+
+.ai-msg .msg-header i {
+    color: #28a745;
+}
+
+/* システムメッセージ */
+.system-msg::before {
+    background-color: #6c757d;
+}
+
+.system-msg .msg-header i {
+    color: #6c757d;
+}
+
+/* チェックポイントメッセージ */
+.checkpoint-msg::before {
+    background-color: #ffc107;
+}
+.checkpoint-msg .msg-header i {
+    color: #ffc107;
+}
+.checkpoint-msg.disabled {
+    opacity: 0.6;
+    background-color: var(--bg-light);
+}
+.restore-checkpoint-btn-inline {
+    background-color: #ffc107;
+    color: #212529;
+    border: 1px solid #ffc107;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition);
+    font-weight: 600;
+}
+.restore-checkpoint-btn-inline:hover:not(:disabled) {
+    background-color: #e0a800;
+    border-color: #d39e00;
+}
+.restore-checkpoint-btn-inline:disabled {
+    background-color: var(--text-secondary);
+    border-color: var(--text-secondary);
+    color: var(--bg-white);
+    cursor: not-allowed;
+}
+.restore-checkpoint-btn-inline i {
+    margin-right: 6px;
+}
+
+/* エラーメッセージ */
+.error-msg {
+    background-color: #fff5f5;
+}
+
+.error-msg::before {
+    background-color: var(--danger-color);
+}
+
+.error-msg .msg-header {
+    color: var(--danger-color);
+}
+
+.error-msg .msg-header i {
+    color: var(--danger-color);
+}
+
+.error-msg .msg-content {
+    color: #c53030;
+}
+
+[data-theme="dark"] .error-msg {
+    background-color: rgba(255, 107, 107, 0.1);
+}
+
+[data-theme="dark"] .error-msg .msg-content {
+    color: #ffbaba;
+}
+
+
+/* 実行ボタン */
+.execute-btn {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    margin-top: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.execute-btn:hover {
+    background-color: #218838;
+}
+
+.execute-btn:disabled {
+    background-color: #6c757d;
+    cursor: not-allowed;
+}
+
+/* 実行結果 */
+.success-msg,
+.error-msg {
+    padding: 10px;
+    border-radius: 6px;
+    margin-top: 10px;
+}
+
+.success-msg {
+    background-color: #e9f7ef;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.error-msg {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+[data-theme="dark"] .success-msg {
+    background-color: rgba(40, 167, 69, 0.1);
+    color: #a7d7b4;
+}
+
+[data-theme="dark"] .error-msg {
+    background-color: rgba(220, 53, 69, 0.1);
+    color: #f1b0b7;
+}
+
+
+/* チャット入力エリア */
+#chat-input-container {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+#chat-input {
+    border: none;
+    outline: none;
+    background-color: var(--bg-white);
+    color: var(--text-primary);
+}
+
+#chat-input:focus {
+    box-shadow: none;
+}
+
+#send-chat-btn {
+    background-color: var(--primary-color);
+    border: none;
+    color: white;
+}
+
+#send-chat-btn:hover {
+    background-color: var(--primary-color-hover);
+}
+
+/* --- AI Question UI Styles --- */
+
+.question-container-wrapper {
+    padding: 15px;
+    background-color: #f7f8fa;
+    border-radius: 8px;
+    margin-top: 12px;
+    border: 1px solid #e0e0e0;
+}
+
+.question-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.question-container p {
+    margin: 0 0 5px 0;
+    font-weight: 500;
+    color: #2c3e50;
+    line-height: 1.5;
+}
+
+.question-input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 1rem;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.question-input:focus {
+    outline: none;
+    border-color: #4a6cf7;
+    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
+}
+
+.question-submit-btn {
+    align-self: flex-end;
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 10px 20px;
+    background-color: #4a6cf7;
+    color: #fff;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.question-submit-btn:hover {
+    background-color: #3a5ce6;
+    transform: translateY(-1px);
+}
+
+.question-submit-btn:disabled {
+    background-color: #bdc3c7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.question-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 5px;
+}
+
+.question-option-btn {
+    font-size: 0.9rem;
+    padding: 10px 18px;
+    background-color: #fff;
+    color: #34495e;
+    border: 1px solid #bdc3c7;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.question-option-btn:hover {
+    background-color: #ecf0f1;
+    border-color: #4a6cf7;
+    color: #4a6cf7;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.question-option-btn:disabled {
+    background-color: #4a6cf7;
+    border-color: #4a6cf7;
+    color: #fff;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+    opacity: 0.8;
+}
+
+/* --- AIモードセレクター --- */
+#ai-mode-selector {
+    display: flex;
+    justify-content: space-around;
+    background: var(--bg-light);
+    padding: 4px;
+    border-radius: var(--border-radius);
+    margin-bottom: 8px;
+}
+
+.ai-mode-btn {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    border: none;
+    background-color: transparent;
+    color: var(--text-secondary);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.ai-mode-btn:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .ai-mode-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.ai-mode-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: 600;
+}
+
+.ai-mode-btn i {
+    font-size: 16px;
+}
+
+/* --- AI Complete Message --- */
+.complete-msg-container {
+    background-color: #e9f7ef;
+    border-left: 4px solid #28a745;
+    padding: 12px 16px;
+    border-radius: var(--border-radius);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #155724;
+}
+
+.complete-msg-container i {
+    font-size: 20px;
+    color: #28a745;
+}
+
+[data-theme="dark"] .complete-msg-container {
+    background-color: rgba(40, 167, 69, 0.15);
+    border-left-color: #3ddc84;
+    color: #a7d7b4;
+}
+
+[data-theme="dark"] .complete-msg-container i {
+    color: #3ddc84;
+}

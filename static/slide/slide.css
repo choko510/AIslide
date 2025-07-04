@@ -24,7 +24,7 @@
     --bg-white: #2d2d2d;
     --border-color: #424242;
     --text-primary: #ffffff;
-    --text-secondary: #b0b0b0;
+    --text-secondary: #cccccc; /* 視認性向上のため調整 */
     --danger-color: #ff6b6b;
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
@@ -156,12 +156,6 @@ input:checked+.theme-slider:before {
     background-size: 20px 20px;
 }
 
-[data-theme="dark"] .slide-canvas.show-grid {
-    background-image:
-        linear-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.2) 1px, transparent 1px);
-    background-size: 20px 20px;
-}
 
 * {
     box-sizing: border-box;
@@ -322,8 +316,7 @@ body {
 }
 
 .sidebar-tab-button:hover {
-    background-color: #e9ecef;
-    /* Hover effect */
+    background-color: var(--bg-light); /* Hover effect */
     color: var(--text-primary);
 }
 
@@ -410,7 +403,7 @@ body {
 /* 追加ボタン用サムネイル */
 .slide-thumbnail.add-slide {
     border: 2px solid transparent;
-    background: #f8fafc;
+    background: var(--bg-light); /* ダークモード対応 */
     color: var(--primary-color);
     justify-content: center;
     align-items: center;
@@ -420,7 +413,7 @@ body {
 }
 
 .slide-thumbnail.add-slide:hover {
-    background: #f0f4fa;
+    background: var(--bg-light); /* ダークモード対応 */
     opacity: 1;
 }
 
@@ -443,7 +436,7 @@ body {
 
 .slide-thumbnail.active {
     border-color: var(--primary-color);
-    background-color: #e6f2ff;
+    background-color: var(--bg-light); /* ダークモード対応 */
 }
 
 .slide-thumbnail.dragging {
@@ -469,7 +462,7 @@ body {
     top: 0;
     left: 0;
     transform-origin: top left;
-    background-color: white;
+    background-color: var(--bg-white); /* ダークモード対応 */
 }
 
 .thumbnail-index {
@@ -529,6 +522,11 @@ body {
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-md);
     flex-shrink: 0;
+    transition: opacity 0.3s ease-in-out;
+}
+
+.slide-canvas-transitioning {
+    opacity: 0;
 }
 
 /* --- スライド要素 --- */
@@ -703,7 +701,53 @@ body {
 .inspector-group select:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+    box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.25); /* ダークモード対応 */
+}
+
+/* --- Accordion --- */
+.accordion {
+    width: 100%;
+}
+
+.accordion-item {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.accordion-item:last-child {
+    border-bottom: none;
+}
+
+.accordion-header {
+    width: 100%;
+    background: transparent;
+    border: none;
+    padding: 12px 8px;
+    text-align: left;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.2s;
+}
+
+.accordion-header:hover {
+    background-color: var(--bg-light);
+}
+
+.accordion-header i {
+    transition: transform 0.2s ease-in-out;
+}
+
+.accordion-header[aria-expanded="true"] i {
+    transform: rotate(180deg);
+}
+
+.accordion-content {
+    padding: 8px 8px 16px 8px;
+    background-color: transparent;
 }
 
 .inspector-group input[type="color"] {
@@ -766,7 +810,7 @@ body.presentation-mode {
 
 #presentation-slide-container {
     position: relative;
-    background-color: white;
+    background-color: var(--bg-white); /* ダークモード対応 */
     overflow: hidden;
 }
 
@@ -783,9 +827,9 @@ body.presentation-mode {
     border-radius: 4px;
 }
 
-#slide-context-menu>div:hover,
-#element-context-menu>div:hover,
-.submenu>div:hover {
+#slide-context-menu > div:hover,
+#element-context-menu > div:hover,
+.submenu > div:hover {
     background-color: var(--bg-light);
 }
 
@@ -803,19 +847,17 @@ body.presentation-mode {
     display: none;
     position: absolute;
     left: 100%;
-    top: -5px;
-    /* 親メニューのpaddingと合わせる */
+    top: -5px; /* 親メニューのpaddingと合わせる */
     background-color: var(--bg-white);
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow-md);
     padding: 4px;
     border-radius: var(--border-radius);
     min-width: 140px;
-    z-index: 100000;
-    /* 親メニューより上 */
+    z-index: 100000; /* 親メニューより上 */
 }
 
-.has-submenu:hover>.submenu {
+.has-submenu:hover > .submenu {
     display: block;
 }
 
@@ -849,874 +891,6 @@ body.presentation-mode {
 .tab-content.active { ... }
 */
 
-/* --- チャットUIスタイル --- */
-#chat-messages {
-    background-color: var(--bg-light);
-    padding: 10px;
-}
-
-.chat-message {
-    padding: 12px 16px;
-    margin-bottom: 12px;
-    border-radius: var(--border-radius);
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-white);
-    box-shadow: var(--shadow-sm);
-    position: relative;
-    overflow: hidden;
-}
-
-.chat-message::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 4px;
-    height: 100%;
-}
-
-.msg-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
-    font-size: 13px;
-    color: var(--text-secondary);
-}
-
-.msg-header i {
-    font-size: 14px;
-}
-
-.msg-content {
-    font-size: 14px;
-    line-height: 1.6;
-    color: var(--text-primary);
-}
-
-.msg-content pre {
-    background-color: var(--bg-light);
-    padding: 12px;
-    border-radius: 6px;
-    overflow-x: auto;
-    margin: 10px 0;
-    border: 1px solid var(--border-color);
-}
-
-/* ユーザーメッセージ */
-.user-msg::before {
-    background-color: var(--primary-color);
-}
-
-.user-msg .msg-header i {
-    color: var(--primary-color);
-}
-
-/* AIメッセージ */
-.ai-msg::before {
-    background-color: #28a745;
-}
-
-.ai-msg .msg-header i {
-    color: #28a745;
-}
-
-/* システムメッセージ */
-.system-msg::before {
-    background-color: #6c757d;
-}
-
-.system-msg .msg-header i {
-    color: #6c757d;
-}
-
-/* チェックポイントメッセージ */
-.checkpoint-msg::before {
-    background-color: #ffc107;
-}
-
-.checkpoint-msg .msg-header i {
-    color: #ffc107;
-}
-
-.checkpoint-msg.disabled {
-    opacity: 0.6;
-    background-color: var(--bg-light);
-}
-
-.restore-checkpoint-btn-inline {
-    background-color: #ffc107;
-    color: #212529;
-    border: 1px solid #ffc107;
-    padding: 6px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: var(--transition);
-    font-weight: 600;
-}
-
-.restore-checkpoint-btn-inline:hover:not(:disabled) {
-    background-color: #e0a800;
-    border-color: #d39e00;
-}
-
-.restore-checkpoint-btn-inline:disabled {
-    background-color: var(--text-secondary);
-    border-color: var(--text-secondary);
-    color: var(--bg-white);
-    cursor: not-allowed;
-}
-
-.restore-checkpoint-btn-inline i {
-    margin-right: 6px;
-}
-
-/* エラーメッセージ */
-.error-msg {
-    background-color: #fff5f5;
-}
-
-.error-msg::before {
-    background-color: var(--danger-color);
-}
-
-.error-msg .msg-header {
-    color: var(--danger-color);
-}
-
-.error-msg .msg-header i {
-    color: var(--danger-color);
-}
-
-.error-msg .msg-content {
-    color: #c53030;
-}
-
-[data-theme="dark"] .error-msg {
-    background-color: rgba(255, 107, 107, 0.1);
-}
-
-[data-theme="dark"] .error-msg .msg-content {
-    color: #ffbaba;
-}
-
-
-/* 実行ボタン */
-.execute-btn {
-    background-color: #28a745;
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    margin-top: 10px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.execute-btn:hover {
-    background-color: #218838;
-}
-
-.execute-btn:disabled {
-    background-color: #6c757d;
-    cursor: not-allowed;
-}
-
-/* 実行結果 */
-.success-msg,
-.error-msg {
-    padding: 10px;
-    border-radius: 6px;
-    margin-top: 10px;
-}
-
-.success-msg {
-    background-color: #e9f7ef;
-    color: #155724;
-    border: 1px solid #c3e6cb;
-}
-
-.error-msg {
-    background-color: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
-}
-
-[data-theme="dark"] .success-msg {
-    background-color: rgba(40, 167, 69, 0.1);
-    color: #a7d7b4;
-}
-
-[data-theme="dark"] .error-msg {
-    background-color: rgba(220, 53, 69, 0.1);
-    color: #f1b0b7;
-}
-
-
-/* チャット入力エリア */
-#chat-input-container {
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-    overflow: hidden;
-    box-shadow: var(--shadow-sm);
-}
-
-#chat-input {
-    border: none;
-    outline: none;
-    background-color: var(--bg-white);
-    color: var(--text-primary);
-}
-
-#chat-input:focus {
-    box-shadow: none;
-}
-
-#send-chat-btn {
-    background-color: var(--primary-color);
-    border: none;
-    color: white;
-}
-
-#send-chat-btn:hover {
-    background-color: var(--primary-color-hover);
-}
-
-/* --- AI Question UI Styles --- */
-
-.question-container-wrapper {
-    padding: 15px;
-    background-color: #f7f8fa;
-    border-radius: 8px;
-    margin-top: 12px;
-    border: 1px solid #e0e0e0;
-}
-
-.question-container {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.question-container p {
-    margin: 0 0 5px 0;
-    font-weight: 500;
-    color: #2c3e50;
-    line-height: 1.5;
-}
-
-.question-input {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-size: 1rem;
-    box-sizing: border-box;
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.question-input:focus {
-    outline: none;
-    border-color: #4a6cf7;
-    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
-}
-
-.question-submit-btn {
-    align-self: flex-end;
-    font-size: 0.9rem;
-    font-weight: 600;
-    padding: 10px 20px;
-    background-color: #4a6cf7;
-    color: #fff;
-    border-radius: 6px;
-    border: none;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.question-submit-btn:hover {
-    background-color: #3a5ce6;
-    transform: translateY(-1px);
-}
-
-.question-submit-btn:disabled {
-    background-color: #bdc3c7;
-    cursor: not-allowed;
-    transform: none;
-}
-
-.question-options {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 5px;
-}
-
-.question-option-btn {
-    font-size: 0.9rem;
-    padding: 10px 18px;
-    background-color: #fff;
-    color: #34495e;
-    border: 1px solid #bdc3c7;
-    border-radius: 20px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-weight: 500;
-}
-
-.question-option-btn:hover {
-    background-color: #ecf0f1;
-    border-color: #4a6cf7;
-    color: #4a6cf7;
-    transform: translateY(-2px);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-}
-
-.question-option-btn:disabled {
-    background-color: #4a6cf7;
-    border-color: #4a6cf7;
-    color: #fff;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-    opacity: 0.8;
-}
-
-/* --- レスポンシブデザイン --- */
-@media (min-width: 1400px) {
-    #left-sidebar {
-        width: 360px;
-    }
-}
-
-@media (max-width: 1024px) {
-
-    /* Adjust for new layout if necessary */
-    #left-sidebar {
-        width: 240px;
-        /* Slightly narrower sidebar for smaller screens */
-    }
-}
-
-@media (max-width: 768px) {
-    body {
-        overflow: auto;
-        height: auto;
-    }
-
-    #app-container {
-        height: auto;
-        min-height: 100vh;
-    }
-
-    #app-body {
-        flex-direction: column;
-        height: auto;
-        /* viewport height will be managed by app-container */
-        flex-grow: 1;
-        overflow-y: auto;
-        /* Allow vertical scroll for the whole app-body if content overflows */
-    }
-
-    #center-content {
-        /* This wraps sidebar and canvas area */
-        flex-direction: column;
-        overflow-y: visible;
-        /* Allow content to determine height */
-        flex-grow: 1;
-    }
-
-    #left-sidebar {
-        width: 100%;
-        /* Take full width */
-        border-right: none;
-        /* Remove border for mobile */
-        border-bottom: 1px solid var(--border-color);
-        /* Add bottom border to separate from canvas */
-        box-shadow: none;
-        order: 2;
-        /* Canvas first, then sidebar */
-        height: auto;
-        /* Adjust height based on content */
-        max-height: 40vh;
-        /* Limit height to prevent it from taking too much space */
-        display: flex;
-        /* Ensure flex properties apply */
-        flex-direction: row;
-        /* Tabs on left, content on right */
-        overflow: hidden;
-        /* Prevent internal content from breaking layout */
-    }
-
-    #sidebar-tabs {
-        overflow-y: auto;
-        /* Allow vertical scroll for tabs if they exceed height */
-        flex-shrink: 0;
-        padding: 4px;
-        /* Reduce padding for smaller screens */
-    }
-
-    .sidebar-tab-button {
-        font-size: 11px;
-        /* Smaller tabs on mobile */
-        padding: 8px 4px;
-        /* Adjust padding */
-        min-height: 50px;
-        /* Ensure tabs are tappable */
-    }
-
-    .sidebar-tab-button i {
-        font-size: 16px;
-        /* Adjust icon size */
-    }
-
-    .sidebar-tab-button span {
-        font-size: 9px;
-        /* Adjust text size */
-    }
-
-    #sidebar-content {
-        flex-grow: 1;
-        overflow-y: auto;
-        /* Allow content within tab to scroll */
-        padding: 8px;
-        /* Reduce padding */
-    }
-
-    #element-add-buttons-container {
-        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-        /* More flexible grid for add buttons */
-        gap: 8px;
-    }
-
-    .sidebar-add-btn {
-        font-size: 12px;
-        /* Smaller text for add buttons */
-        padding: 8px;
-    }
-
-    .sidebar-add-btn i {
-        font-size: 14px;
-    }
-
-    /* Specific adjustments for icon sections */
-    #fa-icon-list-container,
-    #mi-icon-list-container {
-        max-height: 250px;
-        /* Reduce max height for icon lists */
-    }
-
-    #fa-icon-category-filter button,
-    #mi-icon-category-filter button {
-        padding: 3px 6px;
-        font-size: 10px;
-    }
-
-    #inspector {
-        padding: 8px;
-        /* Reduce padding for inspector */
-    }
-
-    .inspector-group input[type="text"],
-    .inspector-group input[type="number"],
-    .inspector-group input[type="color"],
-    .inspector-group select {
-        padding: 6px 8px;
-        font-size: 13px;
-    }
-
-    .inspector-group label {
-        font-size: 11px;
-    }
-
-
-    /* Slide list at the bottom */
-    #bottom-pane {
-        order: 3;
-        /* Sidebar, then canvas, then bottom pane */
-        height: 120px;
-        /* Slightly reduce height */
-        padding: 4px;
-    }
-
-    #slide-list-container {
-        /* This is the direct child of bottom-pane */
-        width: 100%;
-    }
-
-    #slide-list {
-        /* This is the ul inside slide-list-container */
-        padding: 8px;
-        align-items: center;
-        overflow-x: auto;
-        /* Ensure horizontal scroll for thumbnails */
-        overflow-y: hidden;
-        height: 100%;
-    }
-
-    .slide-thumbnail {
-        flex-shrink: 0;
-        width: 100px;
-        /* Smaller thumbnails */
-        height: calc(100px * 9 / 16 + 28px);
-        /* Adjust height based on new width and some padding for index */
-        margin-right: 8px;
-        margin-bottom: 0;
-        /* Already set */
-    }
-
-    .slide-thumbnail-wrapper {
-        border-radius: 3px;
-        /* Slightly smaller radius */
-    }
-
-    .thumbnail-index {
-        width: 18px;
-        height: 18px;
-        line-height: 18px;
-        font-size: 10px;
-    }
-
-    #main-canvas-area {
-        padding: 8px;
-        /* Reduce padding */
-        order: 1;
-        /* Canvas comes first */
-        flex-grow: 1;
-        /* Allow canvas area to take remaining space */
-        min-height: 300px;
-        /* Ensure minimum height for canvas */
-        overflow: hidden;
-        /* Important to contain the scaled canvas */
-    }
-
-    #slide-wrapper {
-        max-width: 100%;
-        width: 100%;
-        height: 100%;
-        /* Allow wrapper to fill main-canvas-area */
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    #slide-canvas {
-        max-width: 100%;
-        max-height: 100%;
-        /* aspect-ratio will be handled by JS or specific scaling logic for mobile */
-    }
-
-    #toolbar {
-        flex-wrap: wrap;
-        /* Allow toolbar buttons to wrap */
-        padding: 6px;
-        justify-content: center;
-        /* Center buttons when they wrap */
-    }
-
-    #toolbar button {
-        margin-bottom: 4px;
-        padding: 6px 8px;
-        /* Adjust button padding */
-    }
-
-    #toolbar button span {
-        display: none;
-        /* Text is already hidden, ensure it stays that way */
-    }
-
-    #toolbar button i {
-        font-size: 16px;
-        /* Ensure icons are reasonably sized */
-    }
-
-    #toolbar .separator {
-        margin: 0 6px;
-        /* Adjust separator margin */
-    }
-
-    /* Chat panel specific adjustments */
-    #chat-messages {
-        max-height: 200px;
-        /* Limit height of chat messages */
-    }
-
-    #ai-mode-selector button {
-        padding: 4px 6px;
-        font-size: 10px;
-    }
-
-    #ai-mode-selector button i {
-        font-size: 14px;
-    }
-
-    #autonomous-goal-input,
-    #chat-input {
-        padding: 6px;
-        font-size: 13px;
-    }
-
-    #send-chat-btn {
-        padding: 6px 10px;
-    }
-
-}
-
-/* Targeting landscape on smaller devices */
-@media (max-width: 768px) and (orientation: landscape) {
-    #app-body {
-        /* For landscape, we might want main content (canvas + sidebar) side-by-side if possible,
-           but given the complexity, keeping column might be safer and then adjust heights. */
-        flex-direction: column;
-        /* Keep column for simplicity, adjust heights below */
-    }
-
-    #center-content {
-        flex-direction: row;
-        /* Attempt to put sidebar and canvas side-by-side */
-        flex-grow: 1;
-    }
-
-    #left-sidebar {
-        width: 220px;
-        /* Fixed width for sidebar in landscape */
-        height: 100%;
-        /* Take full height of center-content */
-        max-height: none;
-        /* Override previous max-height */
-        border-right: 1px solid var(--border-color);
-        /* Restore border */
-        border-bottom: none;
-        order: 1;
-        /* Sidebar first in landscape */
-    }
-
-    #main-canvas-area {
-        order: 2;
-        /* Canvas after sidebar */
-        flex-grow: 1;
-        height: 100%;
-        /* Take full height of center-content */
-        padding: 8px;
-    }
-
-    #bottom-pane {
-        height: 100px;
-        /* Further reduce height in landscape */
-        order: 3;
-        /* Comes after center-content */
-    }
-
-    .slide-thumbnail {
-        width: 90px;
-        /* Slightly smaller thumbnails in landscape */
-        height: calc(90px * 9 / 16 + 24px);
-    }
-
-    #toolbar {
-        flex-wrap: nowrap;
-        /* Try to keep toolbar items in one line */
-        overflow-x: auto;
-        /* Allow horizontal scroll if they don't fit */
-        justify-content: flex-start;
-        /* Align to start */
-        padding: 4px 8px;
-    }
-
-    #toolbar button {
-        padding: 4px 6px;
-        gap: 4px;
-    }
-
-    #toolbar button i {
-        font-size: 14px;
-    }
-
-    #toolbar .separator {
-        margin: 0 4px;
-        height: 20px;
-    }
-
-    /* Landscape specific adjustments for sidebar content */
-    #left-sidebar {
-        width: 240px;
-        /* Increase sidebar width for better usability */
-    }
-
-    .sidebar-tab-button span {
-        font-size: 10px;
-        /* Slightly larger text for tabs */
-    }
-
-    #sidebar-content {
-        padding: 6px;
-        /* Adjust padding */
-    }
-
-    #element-add-buttons-container {
-        grid-template-columns: 1fr;
-        /* Single column for add buttons */
-        gap: 6px;
-        /* Reduce gap */
-    }
-
-    .sidebar-add-btn {
-        justify-content: flex-start;
-        /* Align button content to start */
-    }
-
-    #fa-icon-list-container,
-    #mi-icon-list-container {
-        max-height: calc(100vh - 280px);
-        /* Adjust max height based on viewport, considering other elements */
-    }
-
-    .inspector-group input[type="text"],
-    .inspector-group input[type="number"],
-    .inspector-group input[type="color"],
-    .inspector-group select {
-        font-size: 12px;
-        /* Smaller font for inspector inputs */
-    }
-}
-
-#sidebar-resize-handle:hover {
-    background: rgba(0, 123, 255, 0.08);
-}
-
-/* Toggle Switch for Autonomous Mode */
-.toggle-switch {
-    position: relative;
-    display: inline-block;
-    width: 44px;
-    /* Smaller */
-    height: 24px;
-}
-
-.toggle-switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
-.slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: #ccc;
-    transition: .4s;
-    border-radius: 24px;
-}
-
-.slider:before {
-    position: absolute;
-    content: "";
-    height: 18px;
-    /* Smaller */
-    width: 18px;
-    left: 3px;
-    bottom: 3px;
-    background-color: white;
-    transition: .4s;
-    border-radius: 50%;
-}
-
-input:checked+.slider {
-    background-color: var(--primary-color);
-}
-
-input:checked+.slider:before {
-    transform: translateX(20px);
-    /* Adjusted */
-}
-
-/* slide-element.imageにホバーしたときにimage-edit-overlay-btnを表示 */
-.slide-element.image:hover .image-edit-overlay-btn {
-    opacity: 1 !important;
-}
-
-.chart-type-btn.selected {
-    background: var(--primary-color, #007bff);
-    color: #fff;
-    border-color: var(--primary-color, #007bff);
-    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.15);
-    transition: background 0.2s, color 0.2s, border-color 0.2s;
-}
-
-/* --- AIモードセレクター --- */
-#ai-mode-selector {
-    display: flex;
-    justify-content: space-around;
-    background: var(--bg-light);
-    padding: 4px;
-    border-radius: var(--border-radius);
-    margin-bottom: 8px;
-}
-
-.ai-mode-btn {
-    flex: 1;
-    padding: 6px 8px;
-    font-size: 12px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    border: none;
-    background-color: transparent;
-    color: var(--text-secondary);
-    border-radius: 6px;
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.ai-mode-btn:hover {
-    background-color: rgba(0, 0, 0, 0.05);
-}
-
-[data-theme="dark"] .ai-mode-btn:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-}
-
-.ai-mode-btn.active {
-    background-color: var(--primary-color);
-    color: white;
-    font-weight: 600;
-}
-
-.ai-mode-btn i {
-    font-size: 16px;
-}
-
-/* --- チャットUIスタイル --- */
-/* --- AI Complete Message --- */
-.complete-msg-container {
-    background-color: #e9f7ef;
-    border-left: 4px solid #28a745;
-    padding: 12px 16px;
-    border-radius: var(--border-radius);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    color: #155724;
-}
-
-.complete-msg-container i {
-    font-size: 20px;
-    color: #28a745;
-}
-
-[data-theme="dark"] .complete-msg-container {
-    background-color: rgba(40, 167, 69, 0.15);
-    border-left-color: #3ddc84;
-    color: #a7d7b4;
-}
-
-[data-theme="dark"] .complete-msg-container i {
-    color: #3ddc84;
-}
 
 /* 図形選択モーダル */
 .shape-select-btn {
@@ -1738,7 +912,68 @@ input:checked+.slider:before {
     transform: translateY(-2px);
 }
 
+/* アイコン検索・フィルターのダークモード対応 */
+[data-theme="dark"] #fa-icon-search-input,
+[data-theme="dark"] #mi-icon-search-input {
+    background-color: var(--bg-white);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] #fa-style-select,
+[data-theme="dark"] #mi-style-select {
+    background-color: var(--bg-white);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] #fa-icon-category-filter button,
+[data-theme="dark"] #mi-icon-category-filter button {
+    background-color: var(--bg-light);
+    border-color: var(--border-color);
+    color: var(--text-secondary); /* 視認性向上のため調整 */
+}
+
+[data-theme="dark"] #fa-icon-category-filter button.active,
+[data-theme="dark"] #mi-icon-category-filter button.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
 .shape-select-btn span {
     font-size: 14px;
     color: var(--text-primary);
+}
+/* --- コンテキストメニューのサブメニュー対応 --- */
+.has-submenu {
+    position: relative;
+}
+
+.submenu {
+    display: none;
+    position: absolute;
+    left: 100%;
+    top: -5px; /* 親メニューのpaddingと合わせる */
+    background-color: var(--bg-white);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-md);
+    padding: 4px;
+    border-radius: var(--border-radius);
+    min-width: 140px;
+    z-index: 100000; /* 親メニューより上 */
+}
+
+.has-submenu:hover > .submenu {
+    display: block;
+}
+
+/* サブメニュー内のアイテムのスタイル */
+.submenu > div {
+    padding: 8px 12px;
+    cursor: pointer;
+    white-space: nowrap; /* テキストが折り返さないように */
+}
+
+.submenu > div:hover {
+    background-color: var(--bg-light);
 }

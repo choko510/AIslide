@@ -49,7 +49,7 @@
     justify-content: center;
     align-items: center;
     padding: 20px;
-    background-color: #e9ecef;
+    background-color: var(--bg-light); /* ダークモード対応 */
     position: relative;
     min-height: 500px;
 }
@@ -66,8 +66,8 @@
 }
 
 #imgedit-drop-zone.drag-over {
-    background-color: #d4edda;
-    border-color: var(--success-color);
+    background-color: var(--bg-light); /* ダークモード対応 */
+    border-color: var(--primary-color); /* ダークモード対応 */
 }
 
 #imgedit-image-workspace {
@@ -145,7 +145,7 @@ input[type="file"] {
 
 .imgedit-slider-group output {
     font-size: 0.8rem;
-    background: #e9ecef;
+    background: var(--bg-light); /* ダークモード対応 */
     padding: 2px 6px;
     border-radius: 4px;
     min-width: 40px;
@@ -211,11 +211,12 @@ button.imgedit-special-btn {
 }
 
 button.imgedit-primary-btn {
-    background-color: var(--success-color);
+    background-color: var(--primary-color); /* ダークモード対応 */
 }
 
 button.imgedit-secondary-btn {
-    background-color: var(--secondary-color);
+    background-color: var(--bg-light); /* ダークモード対応 */
+    color: var(--text-primary); /* ダークモード対応 */
 }
 
 button.imgedit-danger-btn {
@@ -224,7 +225,7 @@ button.imgedit-danger-btn {
 }
 
 button.imgedit-special-btn {
-    background-color: #9c27b0;
+    background-color: #9c27b0; /* この色はそのまま */
 }
 
 button.imgedit-primary-btn:hover,
@@ -251,7 +252,7 @@ button:disabled {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(255, 255, 255, 0.8);
+    background-color: rgba(var(--bg-white-rgb), 0.8); /* ダークモード対応 */
     backdrop-filter: blur(5px);
     display: flex;
     flex-direction: column;
@@ -285,7 +286,7 @@ button:disabled {
     margin-top: 20px;
     font-size: 1.2rem;
     font-weight: 500;
-    color: var(--text-color);
+    color: var(--text-primary); /* ダークモード対応 */
 }
 
 .imgedit-progress-bar-container {
@@ -525,7 +526,7 @@ button:disabled {
 #imgedit-paint-tools-panel {
     /* IDをpaint-tools-panelからimgedit-paint-tools-panelに変更 */
     padding: 15px;
-    background-color: #f8f9fa;
+    background-color: var(--bg-light); /* ダークモード対応 */
     border: 1px solid var(--border-color);
     border-radius: 8px;
     margin-top: 15px;

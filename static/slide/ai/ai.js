@@ -150,18 +150,18 @@ class AIHandler {
 ### 思考プロセス
 1.  **目的の理解**: このスライドの目的は何か？（情報提供、説得、意思決定など）
 2.  **ターゲットの想定**: 誰に向けたスライドか？（専門家、初心者、経営層など）
-3.  **文脈の把握**: ユーザーの指示から、デザインのトーン＆マナー（フォーマル、クリエイティブなど）を読み取る。
+3.  **文脈の把握**: ユーザーの指示、過去の対話、そして提供されたスライド画像（view_slide_as_image）から、デザインのトーン＆マナー（フォーマル、クリエイティブなど）や一貫性を読み取る。
 
 ### 対話戦略
 - **曖昧さの解消**: ユーザーの指示が曖昧な場合（例：「いい感じにして」）、具体的なデザインの方向性を確認するために、\`<question>\`コマンドを使って質問してください。
-- **積極的な提案**: 指示がなくても、より良いデザインになるような提案（例：アイコンの追加、グラフの視覚化）をXMLコメントとして常に含めてください。提案は \`<!-- 追加提案: ... -->\` の形式で記述してください。
+- **積極的な提案**: 指示がなくても、より良いデザインになるような提案（例：アイコンの追加、グラフの視覚化）をXMLコメントとして常に含めてください。提案は \`<!-- 提案: ... -->\` の形式で記述してください。
 
 ### 基本デザイン原則
 - **1スライド・1メッセージ**: 伝えたいことを一つに絞り、情報を詰め込みすぎない。
 - **情報の階層化**: メッセージの重要度に応じて、見た目に明確な差をつける。例: タイトルは \`fontSize: 48\` で太字、サブタイトルは \`fontSize: 24\`、本文は \`fontSize: 18\` のように、サイズと太さでメリハリをつける。
 - **近接**: アイコンと関連テキスト、見出しと本文など、関連する要素は近くに配置し、1つの視覚ユニットとして認識させる。
 - **コントラスト**: 背景色と文字色には十分なコントラストを確保し、可読性を最優先する。
-- **一貫性**: スライド全体でフォントファミリー、カラースキーム、レイアウトスタイルを統一する。
+- **一貫性**: 複数のスライド画像が提供された場合は、それらを参考にフォントファミリー、カラースキーム、レイアウトスタイルを統一します。例えば、スライド1のカラースキームとスライド2のレイアウトを組み合わせるなど、複数の視覚的コンテキストを統合して新しいデザインを提案してください。
 
 ### 超重要レイアウトルール
 - **グリッドシステム**: スライドを仮想の12x12グリッドで考える。要素の配置(top, left)やサイズ(width, height)は、このグリッド線に沿わせることで、整然としたレイアウトを実現する。
@@ -171,7 +171,7 @@ class AIHandler {
 - **整列**: 複数の要素を配置する場合、左揃え、中央揃え、右揃えのいずれかで整列させ、視覚的な安定感を生み出す。
 
 ### アニメーション活用原則
-- **実装方法**: アニメーションは、animate.cssを用いて実装されています。。
+- **実装方法**: アニメーションは、animate.cssを用いて実装されています。
 - **目的**: アニメーションは情報の強調、注意の喚起、状態変化の明示など、明確な目的を持って使用する。過度なアニメーションは避ける。
 - **一貫性**: 同じ種類の要素や目的には、一貫したアニメーションスタイルを適用する。
 - **一般的なアニメーションの一部の例**:
@@ -181,7 +181,7 @@ class AIHandler {
     - \`rotateIn\`: 要素が回転しながら表示される。
 
 ### 重要ルール
-- **提案の根拠**: なぜそのデザインにしたのか、意図をXMLコメント(\`<!-- ... -->\`)で簡潔に説明してください。例: \`<!-- メインメッセージを強調するため、中央に大きく配置しました -->\`
+- **思考プロセスの可視化**: なぜそのデザインにしたのか、その根拠や意図をXMLコメント(\`<!-- ... -->\`)で必ず具体的に説明してください。例: \`<!-- Zパターンレイアウトを適用し、ユーザーの視線を自然に誘導します。 -->\` \`<!-- メインメッセージを強調するため、中央に大きく配置しました。 -->\`
 - **フィードバックへの対応**: ユーザーからの修正依頼（「もっとこうしてほしい」など）があった場合は、チャット履歴を注意深く参照し、意図を汲み取って柔軟に提案を修正してください。
 - **厳格なXML出力**: あなたの応答は、必ずルート要素を1つだけ持つ有効なXMLでなければなりません。XMLタグの外側には、いかなるテキスト、コメント、空白、改行も含めないでください。
 - **CDATAの使用**: contentにHTMLタグ(\`<p>\`, \`<h3>\`など)や特殊文字を含める場合は、必ず \`<![CDATA[...]]>\` で囲んでください。これはXMLパースエラーを防ぐために非常に重要です。
@@ -352,41 +352,49 @@ class AIHandler {
 
             } else {
                 resultContainer.className = 'error-msg';
-                resultContainer.innerHTML = `❌ 失敗: ${result.message}`;
+                resultContainer.textContent = `❌ 失敗: ${result.message}`;
                 
-                // シーケンスの失敗で、自動実行がONの場合のみ再試行
-                if (commandText.trim().startsWith('<sequence>') && this.elements.autoExecuteToggle?.checked) {
-                    resultContainer.innerHTML += `<br>AIが修正を試みます...`;
+                // エラーからの自己修正ロジック
+                if (this.elements.autoExecuteToggle?.checked) {
+                    resultContainer.appendChild(document.createElement('br'));
+                    resultContainer.appendChild(document.createTextNode('AIが修正を試みます...'));
                     
-                    const feedback = `コマンドシーケンスの実行に失敗しました。エラー: "${result.message}". このエラーを修正した新しいXMLコマンドシーケンスを生成してください。`;
-                    this.chatHistory.push({ role: 'user', content: feedback });
-                    this.displayMessage(feedback, 'user');
+                    const feedback = `
+<error_feedback>
+  <failed_command>
+    <![CDATA[
+${commandText}
+    ]]>
+  </failed_command>
+  <error_message>
+    <![CDATA[
+${result.message}
+    ]]>
+  </error_message>
+  <instruction>
+    このエラーを分析し、原因を特定してください。そして、問題を修正した完全なXMLコマンドを再生成してください。修正のポイントはXMLコメントで説明してください。
+  </instruction>
+</error_feedback>
+`;
+                    this._addHistory('user', feedback);
+                    this.displayMessage(`以下の内容でAIに修正を依頼します...\n${feedback}`, 'system');
                     
                     const loadingMsgDiv = this.displayMessage('AIがコマンドを修正中...', 'loading');
-                    try {
-                        const newCommand = await this.askAIForCommand(this.chatHistory);
+                    
+                    // _requestToAIを直接呼ぶ
+                    this._requestToAI().then(aiResponse => {
                         loadingMsgDiv.remove();
-                        
-                        this.chatHistory.push({ role: 'assistant', content: newCommand });
-                        const { resultContainer: newResultContainer, executeBtn: newExecuteBtn } = this.displayAIResponse(newCommand);
-                        
-                        if (newExecuteBtn) {
-                           newExecuteBtn.textContent = '自動実行中...';
-                           newExecuteBtn.disabled = true;
-                           // ここで再帰呼び出し
-                           await this.executeAndDisplayResult(newCommand, newResultContainer);
-                           newExecuteBtn.style.display = 'none';
-                        }
-                    } catch (aiError) {
+                        this._processAIResponse(aiResponse);
+                    }).catch(aiError => {
                         loadingMsgDiv.remove();
                         this.displayMessage(`AIによるコマンド修正中にエラーが発生しました: ${aiError.message}`, 'error');
-                    }
+                    });
                 }
                 return { success: false, imageDataProcessed: false };
             }
         } catch (error) {
             resultContainer.className = 'error-msg';
-            resultContainer.innerHTML = `❌ エラー: ${error.message}`;
+            resultContainer.textContent = `❌ エラー: ${error.message}`;
             return { success: false, imageDataProcessed: false };
         }
         resultContainer.style.display = 'block';
@@ -429,14 +437,20 @@ class AIHandler {
 
         const headerDiv = document.createElement('div');
         headerDiv.className = 'msg-header';
-        headerDiv.innerHTML = `<i class="${iconClass}"></i> <strong>${title}</strong>`;
+        const icon = document.createElement('i');
+        icon.className = iconClass;
+        const strong = document.createElement('strong');
+        strong.textContent = title;
+        headerDiv.appendChild(icon);
+        headerDiv.appendChild(document.createTextNode(' '));
+        headerDiv.appendChild(strong);
 
         const contentDiv = document.createElement('div');
         contentDiv.className = 'msg-content';
 
-        // AIからの応答や特定のシステムメッセージはHTMLとして扱う
-        if (type === 'ai' || (type === 'system' && subTitle !== '') || type === 'checkpoint') {
-            contentDiv.innerHTML = content;
+        // DOMPurifyが利用可能な場合は、安全にHTMLを挿入する
+        if (window.DOMPurify && (type === 'ai' || (type === 'system' && subTitle !== '') || type === 'checkpoint')) {
+            contentDiv.innerHTML = DOMPurify.sanitize(content);
         } else {
             // それ以外は安全なテキストとして扱う
             contentDiv.textContent = content;
@@ -469,7 +483,13 @@ class AIHandler {
 
         const header = document.createElement('div');
         header.className = 'msg-header';
-        header.innerHTML = `<i class="fas fa-robot"></i> <strong>AIアシスタント</strong>`;
+        const icon = document.createElement('i');
+        icon.className = 'fas fa-robot';
+        const strong = document.createElement('strong');
+        strong.textContent = 'AIアシスタント';
+        header.appendChild(icon);
+        header.appendChild(document.createTextNode(' '));
+        header.appendChild(strong);
         aiMsgDiv.appendChild(header);
 
         const contentDiv = document.createElement('div');
@@ -490,7 +510,14 @@ class AIHandler {
             const completeMessage = completeNode.textContent.trim();
             const completeDiv = document.createElement('div');
             completeDiv.className = 'complete-msg-container';
-            completeDiv.innerHTML = `<i class="fas fa-check-circle"></i> <strong>タスク完了:</strong> ${this.escapeHTML(completeMessage)}`;
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-check-circle';
+            const strong = document.createElement('strong');
+            strong.textContent = 'タスク完了:';
+            completeDiv.appendChild(icon);
+            completeDiv.appendChild(document.createTextNode(' '));
+            completeDiv.appendChild(strong);
+            completeDiv.appendChild(document.createTextNode(` ${this.escapeHTML(completeMessage)}`));
             contentDiv.appendChild(completeDiv);
         } else {
             const comments = [];
@@ -500,14 +527,24 @@ class AIHandler {
             }
 
             if (comments.length > 0) {
+                const thoughtProcessContainer = document.createElement('div');
+                thoughtProcessContainer.className = 'thought-process-container';
+
+                const thoughtHeader = document.createElement('div');
+                thoughtHeader.className = 'thought-process-header';
+                thoughtHeader.innerHTML = '<i class="fas fa-brain"></i> AIの思考プロセス';
+                thoughtProcessContainer.appendChild(thoughtHeader);
+
                 const planList = document.createElement('ol');
-                planList.style.paddingLeft = '20px';
+                planList.className = 'thought-process-list';
+                
                 comments.forEach(commentText => {
                     const listItem = document.createElement('li');
                     listItem.textContent = this.escapeHTML(commentText);
                     planList.appendChild(listItem);
                 });
-                contentDiv.appendChild(planList);
+                thoughtProcessContainer.appendChild(planList);
+                contentDiv.appendChild(thoughtProcessContainer);
             } else {
                 const pre = document.createElement('pre');
                 pre.textContent = xmlCommand;
@@ -541,7 +578,9 @@ class AIHandler {
             const questionText = questionNode.textContent.trim();
             const questionDiv = document.createElement('div');
             questionDiv.className = 'question-container';
-            questionDiv.innerHTML = `<p>${this.escapeHTML(questionText)}</p>`;
+            const p = document.createElement('p');
+            p.textContent = this.escapeHTML(questionText);
+            questionDiv.appendChild(p);
 
             const input = document.createElement('input');
             input.type = 'text';
@@ -576,7 +615,9 @@ class AIHandler {
 
             const questionDiv = document.createElement('div');
             questionDiv.className = 'question-container';
-            questionDiv.innerHTML = `<p>${this.escapeHTML(questionText)}</p>`;
+            const p = document.createElement('p');
+            p.textContent = this.escapeHTML(questionText);
+            questionDiv.appendChild(p);
 
             const optionsContainer = document.createElement('div');
             optionsContainer.className = 'question-options';
@@ -1281,7 +1322,11 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
 
                 if (currentTimestamp >= targetTimestamp) {
                     button.disabled = true;
-                    button.innerHTML = `<i class="fas fa-history"></i> 復元済み`;
+                    button.textContent = ''; // Clear content
+                    const icon = document.createElement('i');
+                    icon.className = 'fas fa-history';
+                    button.appendChild(icon);
+                    button.appendChild(document.createTextNode(' 復元済み'));
                     cpMsgDiv.classList.add('disabled');
                 }
             });
@@ -1344,6 +1389,138 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
     }
     getInheritedPlan() {
         return this.state.inheritedPlan || null;
+    }
+
+    async processTextWithAI(processType, text, elementId) {
+        if (!text) {
+            alert('テキストが空です。');
+            return;
+        }
+
+        this.displayMessage(`${processType} を実行中...`, 'loading');
+
+        const prompts = {
+            catchphrase: `以下のテキストの魅力を引き出す、スライドに適したクリエイティブなキャッチコピーを3つ提案してください。結果は、他のいかなるテキストやマークダウン（例: \`\`\`json）も含めず、純粋なJSON配列形式（例: ["案1", "案2", "案3"]）の文字列のみで返してください。\n\nテキスト:\n「${text}」`,
+            summarize: `以下のテキストを、スライドに適した簡潔な文章に要約してください。\n\nテキスト:\n「${text}」`,
+            proofread: `以下のテキストを校正し、スライドに適したより自然で分かりやすい表現に修正してください。\n\nテキスト:\n「${text}」`
+        };
+
+        const prompt = prompts[processType];
+        if (!prompt) {
+            console.error('無効な処理タイプです:', processType);
+            return;
+        }
+
+        try {
+            // テキスト処理専用のAPIリクエスト
+            const messages = [{ role: 'user', content: prompt }];
+            const aiResponse = await this._requestToAI(messages, 0); // リトライなし
+
+            // ローディングメッセージを消す
+            const loadingMsg = document.querySelector('.loading-msg');
+            if (loadingMsg) loadingMsg.remove();
+
+            this.showSuggestionPopover(processType, aiResponse, elementId);
+
+        } catch (error) {
+            const loadingMsg = document.querySelector('.loading-msg');
+            if (loadingMsg) loadingMsg.remove();
+            this.displayMessage(`エラー: ${error.message}`, 'error');
+            console.error('AIテキスト処理エラー:', error);
+        }
+    }
+
+    showSuggestionPopover(processType, aiResponse, elementId) {
+        const popover = document.getElementById('ai-suggestion-popover');
+        const contentDiv = document.getElementById('ai-suggestion-content');
+        const applyBtn = document.getElementById('ai-suggestion-apply');
+        const cancelBtn = document.getElementById('ai-suggestion-cancel');
+
+        if (!popover || !contentDiv || !applyBtn || !cancelBtn) return;
+        
+        let selectedSuggestion = null;
+
+        if (processType === 'catchphrase') {
+            try {
+                // AI応答からJSON部分を抽出する正規表現
+                const jsonMatch = aiResponse.match(/\[[\s\S]*\]|{[\s\S]*}/);
+                if (!jsonMatch) {
+                    throw new Error("応答にJSON形式のデータが見つかりません。");
+                }
+                const jsonString = jsonMatch[0];
+                const suggestions = JSON.parse(jsonString);
+
+                contentDiv.innerHTML = '<strong>キャッチコピー案:</strong>';
+                const list = document.createElement('ul');
+                list.style.listStyle = 'none';
+                list.style.padding = '0';
+                list.style.margin = '8px 0 0 0';
+
+                suggestions.forEach(suggestion => {
+                    const item = document.createElement('li');
+                    // DOMPurifyでサニタイズしてからinnerHTMLに設定
+                    item.innerHTML = DOMPurify.sanitize(suggestion);
+                    item.style.padding = '6px';
+                    item.style.border = '1px solid var(--border-color)';
+                    item.style.borderRadius = '4px';
+                    item.style.marginBottom = '4px';
+                    item.style.cursor = 'pointer';
+                    item.style.wordBreak = 'break-word'; // UI崩れ対策
+                    item.style.lineHeight = '1.5';      // UI崩れ対策
+                    item.onclick = () => {
+                        list.querySelectorAll('li').forEach(li => li.style.backgroundColor = 'transparent');
+                        item.style.backgroundColor = 'var(--primary-color-hover)';
+                        selectedSuggestion = suggestion;
+                    };
+                    list.appendChild(item);
+                });
+                contentDiv.appendChild(list);
+                applyBtn.textContent = '選択した案を適用';
+
+            } catch (e) {
+                console.error("キャッチコピーのJSONパースに失敗:", e, "AIの応答:", aiResponse);
+                contentDiv.textContent = `エラー: AIからの応答を解析できませんでした。`;
+                applyBtn.style.display = 'none';
+            }
+        } else {
+            // DOMPurifyでサニタイズ
+            const sanitizedResponse = DOMPurify.sanitize(aiResponse);
+            contentDiv.innerHTML = `<strong>提案:</strong><p style="margin-top:4px; padding:8px; background-color: var(--bg-light); border-radius:4px; word-break: break-word; line-height: 1.5;">${sanitizedResponse}</p>`;
+            selectedSuggestion = aiResponse; // 元の応答を保持
+            applyBtn.textContent = '適用';
+        }
+
+        const applyHandler = () => {
+            if (selectedSuggestion) {
+                const element = this.app.getActiveSlide()?.elements.find(el => el.id === elementId);
+                if (element) {
+                    element.content = selectedSuggestion;
+                    this.app.render();
+                    this.app.saveState();
+                }
+            }
+            popover.style.display = 'none';
+        };
+
+        const cancelHandler = () => {
+            popover.style.display = 'none';
+        };
+        
+        // イベントリスナーを一度削除してから再設定
+        applyBtn.replaceWith(applyBtn.cloneNode(true));
+        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+        document.getElementById('ai-suggestion-apply').onclick = applyHandler;
+        document.getElementById('ai-suggestion-cancel').onclick = cancelHandler;
+
+
+        const targetElement = document.querySelector(`[data-id="${elementId}"]`);
+        if (targetElement) {
+            const rect = targetElement.getBoundingClientRect();
+            popover.style.left = `${rect.right + 10}px`;
+            popover.style.top = `${rect.top}px`;
+        }
+
+        popover.style.display = 'block';
     }
 }
 
@@ -1448,131 +1625,6 @@ class AutonomousAgent {
         const rawResponse = await this.handler._requestToAI(messages);
         // 自律モードではコマンドの検証が必須
         return this.handler._extractAndValidateCommand(rawResponse);
-    }
-
-    async processTextWithAI(processType, text, elementId) {
-        if (!text) {
-            alert('テキストが空です。');
-            return;
-        }
-
-        this.displayMessage(`${processType} を実行中...`, 'loading');
-
-        const prompts = {
-            catchphrase: `以下のテキストの魅力を引き出す、クリエイティブなキャッチコピーを3つ提案してください。結果は必ずJSON配列形式（例: ["案1", "案2", "案3"]）で返してください。\n\nテキスト:\n「${text}」`,
-            summarize: `以下のテキストを、スライドに適した簡潔な文章に要約してください。\n\nテキスト:\n「${text}」`,
-            proofread: `以下のテキストを校正し、より自然で分かりやすい表現に修正してください。\n\nテキスト:\n「${text}」`
-        };
-
-        const prompt = prompts[processType];
-        if (!prompt) {
-            console.error('無効な処理タイプです:', processType);
-            return;
-        }
-
-        try {
-            // テキスト処理専用のAPIリクエスト
-            const messages = [{ role: 'user', content: prompt }];
-            const aiResponse = await this._requestToAI(messages, 0); // リトライなし
-
-            // ローディングメッセージを消す
-            const loadingMsg = document.querySelector('.loading-msg');
-            if (loadingMsg) loadingMsg.remove();
-
-            this.showSuggestionPopover(processType, aiResponse, elementId);
-
-        } catch (error) {
-            const loadingMsg = document.querySelector('.loading-msg');
-            if (loadingMsg) loadingMsg.remove();
-            this.displayMessage(`エラー: ${error.message}`, 'error');
-            console.error('AIテキスト処理エラー:', error);
-        }
-    }
-
-    showSuggestionPopover(processType, aiResponse, elementId) {
-        const popover = document.getElementById('ai-suggestion-popover');
-        const contentDiv = document.getElementById('ai-suggestion-content');
-        const applyBtn = document.getElementById('ai-suggestion-apply');
-        const cancelBtn = document.getElementById('ai-suggestion-cancel');
-
-        if (!popover || !contentDiv || !applyBtn || !cancelBtn) return;
-        
-        let selectedSuggestion = null;
-
-        if (processType === 'catchphrase') {
-            try {
-                const suggestions = JSON.parse(aiResponse);
-                contentDiv.innerHTML = '<strong>キャッチコピー案:</strong>';
-                const list = document.createElement('ul');
-                list.style.listStyle = 'none';
-                list.style.padding = '0';
-                list.style.margin = '8px 0 0 0';
-
-                suggestions.forEach(suggestion => {
-                    const item = document.createElement('li');
-                    // DOMPurifyでサニタイズしてからinnerHTMLに設定
-                    item.innerHTML = DOMPurify.sanitize(suggestion);
-                    item.style.padding = '6px';
-                    item.style.border = '1px solid var(--border-color)';
-                    item.style.borderRadius = '4px';
-                    item.style.marginBottom = '4px';
-                    item.style.cursor = 'pointer';
-                    item.style.wordBreak = 'break-word'; // UI崩れ対策
-                    item.style.lineHeight = '1.5';      // UI崩れ対策
-                    item.onclick = () => {
-                        list.querySelectorAll('li').forEach(li => li.style.backgroundColor = 'transparent');
-                        item.style.backgroundColor = 'var(--primary-color-hover)';
-                        selectedSuggestion = suggestion;
-                    };
-                    list.appendChild(item);
-                });
-                contentDiv.appendChild(list);
-                applyBtn.textContent = '選択した案を適用';
-
-            } catch (e) {
-                console.error("キャッチコピーのJSONパースに失敗:", e);
-                contentDiv.textContent = `エラー: AIからの応答形式が正しくありません。\n${aiResponse}`;
-                applyBtn.style.display = 'none';
-            }
-        } else {
-            // DOMPurifyでサニタイズ
-            const sanitizedResponse = DOMPurify.sanitize(aiResponse);
-            contentDiv.innerHTML = `<strong>提案:</strong><p style="margin-top:4px; padding:8px; background-color: var(--bg-light); border-radius:4px; word-break: break-word; line-height: 1.5;">${sanitizedResponse}</p>`;
-            selectedSuggestion = aiResponse; // 元の応答を保持
-            applyBtn.textContent = '適用';
-        }
-
-        const applyHandler = () => {
-            if (selectedSuggestion) {
-                const element = this.app.getActiveSlide()?.elements.find(el => el.id === elementId);
-                if (element) {
-                    element.content = selectedSuggestion;
-                    this.app.render();
-                    this.app.saveState();
-                }
-            }
-            popover.style.display = 'none';
-        };
-
-        const cancelHandler = () => {
-            popover.style.display = 'none';
-        };
-        
-        // イベントリスナーを一度削除してから再設定
-        applyBtn.replaceWith(applyBtn.cloneNode(true));
-        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
-        document.getElementById('ai-suggestion-apply').onclick = applyHandler;
-        document.getElementById('ai-suggestion-cancel').onclick = cancelHandler;
-
-
-        const targetElement = document.querySelector(`[data-id="${elementId}"]`);
-        if (targetElement) {
-            const rect = targetElement.getBoundingClientRect();
-            popover.style.left = `${rect.right + 10}px`;
-            popover.style.top = `${rect.top}px`;
-        }
-
-        popover.style.display = 'block';
     }
 }
 

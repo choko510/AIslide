@@ -40,7 +40,7 @@ let undoBtn = null; // Will be initialized in setupEventListeners
 // =================================
 function initPaintWorker() {
     if (paintWorker) return;
-    paintWorker = new Worker('./paint.worker.js');
+    paintWorker = new Worker('imgedit/paint.worker.js');
     paintWorker.onmessage = (e) => {
         const { type, payload } = e.data;
         if (type === 'image_loaded') {

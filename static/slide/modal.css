@@ -17,7 +17,7 @@
 }
 
 .modal__container {
-    background-color: #fff;
+    background-color: var(--bg-white); /* ダークモード対応 */
     width: 85%;
     max-width: 800px;
     max-height: 90vh;
@@ -40,7 +40,7 @@
     margin: 0;
     font-weight: 600;
     font-size: 1.5rem;
-    color: #333;
+    color: var(--text-primary); /* ダークモード対応 */
 }
 
 .modal__close {
@@ -48,17 +48,17 @@
     border: 0;
     font-size: 1.5rem;
     cursor: pointer;
-    color: #666;
+    color: var(--text-secondary); /* ダークモード対応 */
     transition: color 0.2s ease;
 }
 
 .modal__close:hover {
-    color: #333;
+    color: var(--text-primary); /* ダークモード対応 */
 }
 
 .modal__content {
     margin-bottom: 2rem;
-    color: #333;
+    color: var(--text-primary); /* ダークモード対応 */
 }
 
 .modal__footer {
@@ -71,8 +71,8 @@
 .modal__btn {
     font-size: 1rem;
     padding: 10px 20px;
-    background-color: #f0f0f0;
-    color: #333;
+    background-color: var(--bg-light); /* ダークモード対応 */
+    color: var(--text-primary); /* ダークモード対応 */
     border-radius: 6px;
     border: none;
     cursor: pointer;
@@ -81,7 +81,7 @@
 }
 
 .modal__btn:hover {
-    background-color: #e0e0e0;
+    background-color: var(--border-color); /* ダークモード対応 */
     transform: translateY(-2px);
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
@@ -194,4 +194,3 @@
         font-size: 0.9rem;
     }
 }
-

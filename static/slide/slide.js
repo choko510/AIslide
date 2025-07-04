@@ -5308,13 +5308,39 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function createChartRow(label = '', value = '') {
         const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td style="padding: 4px;"><input type="text" data-type="label" value="${label}" style="width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;"></td>
-            <td style="padding: 4px;"><input type="number" data-type="value" value="${value}" style="width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;"></td>
-            <td style="text-align: center;"><button type="button" class="delete-chart-row-btn" style="background:none; border:none; color: #dc3545; cursor:pointer; font-size: 16px;">&times;</button></td>
-        `;
-        tr.querySelector('input').addEventListener('input', updateChartPreview);
-        tr.querySelector('.delete-chart-row-btn').addEventListener('click', () => {
+        const labelCell = document.createElement('td');
+        labelCell.style.padding = '4px';
+        const labelInput = document.createElement('input');
+        labelInput.type = 'text';
+        labelInput.dataset.type = 'label';
+        labelInput.value = label.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // Escape HTML
+        labelInput.style.cssText = 'width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;';
+        labelCell.appendChild(labelInput);
+
+        const valueCell = document.createElement('td');
+        valueCell.style.padding = '4px';
+        const valueInput = document.createElement('input');
+        valueInput.type = 'number';
+        valueInput.dataset.type = 'value';
+        valueInput.value = value.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // Escape HTML
+        valueInput.style.cssText = 'width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;';
+        valueCell.appendChild(valueInput);
+
+        const deleteCell = document.createElement('td');
+        deleteCell.style.textAlign = 'center';
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'delete-chart-row-btn';
+        deleteButton.style.cssText = 'background:none; border:none; color: #dc3545; cursor:pointer; font-size: 16px;';
+        deleteButton.textContent = '×';
+        deleteCell.appendChild(deleteButton);
+
+        tr.appendChild(labelCell);
+        tr.appendChild(valueCell);
+        tr.appendChild(deleteCell);
+
+        labelInput.addEventListener('input', updateChartPreview);
+        deleteButton.addEventListener('click', () => {
             tr.remove();
             updateChartPreview();
         });

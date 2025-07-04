@@ -42,59 +42,66 @@
         renderScript() {
             const { presentation, activeSlideId } = this.state;
             const scriptDisplay = this.elements.scriptDisplay;
-
             if (!scriptDisplay) return;
 
-            // 現在フォーカスされている要素がscriptDisplayの子要素であっても更新を許可
-            // フォーカスが外れた際に即座に保存されるため、常に最新の状態を反映
             scriptDisplay.innerHTML = ''; // 内容をクリア
 
-                const scriptContent = presentation.script || '';
-                const lines = scriptContent.split('\n');
-                let currentSlideIndex = -1;
+            const scriptContent = presentation.script || '';
+            const slidesScripts = scriptContent.split(/(?=\[スライド\d+\])/g).filter(s => s.trim());
 
-                lines.forEach(line => {
-                    const slideMarkerMatch = line.match(/^\[スライド(\d+)\]$/);
-                    if (slideMarkerMatch) {
-                        // スライドマーカー行
-                        currentSlideIndex = parseInt(slideMarkerMatch[1]) - 1;
-                        const markerDiv = document.createElement('div');
-                        markerDiv.className = 'script-marker';
-                        markerDiv.textContent = line;
-                        markerDiv.contentEditable = 'false'; // 編集不可
-                        markerDiv.style.fontWeight = 'bold'; // 太字
-                        markerDiv.style.marginTop = '10px';
-                        markerDiv.style.marginBottom = '5px';
-                        markerDiv.style.color = 'var(--primary-color)';
-                        markerDiv.style.userSelect = 'none'; // 選択不可
+            slidesScripts.forEach((scriptBlock, index) => {
+                const lines = scriptBlock.trim().split('\n');
+                const markerLine = lines.shift() || '';
+                const noteLines = lines.join('\n');
+                const slideMarkerMatch = markerLine.match(/^\[スライド(\d+)\]$/);
+                if (!slideMarkerMatch) return;
 
-                        if (presentation.slides[currentSlideIndex]?.id === activeSlideId) {
-                            markerDiv.classList.add('active-slide-marker');
-                            markerDiv.style.backgroundColor = 'var(--highlight-color)'; // ハイライト
-                            markerDiv.style.padding = '2px 5px';
-                            markerDiv.style.borderRadius = '3px';
-                        }
-                        scriptDisplay.appendChild(markerDiv);
-                    } else {
-                        // ノート行
-                        const noteDiv = document.createElement('div');
-                        noteDiv.className = 'script-note';
-                        noteDiv.contentEditable = 'true'; // 編集可能
-                        noteDiv.dataset.slideIndex = currentSlideIndex; // どのスライドのノートか識別
-                        noteDiv.textContent = line;
-                        noteDiv.style.minHeight = '1.2em'; // 空行でも高さを持つように
-                        noteDiv.style.padding = '2px 0';
+                const slideIndex = parseInt(slideMarkerMatch[1]) - 1;
+                const isActiveSlide = presentation.slides[slideIndex]?.id === activeSlideId;
 
-                        // ノートの変更をstateに反映するイベントリスナー
-                        // debounceを使って入力頻度を制限し、パフォーマンスを向上
-                        noteDiv.addEventListener('input', Utils.debounce(() => {
-                            this._updateScriptFromDOM();
-                        }, 500));
+                const scriptBlockContainer = document.createElement('div');
+                scriptBlockContainer.className = 'script-block';
+                if (isActiveSlide) {
+                    scriptBlockContainer.classList.add('active');
+                    scriptBlockContainer.style.backgroundColor = 'var(--highlight-color)';
+                    scriptBlockContainer.style.borderRadius = 'var(--border-radius)';
+                    scriptBlockContainer.style.padding = '8px';
+                    scriptBlockContainer.style.margin = '8px 0';
+                }
 
-                        scriptDisplay.appendChild(noteDiv);
-                    }
-                });
-        }, // <= ここにカンマを追加 (renderScriptメソッドの閉じ括弧後)
+                const markerDiv = document.createElement('div');
+                markerDiv.className = 'script-marker';
+                markerDiv.textContent = markerLine;
+                markerDiv.contentEditable = 'false';
+                markerDiv.style.fontWeight = 'bold';
+                markerDiv.style.color = 'var(--primary-color)';
+                markerDiv.style.userSelect = 'none';
+                if (isActiveSlide) {
+                    markerDiv.classList.add('active-slide-marker');
+                }
+                scriptBlockContainer.appendChild(markerDiv);
+
+                const noteDiv = document.createElement('div');
+                noteDiv.className = 'script-note';
+                noteDiv.contentEditable = 'true';
+                noteDiv.dataset.slideIndex = slideIndex;
+                noteDiv.textContent = noteLines;
+                noteDiv.style.minHeight = '1.2em';
+                noteDiv.style.padding = '5px 0';
+                noteDiv.addEventListener('input', Utils.debounce(() => {
+                    this._updateScriptFromDOM();
+                }, 500));
+                scriptBlockContainer.appendChild(noteDiv);
+
+                scriptDisplay.appendChild(scriptBlockContainer);
+            });
+
+            // アクティブなスライドブロックまでスクロール
+            const activeBlock = scriptDisplay.querySelector('.script-block.active');
+            if (activeBlock) {
+                activeBlock.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        },
 
         // DOMから台本の内容を再構築してstateに保存するヘルパー
         _updateScriptFromDOM: Utils.debounce(function() {
@@ -102,16 +109,14 @@
             if (!scriptDisplay) return;
 
             let newScriptContent = [];
-            scriptDisplay.childNodes.forEach(node => {
-                if (node.nodeType === Node.ELEMENT_NODE) {
-                    if (node.classList.contains('script-marker')) {
-                        newScriptContent.push(node.textContent);
-                    } else if (node.classList.contains('script-note')) {
-                        newScriptContent.push(node.textContent);
-                    }
-                } else if (node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== '') {
-                    // テキストノードが直接scriptDisplayにある場合（通常は発生しないはずだが念のため）
-                    newScriptContent.push(node.textContent.trim());
+            scriptDisplay.querySelectorAll('.script-block').forEach(block => {
+                const marker = block.querySelector('.script-marker');
+                const note = block.querySelector('.script-note');
+                if (marker) {
+                    newScriptContent.push(marker.textContent);
+                }
+                if (note) {
+                    newScriptContent.push(note.textContent);
                 }
             });
 
@@ -123,7 +128,7 @@
                 this.state.presentation.script = updatedScript;
                 this.saveState();
             }
-        }, 500), // debounce delay
+        }, 500),
         // <= ここにカンマを追加 (_updateScriptFromDOMメソッドの閉じ括弧後)
 
         // DOMから台本の内容を即座に再構築してstateに保存するヘルパー (debounceなし)
@@ -132,15 +137,14 @@
             if (!scriptDisplay) return;
 
             let newScriptContent = [];
-            scriptDisplay.childNodes.forEach(node => {
-                if (node.nodeType === Node.ELEMENT_NODE) {
-                    if (node.classList.contains('script-marker')) {
-                        newScriptContent.push(node.textContent);
-                    } else if (node.classList.contains('script-note')) {
-                        newScriptContent.push(node.textContent);
-                    }
-                } else if (node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== '') {
-                    newScriptContent.push(node.textContent.trim());
+            scriptDisplay.querySelectorAll('.script-block').forEach(block => {
+                const marker = block.querySelector('.script-marker');
+                const note = block.querySelector('.script-note');
+                if (marker) {
+                    newScriptContent.push(marker.textContent);
+                }
+                if (note) {
+                    newScriptContent.push(note.textContent);
                 }
             });
 
@@ -152,7 +156,7 @@
                 this.state.presentation.script = updatedScript;
                 this.saveState();
             }
-        }, // <= ここにカンマを追加 (_saveScriptFromDOMImmediatelyメソッドの閉じ括弧後)
+        },
 
         // App初期化時に台本関連の処理をバインド
         _initScriptFeatures() {
@@ -162,8 +166,8 @@
             // 台本入力イベント
             if (this.elements.scriptDisplay) {
                 this.elements.scriptDisplay.addEventListener('input', this.handleScriptInput.bind(this));
-                // 追加: フォーカスが外れたときに即座に更新 (debounceなしの関数を呼び出す)
-                this.elements.scriptDisplay.addEventListener('blur', this._saveScriptFromDOMImmediately.bind(this));
+                // focusoutはバブリングするため、子要素のdivからフォーカスが外れた場合も検知できる
+                this.elements.scriptDisplay.addEventListener('focusout', this._saveScriptFromDOMImmediately.bind(this));
             }
 
             // 台本パネル切り替えボタン
@@ -293,6 +297,16 @@
     const originalRender = App.render;
     App.render = function() {
         originalRender.apply(this, arguments);
+
+        // 台本エリアが編集中（フォーカスされている）場合は、
+        // renderScriptを呼び出さないことで、入力中のフォーカス消失を防ぐ。
+        // フォーカスが外れた（blur/focusout）時に保存と再描画が行われるため、
+        // データの整合性は保たれる。
+        const scriptDisplay = this.elements.scriptDisplay;
+        if (scriptDisplay && scriptDisplay.contains(document.activeElement)) {
+            return;
+        }
+
         this.renderScript();
     };
 

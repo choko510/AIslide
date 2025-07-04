@@ -13,7 +13,7 @@
     <link rel="preload" as="style" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/all.css"
         onload="this.rel='stylesheet'">
     <link rel="preload" as="style" href="slide.css" onload="this.rel='stylesheet'">
-    <link rel="preload" as="style" href="imgedit.css" onload="this.rel='stylesheet'">
+    <link rel="preload" as="style" href="ai/ai.css" onload="this.rel='stylesheet'">
     <link rel="preload" as="style"
         href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap"
         onload="this.rel='stylesheet'">
@@ -40,6 +40,9 @@
                 <button id="distribute-h-btn" title="水平方向へ等間隔に配置"><i class="fas fa-grip-lines"></i></button>
                 <button id="distribute-v-btn" title="垂直方向へ等間隔に配置"><i class="fas fa-grip-lines-vertical"></i></button>
             </div>
+            <div class="separator"></div>
+            <button id="group-btn" title="グループ化 (Ctrl+G)"><i class="fas fa-object-group"></i></button>
+            <button id="ungroup-btn" title="グループ解除 (Ctrl+Shift+G)"><i class="fas fa-object-ungroup"></i></button>
             <div class="separator"></div>
             <button id="undo-btn" title="元に戻す (Ctrl+Z)"><i class="fas fa-undo"></i></button>
             <button id="redo-btn" title="やり直し (Ctrl+Y)"><i class="fas fa-redo"></i></button>
@@ -470,18 +473,34 @@
                                             <input type="text" id="chart-dataset-label" value="Dataset" required
                                                 style="width: 100%; padding: 10px 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px;">
                                         </div>
-                                        <div>
-                                            <label
-                                                style="display: block; margin-bottom: 4px; font-size: 13px; color: #6c757d; font-weight: 500;">ラベル（カンマ区切り）</label>
-                                            <input type="text" id="chart-labels" value="A,B,C" required
-                                                style="width: 100%; padding: 10px 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px;">
+                                        <!-- 新しいスプレッドシートUI -->
+                                        <div id="chart-data-spreadsheet"
+                                            style="height: 200px; overflow-y: auto; border: 1px solid #ced4da; border-radius: 6px;">
+                                            <table style="width: 100%; border-collapse: collapse;">
+                                                <thead style="position: sticky; top: 0; background: #f8f9fa;">
+                                                    <tr>
+                                                        <th
+                                                            style="padding: 8px; text-align: left; border-bottom: 1px solid #ced4da;">
+                                                            ラベル</th>
+                                                        <th
+                                                            style="padding: 8px; text-align: left; border-bottom: 1px solid #ced4da;">
+                                                            値</th>
+                                                        <th style="width: 40px; border-bottom: 1px solid #ced4da;"></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="chart-data-tbody">
+                                                    <!-- データ行はJSで動的に生成 -->
+                                                </tbody>
+                                            </table>
                                         </div>
-                                        <div>
-                                            <label
-                                                style="display: block; margin-bottom: 4px; font-size: 13px; color: #6c757d; font-weight: 500;">値（カンマ区切り）</label>
-                                            <input type="text" id="chart-data" value="10,20,30" required
-                                                style="width: 100%; padding: 10px 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px;">
+                                        <div style="display: flex; gap: 8px;">
+                                            <button type="button" id="add-chart-row-btn" class="sidebar-add-btn"
+                                                style="flex-grow: 1;">行を追加</button>
+                                            <button type="button" id="paste-csv-btn" class="sidebar-add-btn"
+                                                style="flex-grow: 1;">CSV/TSVを貼り付け</button>
                                         </div>
+                                        <textarea id="csv-paste-area" style="display:none; width: 100%; height: 80px;"
+                                            placeholder="ここにCSV/TSVデータを貼り付け"></textarea>
                                     </div>
                                 </div>
 
@@ -590,6 +609,33 @@
                                 <line x1="10" y1="50" x2="90" y2="50" stroke="#ccc" stroke-width="5"></line>
                             </svg>
                             <span>線</span>
+                        </button>
+                        <button class="shape-select-btn" data-shape="arrow">
+                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
+                                <defs>
+                                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5"
+                                        orient="auto">
+                                        <polygon points="0 0, 10 3.5, 0 7" />
+                                    </marker>
+                                </defs>
+                                <line x1="10" y1="50" x2="80" y2="50" stroke="#ccc" stroke-width="5"
+                                    marker-end="url(#arrowhead)"></line>
+                            </svg>
+                            <span>矢印</span>
+                        </button>
+                        <button class="shape-select-btn" data-shape="star">
+                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
+                                <polygon points="50,5 61,40 98,40 68,62 79,96 50,75 21,96 32,62 2,40 39,40" fill="#ccc">
+                                </polygon>
+                            </svg>
+                            <span>星</span>
+                        </button>
+                        <button class="shape-select-btn" data-shape="speech-bubble">
+                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
+                                <path d="M10 10 H 90 V 70 H 60 L 50 90 L 40 70 H 10 Z" fill="#ccc" stroke="#ccc"
+                                    stroke-width="2"></path>
+                            </svg>
+                            <span>吹き出し</span>
                         </button>
                     </div>
                 </main>
@@ -793,21 +839,24 @@
         </div>
     </div>
 
-    <script src="ai.js" defer></script>
-    <script src="slide.js" type="module"></script>
-    <script src="slideScript.js" type="module"></script>
-
+    <!-- Styles -->
+    <link rel="stylesheet" href="modal.css">
     <link href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
-    <link rel="stylesheet" href="mainmodal.css">
-    <script src="https://cdn.jsdelivr.net/npm/micromodal@0.6.1/dist/micromodal.min.js" defer></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet" href="imgedit/imgedit.css">
 
+    <!-- Third-party scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/micromodal@0.6.1/dist/micromodal.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.9.2/lib/qr-code-styling.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.1.0/dist/fuse.min.js" defer></script>
-
-    <script src="imgedit.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js" defer></script>
+
+    <!-- App scripts -->
+    <script src="ai/ai.js" defer></script>
+    <script type="module" src="slide.js"></script>
+    <script type="module" src="slideScript.js"></script>
+    <script src="imgedit/imgedit.js" defer></script>
 </body>
 
 </html>

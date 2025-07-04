@@ -22,7 +22,7 @@
             const isVisible = rightSidebar.style.display !== 'none';
             rightSidebar.style.display = isVisible ? 'none' : 'flex';
             localStorage.setItem('webSlideMakerScriptPanelVisible', !isVisible);
-        },
+        }, // <= ここにカンマを追加
 
         // 台本パネルの表示状態をロード
         _loadScriptPanelState() {
@@ -36,7 +36,7 @@
                 rightSidebar.style.display = 'none';
             }
             // savedStateがnullの場合はHTMLのデフォルト（display: none）が適用される
-        },
+        }, // <= ここにカンマを追加
 
         // 台本表示のレンダリング
         renderScript() {
@@ -45,9 +45,9 @@
 
             if (!scriptDisplay) return;
 
-            // 現在フォーカスされている要素がscriptDisplayの子要素でない場合のみ更新
-            if (!scriptDisplay.contains(document.activeElement)) {
-                scriptDisplay.innerHTML = ''; // 内容をクリア
+            // 現在フォーカスされている要素がscriptDisplayの子要素であっても更新を許可
+            // フォーカスが外れた際に即座に保存されるため、常に最新の状態を反映
+            scriptDisplay.innerHTML = ''; // 内容をクリア
 
                 const scriptContent = presentation.script || '';
                 const lines = scriptContent.split('\n');
@@ -85,14 +85,16 @@
                         noteDiv.style.minHeight = '1.2em'; // 空行でも高さを持つように
                         noteDiv.style.padding = '2px 0';
 
-                        // ノートの変更をstateに反映するイベントリスナーは親要素に移動
-                        // 個別のノートにはリスナーを追加しない
+                        // ノートの変更をstateに反映するイベントリスナー
+                        // debounceを使って入力頻度を制限し、パフォーマンスを向上
+                        noteDiv.addEventListener('input', Utils.debounce(() => {
+                            this._updateScriptFromDOM();
+                        }, 500));
 
                         scriptDisplay.appendChild(noteDiv);
                     }
                 });
-            }
-        },
+        }, // <= ここにカンマを追加 (renderScriptメソッドの閉じ括弧後)
 
         // DOMから台本の内容を再構築してstateに保存するヘルパー
         _updateScriptFromDOM: Utils.debounce(function() {
@@ -122,6 +124,36 @@
                 this.saveState();
             }
         }, 500), // debounce delay
+        // <= ここにカンマを追加 (_updateScriptFromDOMメソッドの閉じ括弧後)
+
+        // DOMから台本の内容を即座に再構築してstateに保存するヘルパー (debounceなし)
+        _saveScriptFromDOMImmediately: function() {
+            const scriptDisplay = this.elements.scriptDisplay;
+            if (!scriptDisplay) return;
+
+            let newScriptContent = [];
+            scriptDisplay.childNodes.forEach(node => {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    if (node.classList.contains('script-marker')) {
+                        newScriptContent.push(node.textContent);
+                    } else if (node.classList.contains('script-note')) {
+                        newScriptContent.push(node.textContent);
+                    }
+                } else if (node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== '') {
+                    newScriptContent.push(node.textContent.trim());
+                }
+            });
+
+            const updatedScript = newScriptContent.join('\n');
+            const currentScript = this.state.presentation.script || '';
+
+            if (currentScript !== updatedScript) {
+                this.stateManager._saveToHistory();
+                this.state.presentation.script = updatedScript;
+                this.saveState();
+            }
+        }, // <= ここにカンマを追加 (_saveScriptFromDOMImmediatelyメソッドの閉じ括弧後)
+
         // App初期化時に台本関連の処理をバインド
         _initScriptFeatures() {
             // 台本パネルの初期表示状態をロード
@@ -130,34 +162,37 @@
             // 台本入力イベント
             if (this.elements.scriptDisplay) {
                 this.elements.scriptDisplay.addEventListener('input', this.handleScriptInput.bind(this));
+                // 追加: フォーカスが外れたときに即座に更新 (debounceなしの関数を呼び出す)
+                this.elements.scriptDisplay.addEventListener('blur', this._saveScriptFromDOMImmediately.bind(this));
             }
 
             // 台本パネル切り替えボタン
             if (this.elements.toggleScriptPanelBtn) {
                 this.elements.toggleScriptPanelBtn.addEventListener('click', () => this.toggleScriptPanel());
             }
-        },
+        }, // <= ここにカンマを追加 (_initScriptFeaturesメソッドの閉じ括弧後)
 
         // handleScriptInput メソッドを追加
         handleScriptInput(event) {
             // ここで必要に応じてイベント処理ロジックを追加
             // 例えば、debounceされた_updateScriptFromDOMを呼び出すなど
             this._updateScriptFromDOM();
-        },
+        }, // <= ここにカンマを追加 (handleScriptInputメソッドの閉じ括弧後)
 
         // App.cacheElementsの拡張
         _cacheScriptElements() {
             this.elements.scriptDisplay = document.getElementById('script-display');
             this.elements.toggleScriptPanelBtn = document.getElementById('toggle-script-panel-btn');
-        },
+        }, // <= ここにカンマを追加 (_cacheScriptElementsメソッドの閉じ括弧後)
 
         // App._createInitialStateの拡張
         _initialScriptState: {
             script: ''
-        },
+        }, // <= ここにカンマを追加 (_initialScriptStateオブジェクトの閉じ括弧後)
 
         // App.createNewPresentationの拡張
         _newPresentationScript: '[スライド1]\n', // 新しいプレゼンテーションの初期台本
+        // 上の行にはすでにカンマがあるので修正不要
 
         // App.addSlideの拡張
         _addSlideScriptLogic(newSlide, insertionIndex) {
@@ -187,7 +222,7 @@
 
             // スライド番号の再調整
             this._reindexScriptMarkers();
-        },
+        }, // <= ここにカンマを追加 (_addSlideScriptLogicメソッドの閉じ括弧後)
 
         // App.deleteSlideの拡張
         _deleteSlideScriptLogic(deletedIdx) {
@@ -219,7 +254,7 @@
 
             // スライド番号の再調整
             this._reindexScriptMarkers();
-        },
+        }, // <= ここにカンマを追加 (_deleteSlideScriptLogicメソッドの閉じ括弧後)
 
         // スライドマーカーの番号を再調整するヘルパー
         _reindexScriptMarkers() {
@@ -237,7 +272,7 @@
                 }
             });
             this.state.presentation.script = reindexedLines.join('\n');
-        }
+        } // これはObject.assignの最後のプロパティなので、カンマは不要です
     }); // Object.assign(App, { ... }); の閉じ括弧
 
     // App.init()の後に台本機能を初期化するフック

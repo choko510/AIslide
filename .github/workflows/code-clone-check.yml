@@ -18,7 +18,7 @@ jobs:
 
       # 2. jscpdアクションを実行します。
       - name: Run jscpd action
-        uses: jscpd/jscpd-action@v2
+        uses: jscpd/jscpd-action@v3 # または最新のメジャーバージョンを指定
         with:
           # リポジトリのルートからスキャンを開始
           path: './'
@@ -28,10 +28,10 @@ jobs:
 
           # --- ここが重要です ---
           # trueにすると、画像のようにPull Requestにコメントで結果を報告します。
-          post-comment: true
+          post-comment: 'true' # 文字列として'true'を指定するのがより確実です
 
           # 重複が見つかった場合にチェックを失敗させます (マージをブロックできます)
-          fail-on-duplicate: true
+          fail-on-duplicate: 'true' # 文字列として'true'を指定するのがより確実です
 
           # スキャンから除外するディレクトリやファイルを指定します
           ignore: |

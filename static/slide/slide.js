@@ -1825,13 +1825,16 @@
                     </div>
                 `;
 
+                const widthInPx = Utils.percentToPixels(parseFloat(s.width) || 0, CANVAS_WIDTH);
+                const heightInPx = Utils.percentToPixels(parseFloat(s.height) || 0, CANVAS_HEIGHT);
+
                 const transformContent = `
                     <div class="inspector-group">
                         <div class="pos-size-grid">
                             <div><label for="inspector-left">X (%)</label><input id="inspector-left" type="number" data-prop="left" value="${(s.left || 0).toFixed(2)}" step="0.1"></div>
                             <div><label for="inspector-top">Y (%)</label><input id="inspector-top" type="number" data-prop="top" value="${(s.top || 0).toFixed(2)}" step="0.1"></div>
-                            <div><label for="inspector-width">幅 (%)</label><input id="inspector-width" type="number" data-prop="width" value="${(s.width || 0).toFixed(2)}" step="0.1"></div>
-                            <div><label for="inspector-height">高さ (%)</label><input id="inspector-height" type="number" data-prop="height" value="${(s.height || 0).toFixed(2)}" step="0.1" ${!['image', 'video', 'shape'].includes(selectedElement.type) ? 'disabled' : ''}></div>
+                            <div><label for="inspector-width">幅 (px)</label><input id="inspector-width" type="number" data-prop="width" data-unit="px" value="${widthInPx.toFixed(0)}" min="10" max="500"></div>
+                            <div><label for="inspector-height">高さ (px)</label><input id="inspector-height" type="number" data-prop="height" data-unit="px" value="${heightInPx.toFixed(0)}" min="10" max="500" ${!['image', 'video', 'shape'].includes(selectedElement.type) ? 'disabled' : ''}></div>
                         </div>
                     </div>
                     <div class="inspector-group"><label>回転 (deg)</label><input type="number" data-prop="rotation" value="${s.rotation || 0}" step="1"></div>
@@ -3866,6 +3869,7 @@ handleInspectorInput(e) {
     }
 
     let value;
+    const unit = e.target.dataset.unit;
     if (e.target.type === 'checkbox') {
         value = e.target.checked;
     } else if (e.target.type === 'number') {
@@ -3874,29 +3878,49 @@ handleInspectorInput(e) {
         value = e.target.value;
     }
 
-    if (el.style.hasOwnProperty(prop)) {
+    // Update the style property on the element's data object
+    if (unit === 'px' && (prop === 'width' || prop === 'height')) {
+        if (prop === 'width') {
+            el.style.width = Utils.pixelsToPercent(value, CANVAS_WIDTH);
+        } else if (prop === 'height') {
+            el.style.height = Utils.pixelsToPercent(value, CANVAS_HEIGHT);
+        }
+    } else if ((prop === 'left' || prop === 'top') && unit === '%') {
+        el.style[prop] = `${value}%`;
+    } else {
         el.style[prop] = value;
-        if (prop === 'animation') {
-            const domEl = this.elements.slideCanvas.querySelector(`[data-id="${el.id}"]`);
-            if (domEl) {
-                if (value) {
-                    domEl.classList.remove('animate__animated', value);
-                    void domEl.offsetWidth;
-                    domEl.classList.add('animate__animated', value);
-                    domEl.addEventListener('animationend', function handler() {
-                        domEl.classList.remove('animate__animated', value);
-                        domEl.removeEventListener('animationend', handler);
-                    });
-                } else {
-                    domEl.classList.remove('animate__animated');
-                }
+    }
+    
+    // Apply styles to the DOM element
+    const domEl = this.elements.slideCanvas.querySelector(`[data-id="${el.id}"]`);
+    if (domEl) {
+        this.applyStyles(domEl, el.style);
+        
+        // Special handling for icon color to apply it to the inner element immediately
+        if (el.type === 'icon' && prop === 'color') {
+            const iconEl = domEl.querySelector('i, span');
+            if (iconEl) {
+                iconEl.style.color = value;
             }
         }
     }
 
-    const domEl = this.elements.slideCanvas.querySelector(`[data-id="${el.id}"]`);
-    if (domEl) {
-        this.applyStyles(domEl, el.style);
+    // Handle animation separately
+    if (prop === 'animation') {
+        if (domEl) {
+            // Remove previous animation classes if any to avoid conflicts
+            const oldAnimation = Object.values(domEl.classList).find(c => c.startsWith('animate__') && c !== value);
+            if(oldAnimation) domEl.classList.remove('animate__animated', oldAnimation);
+
+            if (value) {
+                // Add new animation
+                domEl.classList.add('animate__animated', value);
+                // Remove animation classes after it ends to allow re-triggering
+                domEl.addEventListener('animationend', function handler() {
+                    domEl.classList.remove('animate__animated', value);
+                }, { once: true });
+            }
+        }
     }
 
     this._inspectorInputTimeout = setTimeout(() => {
@@ -3919,64 +3943,165 @@ setActiveSlide(slideId) {
         }
     }
 },
-            showExportMenu(e) { const menu = this.elements.exportMenu; menu.innerHTML = `<div style="padding:8px 12px;cursor:pointer;" id="export-png-btn">PNG保存</div><div style="padding:8px 12px;cursor:pointer;" id="export-pdf-btn">PDF保存</div>`; menu.style.display = 'block'; const rect = this.elements.exportBtn.getBoundingClientRect(); menu.style.left = rect.left + 'px'; menu.style.top = (rect.bottom + 5) + 'px'; document.getElementById('export-png-btn').onclick = () => { this.exportCurrentSlideAsImage(); menu.style.display = 'none'; }; document.getElementById('export-pdf-btn').onclick = () => { this.exportCurrentSlideAsPDF(); menu.style.display = 'none'; }; setTimeout(() => document.addEventListener('click', function h(ev) { if (!menu.contains(ev.target) && !App.elements.exportBtn.contains(ev.target)) { menu.style.display = 'none'; document.removeEventListener('click', h); } }, { once: true }), 10); },
+            showExportMenu(e) {
+                const menu = this.elements.exportMenu;
+                menu.innerHTML = `
+                    <div style="padding:8px 12px;cursor:pointer;" id="export-png-btn">PNGで保存 (このスライドのみ)</div>
+                    <div style="padding:8px 12px;cursor:pointer;" id="export-png-all-btn">PNGで保存 (全スライド)</div>
+                    <div style="padding:8px 12px;cursor:pointer;" id="export-pdf-btn">PDFで保存 (全スライド)</div>
+                    <div style="padding:8px 12px;cursor:pointer;" id="export-pptx-btn">PPTXで保存 (全スライド)</div>
+                `;
+                menu.style.display = 'block';
+                const rect = this.elements.exportBtn.getBoundingClientRect();
+                menu.style.left = rect.left + 'px';
+                menu.style.top = (rect.bottom + 5) + 'px';
+                document.getElementById('export-png-btn').onclick = () => { this.exportCurrentSlideAsImage(); menu.style.display = 'none'; };
+                document.getElementById('export-png-all-btn').onclick = () => { this.exportAllSlidesAsImages(); menu.style.display = 'none'; };
+                document.getElementById('export-pdf-btn').onclick = () => { this.exportCurrentSlideAsPDF(); menu.style.display = 'none'; };
+                document.getElementById('export-pptx-btn').onclick = () => { this.exportAsPPTX(); menu.style.display = 'none'; };
+
+                setTimeout(() => document.addEventListener('click', function h(ev) {
+                    if (!menu.contains(ev.target) && !App.elements.exportBtn.contains(ev.target)) {
+                        menu.style.display = 'none';
+                        document.removeEventListener('click', h);
+                    }
+                }, { once: true }), 10);
+            },
             exportCurrentSlideAsImage() {
                 this.runExportWorker('png');
+            },
+            exportAllSlidesAsImages() {
+                this.runExportWorker('png-all');
             },
             exportCurrentSlideAsPDF() {
                 this.runExportWorker('pdf');
             },
-            runExportWorker(type) {
-                const slide = this.getActiveSlide();
-                if (!slide) return;
+            exportAsPPTX() {
+                this.runExportWorker('pptx');
+            },
+            async runExportWorker(type) {
+                const presentation = this.state.presentation;
+                if (!presentation || presentation.slides.length === 0) return;
 
-                // Show a loading indicator
                 ErrorHandler.showNotification('エクスポート処理を開始しました...', 'info');
 
                 const worker = new Worker('export.worker.js');
+                
+                // --- PPTX (All Slides) ---
+                if (type === 'pptx') {
+                    const allSlidesData = [];
+                    const tempContainer = document.createElement('div');
+                    tempContainer.style.position = 'absolute';
+                    tempContainer.style.left = '-9999px';
+                    document.body.appendChild(tempContainer);
 
-                // Prepare data for the worker
-                const slideContainer = document.createElement('div');
-                slideContainer.style.width = `${this.state.presentation.settings.width}px`;
-                slideContainer.style.height = `${this.state.presentation.settings.height}px`;
-                slide.elements.forEach(elData => {
-                    const el = this.createElementDOM(elData);
-                    slideContainer.appendChild(el);
-                });
+                    for (const slide of presentation.slides) {
+                        const slideContainer = document.createElement('div');
+                        slideContainer.style.width = `${presentation.settings.width}px`;
+                        slideContainer.style.height = `${presentation.settings.height}px`;
+                        slide.elements.forEach(elData => {
+                            const el = this.createElementDOM(elData);
+                            slideContainer.appendChild(el);
+                        });
+                        tempContainer.appendChild(slideContainer);
 
-                worker.postMessage({
-                    type: type,
-                    slideHTML: slideContainer.innerHTML,
-                    settings: this.state.presentation.settings,
-                    slideId: slide.id
-                });
+                        const canvas = await html2canvas(slideContainer, { backgroundColor: "#fff", scale: 2, useCORS: true });
+                        const dataUrl = canvas.toDataURL('image/png');
+                        allSlidesData.push({ slideData: slide, dataUrl: dataUrl });
+                        
+                        tempContainer.removeChild(slideContainer);
+                    }
+                    document.body.removeChild(tempContainer);
+                    
+                    worker.postMessage({
+                        type: 'pptx',
+                        slides: allSlidesData,
+                        settings: presentation.settings
+                    });
 
+                // --- PDF (All Slides) ---
+                } else if (type === 'pdf') {
+                    const dataUrls = [];
+                    const tempContainer = document.createElement('div');
+                    tempContainer.style.position = 'absolute';
+                    tempContainer.style.left = '-9999px';
+                    document.body.appendChild(tempContainer);
+
+                    for (const slide of presentation.slides) {
+                        const slideContainer = document.createElement('div');
+                        slideContainer.style.width = `${presentation.settings.width}px`;
+                        slideContainer.style.height = `${presentation.settings.height}px`;
+                        slide.elements.forEach(elData => {
+                            const el = this.createElementDOM(elData);
+                            slideContainer.appendChild(el);
+                        });
+                        tempContainer.appendChild(slideContainer);
+                        
+                        const canvas = await html2canvas(slideContainer, { backgroundColor: "#fff", scale: 2, useCORS: true });
+                        dataUrls.push(canvas.toDataURL('image/png'));
+
+                        tempContainer.removeChild(slideContainer);
+                    }
+                    document.body.removeChild(tempContainer);
+
+                    worker.postMessage({
+                        type: 'pdf',
+                        dataUrls: dataUrls,
+                        settings: presentation.settings
+                    });
+                
+                // --- PNG (Current Slide Only) ---
+                } else if (type === 'png') {
+                    const slide = this.getActiveSlide();
+                    if (!slide) return;
+                    const slideContainer = document.createElement('div');
+                    slideContainer.style.width = `${presentation.settings.width}px`;
+                    slideContainer.style.height = `${presentation.settings.height}px`;
+                    slide.elements.forEach(elData => {
+                        const el = this.createElementDOM(elData);
+                        slideContainer.appendChild(el);
+                    });
+                    document.body.appendChild(slideContainer);
+                    const canvas = await html2canvas(slideContainer, { backgroundColor: "#fff", scale: 2, useCORS: true });
+                    const link = document.createElement('a');
+                    link.download = `slide-${slide.id}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                    document.body.removeChild(slideContainer);
+                    ErrorHandler.showNotification('エクスポートが完了しました。', 'success');
+                    worker.terminate(); // No need for worker on PNG
+                    return;
+                }
+
+                // --- Worker Handlers ---
                 worker.onmessage = (event) => {
                     if (event.data.success) {
-                        const { type, dataUrl, data, slideId } = event.data;
-                        const link = document.createElement('a');
-                        
-                        if (type === 'png') {
-                            link.download = `slide-${slideId}.png`;
-                            link.href = dataUrl;
-                        } else if (type === 'pdf') {
-                            const blob = new Blob([data], { type: 'application/pdf' });
-                            link.href = URL.createObjectURL(blob);
-                            link.download = `slide-${slideId}.pdf`;
-                        }
-                        
-                        link.click();
+                        const { type, data } = event.data;
+                        let blob, extension;
                         if (type === 'pdf') {
-                            URL.revokeObjectURL(link.href);
+                            blob = new Blob([data], { type: 'application/pdf' });
+                            extension = 'pdf';
+                        } else if (type === 'pptx') {
+                            blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+                            extension = 'pptx';
+                        } else if (type === 'png-all') {
+                            blob = new Blob([data], { type: 'application/zip' });
+                            extension = 'zip';
                         }
-                        ErrorHandler.showNotification('エクスポートが完了しました。', 'success');
+                        if (blob) {
+                            const link = document.createElement('a');
+                            link.href = URL.createObjectURL(blob);
+                            link.download = `presentation.${extension}`;
+                            link.click();
+                            URL.revokeObjectURL(link.href);
+                            ErrorHandler.showNotification('エクスポートが完了しました。', 'success');
+                        }
                     } else {
                         console.error('Export failed in worker:', event.data.error);
                         ErrorHandler.handle(new Error(event.data.error), 'export');
                     }
                     worker.terminate();
                 };
-
                 worker.onerror = (error) => {
                     console.error('Worker error:', error);
                     ErrorHandler.handle(error, 'export_worker');
@@ -5326,7 +5451,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         bottomPane.addEventListener('wheel', function(e) {
             if (Math.abs(e.deltaY) > 30) {
                 e.preventDefault();
-                // App.changeSlide(e.deltaY > 0 ? 1 : -1); // プレゼンテーションモードに移動したため削除
             }
         }, { passive: false });
     }

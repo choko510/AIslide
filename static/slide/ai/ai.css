@@ -83,13 +83,16 @@
 .checkpoint-msg::before {
     background-color: #ffc107;
 }
+
 .checkpoint-msg .msg-header i {
     color: #ffc107;
 }
+
 .checkpoint-msg.disabled {
     opacity: 0.6;
     background-color: var(--bg-light);
 }
+
 .restore-checkpoint-btn-inline {
     background-color: #ffc107;
     color: #212529;
@@ -100,16 +103,19 @@
     transition: var(--transition);
     font-weight: 600;
 }
+
 .restore-checkpoint-btn-inline:hover:not(:disabled) {
     background-color: #e0a800;
     border-color: #d39e00;
 }
+
 .restore-checkpoint-btn-inline:disabled {
     background-color: var(--text-secondary);
     border-color: var(--text-secondary);
     color: var(--bg-white);
     cursor: not-allowed;
 }
+
 .restore-checkpoint-btn-inline i {
     margin-right: 6px;
 }
@@ -394,4 +400,32 @@
 
 [data-theme="dark"] .complete-msg-container i {
     color: #3ddc84;
+}
+
+.msg-actions {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    gap: 8px;
+}
+
+.action-btn {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 13px;
+}
+
+.action-btn:hover {
+    background-color: var(--border-color);
+    border-color: var(--text-secondary);
+}
+
+.action-btn i {
+    margin-right: 6px;
 }

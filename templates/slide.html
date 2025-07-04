@@ -329,6 +329,16 @@
                                             <i class="fas fa-sync-alt"></i> チャットをリセット
                                         </button>
                                     </div>
+                                    <div id="ai-control-buttons" style="display: none; gap: 8px; margin-top: 8px;">
+                                        <button id="pause-ai-btn" class="sidebar-add-btn" title="AIの自動実行を一時停止します"
+                                            style="width: 100%; justify-content: center; background-color: var(--warning-color);">
+                                            <i class="fas fa-pause"></i> 一時停止
+                                        </button>
+                                        <button id="resume-ai-btn" class="sidebar-add-btn" title="AIの自動実行を再開します"
+                                            style="width: 100%; justify-content: center; background-color: var(--success-color); display: none;">
+                                            <i class="fas fa-play"></i> 再開
+                                        </button>
+                                    </div>
                                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                                         <label
                                             style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; border: 1px solid var(--border-color); border-radius: var(--border-radius); cursor: pointer;">
@@ -854,6 +864,7 @@
 
     <!-- App scripts -->
     <script src="ai/ai.js" defer></script>
+    <script type="module" src="presentation.js"></script>
     <script type="module" src="slide.js"></script>
     <script type="module" src="slideScript.js"></script>
     <script src="imgedit/imgedit.js" defer></script>

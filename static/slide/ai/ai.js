@@ -8,6 +8,8 @@ class AIHandler {
     constructor(app) {
         this.app = app;
         this.state = app.state;
+        // autonomousModeが未定義の場合に備えて初期化
+        this.state.autonomousMode = this.state.autonomousMode || {};
         this.elements = app.elements;
         this.apiEndpoint = 'http://localhost:3000/ask-ai';
         this.aiMode = 'design'; // 'design', 'plan', 'ask'
@@ -16,6 +18,10 @@ class AIHandler {
         this.chatHistory = []; // 対話履歴を保持
         this.autonomousAgent = null; // 自律モードエージェントのインスタンス
         this.nextRequestImage = null; // 次のAIリクエストに含める画像データ
+
+        this.isAIResponding = false; // AIが応答（特に自動実行）中かどうかのフラグ
+        this.isPaused = false; // AIの自動実行が一時停止中かどうかのフラグ
+        this.pendingNextAction = null; // 一時停止中に保留された次のアクション
 
         this.init();
     }
@@ -46,6 +52,11 @@ class AIHandler {
 
         // モードセレクター
         this.elements.aiModeButtons = document.querySelectorAll('.ai-mode-btn');
+
+        // 停止・再開ボタン
+        this.elements.aiControlButtons = document.getElementById('ai-control-buttons');
+        this.elements.pauseAIBtn = document.getElementById('pause-ai-btn');
+        this.elements.resumeAIBtn = document.getElementById('resume-ai-btn');
     }
 
     bindEvents() {
@@ -89,6 +100,13 @@ class AIHandler {
                 this.setAIMode(newMode);
             });
         });
+
+        if (this.elements.pauseAIBtn) {
+            this.elements.pauseAIBtn.addEventListener('click', () => this.pauseAI());
+        }
+        if (this.elements.resumeAIBtn) {
+            this.elements.resumeAIBtn.addEventListener('click', () => this.resumeAI());
+        }
     }
 
     preparePrompts() {
@@ -232,12 +250,26 @@ class AIHandler {
 
     // --- UI操作とハンドラ ---
 
-    async handleSendMessage(prompt = null) {
+    async handleSendMessage(prompt = null, isRetry = false) {
         const message = prompt || this.elements.aiChatInput.value.trim();
         if (!message) return;
 
-        this.displayMessage(message, 'user');
-        this._addHistory('user', message);
+        if (this.isAIResponding && !prompt) {
+            this.displayMessage('AIが応答中です。完了してから次のメッセージを送信してください。', 'system');
+            return;
+        }
+
+        if (!prompt) {
+            this.isAIResponding = true;
+            this.isPaused = false;
+            this.pendingNextAction = null;
+            this.updateAIControlButtons();
+        }
+
+        if (!isRetry) {
+            this.displayMessage(message, 'user');
+            this._addHistory('user', message);
+        }
         
         if (!prompt) {
             this.elements.aiChatInput.value = '';
@@ -246,13 +278,33 @@ class AIHandler {
         const loadingMsgDiv = this.displayMessage('AIが応答を生成中...', 'loading');
 
         try {
-            const aiResponse = await this._requestToAI();
+            const aiResponse = await this._requestToAI(loadingMsgDiv);
             loadingMsgDiv.remove();
             await this._processAIResponse(aiResponse);
         } catch (error) {
             loadingMsgDiv.remove();
-            this.displayMessage(`エラー: ${error.message}`, 'error');
             console.error('Error during AI interaction:', error);
+
+            if (error.isRetriable) {
+                const retryAction = {
+                    text: '再試行',
+                    onClick: (event) => {
+                        const errorMsgDiv = event.target.closest('.chat-message');
+                        if (errorMsgDiv) errorMsgDiv.remove();
+                        
+                        const lastUserMessage = prompt || this.chatHistory.filter(h => h.role === 'user').pop()?.content;
+                        if (lastUserMessage) {
+                            this.handleSendMessage(lastUserMessage, true);
+                        }
+                    }
+                };
+                this.displayMessage(`エラー: ${error.message}`, 'error', 'システムエラー', [retryAction]);
+            } else {
+                this.displayMessage(`エラー: ${error.message}`, 'error');
+            }
+
+            this.isAIResponding = false;
+            this.updateAIControlButtons();
         }
     }
 
@@ -264,10 +316,20 @@ class AIHandler {
     async _processAIResponse(aiResponse) {
         this._addHistory('assistant', aiResponse);
 
-
         const aiResponseElements = this.displayAIResponse(aiResponse);
         if (aiResponseElements.executeBtn) {
-            await this._executeAndFollowUp(aiResponse, aiResponseElements);
+            // autoExecuteToggleが有効な場合のみ自動実行
+            if (this.elements.autoExecuteToggle?.checked) {
+                await this._executeAndFollowUp(aiResponse, aiResponseElements);
+            } else {
+                // 自動実行がオフの場合は、ここで応答終了とみなす
+                this.isAIResponding = false;
+                this.updateAIControlButtons();
+            }
+        } else {
+            // 実行ボタンがない場合（質問や完了メッセージ）も応答終了
+            this.isAIResponding = false;
+            this.updateAIControlButtons();
         }
     }
 
@@ -290,8 +352,19 @@ class AIHandler {
                 ? "このスライドの画像を認識しました。これを基に、次に行うべきことを提案・実行してください。"
                 : "次のスライドを作成してください。もしタスクが完了していれば<complete>タグで報告してください。";
             
-            // 少し待ってから次の対話を開始
-            setTimeout(() => this.handleSendMessage(nextPrompt), 500);
+            const nextAction = () => this.handleSendMessage(nextPrompt);
+
+            if (this.isPaused) {
+                this.pendingNextAction = nextAction;
+                this.displayMessage('処理が一時停止中のため、次のステップへは進みません。「再開」を押してください。', 'system', '一時停止中');
+            } else {
+                // 少し待ってから次の対話を開始
+                setTimeout(nextAction, 500);
+            }
+        } else {
+            // ループが継続しない場合
+            this.isAIResponding = false;
+            this.updateAIControlButtons();
         }
     }
     
@@ -400,7 +473,7 @@ ${result.message}
         resultContainer.style.display = 'block';
     }
     
-    displayMessage(content, type, subTitle = '') {
+    displayMessage(content, type, subTitle = '', actions = []) {
         const msgDiv = document.createElement('div');
         const messagesContainer = this.elements.aiChatOutput;
         msgDiv.classList.add('chat-message', `${type}-msg`);
@@ -448,16 +521,27 @@ ${result.message}
         const contentDiv = document.createElement('div');
         contentDiv.className = 'msg-content';
 
-        // DOMPurifyが利用可能な場合は、安全にHTMLを挿入する
-        if (window.DOMPurify && (type === 'ai' || (type === 'system' && subTitle !== '') || type === 'checkpoint')) {
+        if (window.DOMPurify && (type === 'ai' || (type === 'system' && subTitle !== '') || type === 'checkpoint' || type === 'error')) {
             contentDiv.innerHTML = DOMPurify.sanitize(content);
         } else {
-            // それ以外は安全なテキストとして扱う
             contentDiv.textContent = content;
         }
 
         msgDiv.appendChild(headerDiv);
         msgDiv.appendChild(contentDiv);
+
+        if (actions.length > 0) {
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'msg-actions';
+            actions.forEach(action => {
+                const button = document.createElement('button');
+                button.innerHTML = `<i class="fas fa-sync-alt"></i> ${this.escapeHTML(action.text)}`;
+                button.className = 'action-btn';
+                button.addEventListener('click', (event) => action.onClick(event));
+                actionsDiv.appendChild(button);
+            });
+            msgDiv.appendChild(actionsDiv);
+        }
 
         messagesContainer.appendChild(msgDiv);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -665,13 +749,12 @@ ${result.message}
      * @returns {Promise<string>} AIからの応答テキストまたはXMLコマンド
      * @private
      */
-    async _requestToAI(messagesOverride = null, maxRetries = 2) {
+    async _requestToAI(loadingMsgDiv, messagesOverride = null, maxRetries = 2) {
         const systemPrompt = this.generateCommandSystemPrompt();
         let lastError = null;
 
         let messages = messagesOverride ? [...messagesOverride] : [...this.chatHistory];
         
-        // 通常のチャットフローでのみ画像を追加する
         if (!messagesOverride && this.nextRequestImage) {
             const lastMessage = messages[messages.length - 1];
             if (lastMessage && lastMessage.role === 'user') {
@@ -684,7 +767,16 @@ ${result.message}
         }
 
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            const currentSystemPrompt = systemPrompt + (lastError ? `\n### 前回の試行エラー\n前回の試行で以下のエラーが発生しました。内容を分析し、**どこが間違っていたのか**をXMLコメントで説明した上で、修正したコマンドを再生成してください。\nエラー: ${lastError}` : '');
+            if (attempt > 0) {
+                const retryMsg = `リトライ中... (${attempt}/${maxRetries})`;
+                if (loadingMsgDiv) {
+                    const contentDiv = loadingMsgDiv.querySelector('.msg-content');
+                    if (contentDiv) contentDiv.textContent = retryMsg;
+                }
+                await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
+            }
+
+            const currentSystemPrompt = systemPrompt + (lastError ? `\n### 前回の試行エラー\n前回の試行で以下のエラーが発生しました。内容を分析し、**どこが間違っていたのか**をXMLコメントで説明した上で、修正したコマンドを再生成してください。\nエラー: ${lastError.message}` : '');
             const payload = { messages: [{ role: "system", content: currentSystemPrompt }, ...messages] };
 
             try {
@@ -703,23 +795,19 @@ ${result.message}
                 const content = data.choices?.[0]?.message?.content;
                 if (!content) throw new Error('APIからの応答形式が不正です。');
                 
-                // messagesOverrideが指定されている場合は、検証せずにそのまま返すことが多い
                 if (messagesOverride) return content;
 
-                // 通常のフローではモードに応じて処理
                 return this._extractAndValidateCommand(content);
 
             } catch (error) {
                 console.error(`AI API呼び出しエラー (試行 ${attempt + 1}):`, error);
-                lastError = error.message;
-                // 通常のチャットフローでのみ履歴にエラーを追加する
-                if (!messagesOverride && attempt < maxRetries) {
-                    this._addHistory('assistant', 'エラーが発生しました。');
-                    this._addHistory('user', `エラー: ${lastError}。修正してやり直してください。`);
-                }
+                lastError = error;
             }
         }
-        throw new Error(`AIコマンドの生成に失敗しました: ${lastError}`);
+        
+        const finalError = new Error(`AIコマンドの生成に失敗しました: ${lastError.message}`);
+        finalError.isRetriable = true;
+        throw finalError;
     }
     
     _extractAndValidateCommand(rawResponse) {
@@ -1391,6 +1479,46 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
         return this.state.inheritedPlan || null;
     }
 
+    // --- AI応答制御 ---
+
+    updateAIControlButtons() {
+        if (!this.elements.aiControlButtons) return;
+
+        if (this.isAIResponding) {
+            this.elements.aiControlButtons.style.display = 'flex';
+            if (this.isPaused) {
+                this.elements.pauseAIBtn.style.display = 'none';
+                this.elements.resumeAIBtn.style.display = 'inline-block';
+            } else {
+                this.elements.pauseAIBtn.style.display = 'inline-block';
+                this.elements.resumeAIBtn.style.display = 'none';
+            }
+        } else {
+            this.elements.aiControlButtons.style.display = 'none';
+        }
+    }
+
+    pauseAI() {
+        if (!this.isAIResponding) return;
+        this.isPaused = true;
+        this.displayMessage('AIの自動実行を一時停止しました。', 'system', '一時停止');
+        this.updateAIControlButtons();
+    }
+
+    resumeAI() {
+        if (!this.isAIResponding || !this.isPaused) return;
+        this.isPaused = false;
+        this.displayMessage('AIの自動実行を再開します。', 'system', '再開');
+        this.updateAIControlButtons();
+
+        if (this.pendingNextAction) {
+            const action = this.pendingNextAction;
+            this.pendingNextAction = null;
+            // 少し待ってから実行
+            setTimeout(action, 500);
+        }
+    }
+
     async processTextWithAI(processType, text, elementId) {
         if (!text) {
             alert('テキストが空です。');
@@ -1610,9 +1738,9 @@ class AutonomousAgent {
                 // c. 自己修正（ここでは単純にエラーを投げて停止）
                 throw new Error(`ステップ ${i + 1} の実行に失敗しました: ${result.message}`);
             }
-             this.handler.displayMessage(`✅ ステップ ${i + 1} 完了`, 'success-msg');
-             
-             await new Promise(resolve => setTimeout(resolve, 1000)); // 次のステップに進む前に少し待つ
+            this.handler.displayMessage(`✅ ステップ ${i + 1} 完了`, 'success-msg');
+            
+            await new Promise(resolve => setTimeout(resolve, 1000)); // 次のステップに進む前に少し待つ
         }
     }
 

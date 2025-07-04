@@ -1062,6 +1062,7 @@
                     
                     this.cacheElements();
                     this.guideLineManager = new GuideLineManager(this.elements.slideCanvas);
+                    this.presentationManager = new PresentationManager(this); // PresentationManagerの初期化
 
                     this.thumbnailObserver = new IntersectionObserver(
                         (entries, observer) => {
@@ -1089,7 +1090,6 @@
                     ErrorHandler.handle(error, 'app_initialization');
                 }
             },
-
             _initializeStateListeners() {
                 // 選択要素変更時の処理
                 this.stateManager.subscribe('selectedElementIds', (newIds, oldIds) => {
@@ -2494,7 +2494,7 @@
 
                 // プレゼンテーション・保存・エクスポートボタン
                 this.elements.saveBtn.addEventListener('click', () => this.saveState());
-                this.elements.presentBtn.addEventListener('click', () => this.startPresentation());
+                this.elements.presentBtn.addEventListener('click', () => this.presentationManager.startPresentation());
                 this.elements.exportBtn.addEventListener('click', (e) => this.showExportMenu(e));
             },
 
@@ -2844,7 +2844,7 @@
                 }, 250));
                 document.addEventListener('fullscreenchange', () => {
                     if (!document.fullscreenElement) {
-                        this.stopPresentation();
+                        this.presentationManager.stopPresentation();
                     }
                 });
             },
@@ -3413,11 +3413,6 @@
 
                 if (e.key === 'Control' || e.key === 'Meta') this.state.interaction.isCtrlPressed = true;
 
-                if (document.body.classList.contains('presentation-mode')) {
-                    if (e.key === 'ArrowRight' || e.key === ' ') this.changePresentationSlide(1);
-                    else if (e.key === 'ArrowLeft') this.changePresentationSlide(-1);
-                    else if (e.key === 'Escape') this.stopPresentation();
-                } else {
                     // テキスト編集中はEscapeキーで編集終了のみ許可
                     if (this.state.isEditingText) {
                         if (e.key === 'Escape') {
@@ -3457,7 +3452,6 @@
                             this.render();
                         }
                     }
-                }
             },
             handleKeyUp(e) { if (e.key === 'Control' || e.key === 'Meta') this.state.interaction.isCtrlPressed = false; },
 
@@ -3914,92 +3908,17 @@ handleInspectorInput(e) {
             getActiveSlide() { return this.state.presentation?.slides.find(s => s.id === this.state.activeSlideId); },
             getSelectedElement() { const id = this.state.selectedElementIds[0]; return this.getActiveSlide()?.elements.find(el => el.id === id); },
             getSelectedElementsData() { const slide = this.getActiveSlide(); if (!slide) return []; return slide.elements.filter(el => this.state.selectedElementIds.includes(el.id)); },
-            startPresentation() {
-                document.body.classList.add('presentation-mode');
-                this.elements.presentationView.requestFullscreen().catch(() => {
-                    alert('フルスクリーンモードの開始に失敗しました。');
-                    this.stopPresentation();
-                });
-                this.renderPresentationSlide();
-                window.addEventListener('resize', this.renderPresentationSlide.bind(this));
-                // クリックで次のスライド
-                this._presentationClickHandler = (e) => {
-                    const rect = this.elements.presentationView.getBoundingClientRect();
-                    const x = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
-                    if (x < rect.left + rect.width / 2) {
-                        this.changePresentationSlide(-1);
-                    } else {
-                        this.changePresentationSlide(1);
-                    }
-                };
-                this.elements.presentationView.addEventListener('click', this._presentationClickHandler);
-            },
-            stopPresentation() {
-                document.body.classList.remove('presentation-mode');
-                if (document.fullscreenElement) document.exitFullscreen();
-                window.removeEventListener('resize', this.renderPresentationSlide.bind(this));
-                // クリックイベント解除
-                if (this._presentationClickHandler) {
-                    this.elements.presentationView.removeEventListener('click', this._presentationClickHandler);
-                    this._presentationClickHandler = null;
-                }
-            },
-            changeSlide(dir) {
-                const { slides } = this.state.presentation;
-                const curIdx = slides.findIndex(s => s.id === this.state.activeSlideId);
-                let nextIdx = curIdx + dir;
-                if (nextIdx >= 0 && nextIdx < slides.length) {
-                    this.setActiveSlide(slides[nextIdx].id);
-                }
-            },
-            setActiveSlide(slideId) {
-                if (this.state.presentation.slides.some(s => s.id === slideId)) {
-                    this.state.activeSlideId = slideId;
-                    this.state.selectedElementIds = [];
-                    if (document.body.classList.contains('presentation-mode')) {
-                        this.renderPresentationSlide();
-                    } else {
-                        this.render();
-                    }
-                }
-            },
-            changePresentationSlide(dir) { this.changeSlide(dir); },
-            renderPresentationSlide() {
-                const slide = this.getActiveSlide();
-                if (!slide) return;
-                const { presentationSlideContainer } = this.elements;
-                const { settings } = this.state.presentation;
-                presentationSlideContainer.innerHTML = '';
-                const presW = this.elements.presentationView.clientWidth, presH = this.elements.presentationView.clientHeight;
-                const presRatio = presW / presH, slideRatio = settings.width / settings.height;
-                let sW = (presRatio > slideRatio) ? presH * slideRatio : presW;
-                let scale = sW / settings.width;
-                presentationSlideContainer.style.width = `${settings.width}px`;
-                presentationSlideContainer.style.height = `${settings.height}px`;
-                presentationSlideContainer.style.transform = `translate(-50%, -50%) scale(${scale})`;
-                Object.assign(presentationSlideContainer.style, { position: 'absolute', left: '50%', top: '50%' });
-            
-                slide.elements.forEach(elData => {
-                    const el = this.createElementDOM(elData);
-
-                    // customCssをインラインスタイルとして適用
-                    if (elData.style.customCss) {
-                        el.style.cssText += elData.style.customCss;
-                    }
-
-                    // アニメーション付与
-                    if (elData.style.animation) {
-                        el.classList.remove('animate__animated', elData.style.animation);
-                        void el.offsetWidth; // 強制再描画
-                        el.classList.add('animate__animated', elData.style.animation);
-                        el.addEventListener('animationend', function handler() {
-                            el.classList.remove('animate__animated', elData.style.animation);
-                            el.removeEventListener('animationend', handler);
-                        });
-                    }
-                    presentationSlideContainer.appendChild(el);
-                });
-            },
+setActiveSlide(slideId) {
+    if (this.state.presentation.slides.some(s => s.id === slideId)) {
+        this.state.activeSlideId = slideId;
+        this.state.selectedElementIds = [];
+        if (document.body.classList.contains('presentation-mode')) {
+            this.presentationManager.renderPresentationSlide();
+        } else {
+            this.render();
+        }
+    }
+},
             showExportMenu(e) { const menu = this.elements.exportMenu; menu.innerHTML = `<div style="padding:8px 12px;cursor:pointer;" id="export-png-btn">PNG保存</div><div style="padding:8px 12px;cursor:pointer;" id="export-pdf-btn">PDF保存</div>`; menu.style.display = 'block'; const rect = this.elements.exportBtn.getBoundingClientRect(); menu.style.left = rect.left + 'px'; menu.style.top = (rect.bottom + 5) + 'px'; document.getElementById('export-png-btn').onclick = () => { this.exportCurrentSlideAsImage(); menu.style.display = 'none'; }; document.getElementById('export-pdf-btn').onclick = () => { this.exportCurrentSlideAsPDF(); menu.style.display = 'none'; }; setTimeout(() => document.addEventListener('click', function h(ev) { if (!menu.contains(ev.target) && !App.elements.exportBtn.contains(ev.target)) { menu.style.display = 'none'; document.removeEventListener('click', h); } }, { once: true }), 10); },
             exportCurrentSlideAsImage() {
                 this.runExportWorker('png');
@@ -5407,7 +5326,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         bottomPane.addEventListener('wheel', function(e) {
             if (Math.abs(e.deltaY) > 30) {
                 e.preventDefault();
-                App.changeSlide(e.deltaY > 0 ? 1 : -1);
+                // App.changeSlide(e.deltaY > 0 ? 1 : -1); // プレゼンテーションモードに移動したため削除
             }
         }, { passive: false });
     }

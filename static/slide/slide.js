@@ -1037,7 +1037,6 @@
             stateManager: null,
             
             // 従来のstate参照（後方互換性のため）
-            // 従来のstate参照（後方互換性のため）
             get state() {
                 return this.stateManager ? this.stateManager.state : {};
             },

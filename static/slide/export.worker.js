@@ -49,7 +49,15 @@ self.onmessage = async (event) => {
 
                         options.vert = element.style.vertical ? 'eaVert' : 'horz';
                         
-                        const textContent = element.content.replace(/<[^>]*>/g, '');
+                        const sanitizeContent = (input) => {
+                            let previous;
+                            do {
+                                previous = input;
+                                input = input.replace(/<[^>]*>/g, '');
+                            } while (input !== previous);
+                            return input;
+                        };
+                        const textContent = sanitizeContent(element.content);
                         presSlide.addText(textContent, options);
                     
                     } else if (element.type === 'shape') {

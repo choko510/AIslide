@@ -3886,6 +3886,8 @@ handleInspectorInput(e) {
         } else if (prop === 'height') {
             el.style.height = Utils.pixelsToPercent(value, CANVAS_HEIGHT);
         }
+    } else if ((prop === 'left' || prop === 'top') && unit === '%') {
+        el.style[prop] = `${value}%`;
     } else {
         el.style[prop] = value;
     }

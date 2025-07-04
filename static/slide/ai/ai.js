@@ -1006,44 +1006,41 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
             throw new Error(`スライドID ${slideId} が見つかりません。`);
         }
 
-        return new Promise((resolve, reject) => {
-            const worker = new Worker('export.worker.js');
+        // Create a temporary container to render the slide for canvas conversion
+        const slideContainer = document.createElement('div');
+        slideContainer.style.width = `${this.app.state.presentation.settings.width}px`;
+        slideContainer.style.height = `${this.app.state.presentation.settings.height}px`;
+        slideContainer.style.position = 'absolute';
+        slideContainer.style.left = '-9999px'; // Position off-screen
+        document.body.appendChild(slideContainer);
 
-            const slideContainer = document.createElement('div');
-            slideContainer.style.width = `${this.app.state.presentation.settings.width}px`;
-            slideContainer.style.height = `${this.app.state.presentation.settings.height}px`;
-            slide.elements.forEach(elData => {
-                const el = this.app.createElementDOM(elData);
-                slideContainer.appendChild(el);
-            });
-
-            worker.postMessage({
-                type: 'png',
-                slideHTML: slideContainer.innerHTML,
-                settings: this.app.state.presentation.settings,
-                slideId: slide.id
-            });
-
-            worker.onmessage = (event) => {
-                if (event.data.success) {
-                    resolve({
-                        success: true,
-                        message: `スライド ${slideId} を画像としてキャプチャしました。`,
-                        imageData: event.data.dataUrl
-                    });
-                } else {
-                    console.error('スライドの画像キャプチャに失敗しました(Worker):', event.data.error);
-                    reject(new Error(`スライドの画像キャプチャに失敗しました: ${event.data.error}`));
-                }
-                worker.terminate();
-            };
-
-            worker.onerror = (error) => {
-                console.error('Worker for image capture failed:', error);
-                reject(new Error(`画像キャプチャWorkerでエラーが発生しました: ${error.message}`));
-                worker.terminate();
-            };
+        slide.elements.forEach(elData => {
+            const el = this.app.createElementDOM(elData);
+            slideContainer.appendChild(el);
         });
+
+        try {
+            // Generate image data on the main thread using html2canvas
+            const canvas = await html2canvas(slideContainer, {
+                backgroundColor: "#fff",
+                scale: 2,
+                useCORS: true,
+                logging: false
+            });
+            const dataUrl = canvas.toDataURL('image/png');
+
+            return {
+                success: true,
+                message: `スライド ${slideId} を画像としてキャプチャしました。`,
+                imageData: dataUrl
+            };
+        } catch (error) {
+            console.error('スライドの画像キャプチャに失敗しました:', error);
+            throw new Error(`スライドの画像キャプチャに失敗しました: ${error.message}`);
+        } finally {
+            // Clean up the temporary container
+            document.body.removeChild(slideContainer);
+        }
     }
 
     handleSwitchAiMode(commandNode) {

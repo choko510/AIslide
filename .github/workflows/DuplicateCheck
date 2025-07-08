@@ -1,0 +1,62 @@
+# .github/workflows/duplicate-lines.yml
+name: Detect Duplicate Consecutive Lines
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  duplicate-lines:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        # アクションを最新のv4に更新
+        # `git diff`が全てのコミット履歴にアクセスできるようfetch-depth: 0 を指定
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up reviewdog
+        uses: reviewdog/action-setup@v2
+        with:
+          reviewdog_version: latest
+
+      - name: Detect duplicate consecutive lines
+        env:
+          # reviewdogがGitHub APIを利用するために必要なTOKENを明示的に設定
+          REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 1. スクリプトの堅牢性を高める設定
+          #    -e: コマンドが失敗したら即座に終了
+          #    -u: 未定義の変数を参照したらエラー
+          #    -o pipefail: パイプラインのいずれかのコマンドが失敗したらエラーにする
+          set -euo pipefail
+
+          # 2. 対象の拡張子を環境変数で管理し、変更しやすくする
+          TARGET_EXTENSIONS_REGEX='\.(yml|yaml|js|ts|py|go|java)$'
+
+          # 変更されたファイルリストを取得し、対象の拡張子を持つファイルのみに絞り込む
+          # 3. ファイル名にスペースが含まれても正しく処理できるよう `while read` ループを使用
+          git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E "$TARGET_EXTENSIONS_REGEX" || true \
+          | while IFS= read -r file; do
+              # 削除されたファイルなど、存在しない場合はスキップ
+              if [ ! -f "$file" ]; then
+                continue
+              fi
+
+              # 4. awkで連続する重複行を検出
+              #    - 空白のみの行が連続していても警告しないように変更 (`$0 !~ /^[[:space:]]*$/`)
+              awk '
+                NR > 1 && $0 == prev && $0 !~ /^[[:space:]]*$/ {
+                  # reviewdog diagnostic format: filepath:line:column: message
+                  # メッセージをより具体的に変更
+                  printf("%s:%d:1: Consecutive duplicate line detected: \"%s\"\n", FILENAME, NR-1, $0)
+                }
+                { prev = $0 }
+              ' "$file"
+            done \
+          | reviewdog -f=diff \
+                      -name="duplicate-consecutive-lines" \
+                      -reporter="github-pr-review" \
+                      -level="warning" \
+                      -fail-on-error=true

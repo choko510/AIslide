@@ -93,6 +93,7 @@ class InspectorManager {
                 </div>
             </div>
             <div class="inspector-group"><label>回転 (deg)</label><input type="number" data-prop="rotation" value="${s.rotation || 0}" step="1"></div>
+            <div class="inspector-group"><label>不透明度</label><div class="d-flex align-items-center"><input type="range" data-prop="opacity" value="${s.opacity ?? 1}" min="0" max="1" step="0.01" style="flex-grow: 1;"><span id="opacity-value" style="margin-left: 10px; width: 40px;">${Math.round((s.opacity ?? 1) * 100)}%</span></div></div>
             <div class="inspector-group"><label>重ね順</label><input type="number" data-prop="zIndex" value="${s.zIndex}"></div>
         `;
 
@@ -120,10 +121,46 @@ class InspectorManager {
         const typeSpecificHTML = this._getTypeSpecificHTML(selectedElement);
         const customCssHTML = this._getCustomCssHTML();
 
+        const shadowEnabled = s.boxShadow && s.boxShadow !== 'none';
+        const shadowValues = this._getShadowValues(s.boxShadow);
+        const shadowContent = `
+            <div class="inspector-group">
+                <label class="d-flex align-items-center"><input type="checkbox" data-prop="shadowEnabled" ${shadowEnabled ? 'checked' : ''} style="margin-right: 8px;"> 影を有効にする</label>
+            </div>
+            <div id="shadow-controls" style="display: ${shadowEnabled ? 'block' : 'none'}">
+                <div class="inspector-group">
+                    <label>Xオフセット (px)</label>
+                    <div class="d-flex align-items-center">
+                        <input type="range" data-prop="shadowX" value="${shadowValues.x}" min="-50" max="50" step="1" style="flex-grow: 1;">
+                        <span class="value-display">${shadowValues.x}px</span>
+                    </div>
+                </div>
+                <div class="inspector-group">
+                    <label>Yオフセット (px)</label>
+                    <div class="d-flex align-items-center">
+                        <input type="range" data-prop="shadowY" value="${shadowValues.y}" min="-50" max="50" step="1" style="flex-grow: 1;">
+                        <span class="value-display">${shadowValues.y}px</span>
+                    </div>
+                </div>
+                <div class="inspector-group">
+                    <label>ぼかし (px)</label>
+                    <div class="d-flex align-items-center">
+                        <input type="range" data-prop="shadowBlur" value="${shadowValues.blur}" min="0" max="100" step="1" style="flex-grow: 1;">
+                        <span class="value-display">${shadowValues.blur}px</span>
+                    </div>
+                </div>
+                <div class="inspector-group">
+                    <label>色</label>
+                    <input type="color" data-prop="shadowColor" value="${shadowValues.color}">
+                </div>
+            </div>
+        `;
+
         return `
             <div class="accordion">
                 ${accordionItem('配置とサイズ', transformContent)}
                 ${typeSpecificHTML}
+                ${accordionItem('影', shadowContent)}
                 ${accordionItem('アニメーション', animationContent)}
                 ${accordionItem('詳細設定', customCssHTML, false)}
             </div>
@@ -133,6 +170,7 @@ class InspectorManager {
     _getTypeSpecificHTML(selectedElement) {
         const typeHandlers = {
             'text': () => this._getTextPropertiesHTML(selectedElement),
+            'image': () => this._getImagePropertiesHTML(selectedElement),
             'icon': () => this.getIconPropertiesHTML(selectedElement),
             'video': () => this._getVideoPropertiesHTML(selectedElement),
             'chart': () => this._getChartPropertiesHTML(selectedElement),
@@ -190,6 +228,28 @@ class InspectorManager {
         return accordionItem('テキストスタイル', content);
     }
 
+    _getImagePropertiesHTML(selectedElement) {
+        const s = selectedElement.style;
+        const accordionItem = (title, content, isOpen = true) => `
+            <div class="accordion-item">
+                <button class="accordion-header" aria-expanded="${isOpen}">
+                    ${title}
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+                <div class="accordion-content" ${isOpen ? '' : 'style="display: none;"'}>
+                    ${content}
+                </div>
+            </div>
+        `;
+        const content = `
+            <div class="inspector-group">
+                <label>角の丸み (px)</label>
+                <input type="number" data-prop="borderRadius" value="${s.borderRadius || 0}" min="0">
+            </div>
+        `;
+        return accordionItem('画像スタイル', content);
+    }
+
     _getFontOptions(currentFont) {
         const fonts = [
             { value: 'sans-serif', name: 'モダン (Sans-serif)', style: 'sans-serif' },
@@ -240,19 +300,22 @@ class InspectorManager {
 
     _getChartPropertiesHTML(selectedElement) {
         const chartData = selectedElement.content.data;
+        // chartData.datasets が存在しない場合や空の場合に備えて安全なアクセスを行う
+        const datasetLabel = chartData?.datasets?.[0]?.label || '';
+        const labels = chartData?.labels || [];
+        const dataValues = chartData?.datasets?.[0]?.data || [];
+
         let tableRows = '';
-        if (chartData && chartData.labels && chartData.datasets?.[0]?.data) {
-            for (let i = 0; i < chartData.labels.length; i++) {
-                const label = chartData.labels[i];
-                const value = chartData.datasets[0].data[i];
-                tableRows += `
-                    <tr>
-                        <td style="padding: 4px;"><input type="text" data-type="label" value="${label}" style="width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;"></td>
-                        <td style="padding: 4px;"><input type="number" data-type="value" value="${value}" style="width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;"></td>
-                        <td style="text-align: center;"><button type="button" class="delete-chart-row-btn" style="background:none; border:none; color: #dc3545; cursor:pointer; font-size: 16px;">&times;</button></td>
-                    </tr>
-                `;
-            }
+        for (let i = 0; i < labels.length; i++) {
+            const label = labels[i];
+            const value = dataValues[i];
+            tableRows += `
+                <tr>
+                    <td style="padding: 4px;"><input type="text" data-type="label" value="${label}" style="width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;"></td>
+                    <td style="padding: 4px;"><input type="number" data-type="value" value="${value}" style="width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;"></td>
+                    <td style="text-align: center;"><button type="button" class="delete-chart-row-btn" style="background:none; border:none; color: #dc3545; cursor:pointer; font-size: 16px;">&times;</button></td>
+                </tr>
+            `;
         }
 
         const accordionItem = (title, content, isOpen = true) => `
@@ -271,7 +334,7 @@ class InspectorManager {
                 <label>グラフデータ編集</label>
                 <div style="margin-top: 10px;">
                     <label>データセット名</label>
-                    <input type="text" id="chart-dataset-label-inspector" value="${chartData.datasets[0].label}" style="width: 100%;">
+                    <input type="text" id="chart-dataset-label-inspector" value="${datasetLabel}" style="width: 100%;">
                 </div>
                 <div id="chart-data-spreadsheet-inspector" style="margin-top: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #ced4da; border-radius: 6px;">
                     <table style="width: 100%; border-collapse: collapse;">
@@ -386,6 +449,10 @@ class InspectorManager {
             <div class="inspector-group">
                 <label>線の太さ (px)</label>
                 <input type="number" data-prop="strokeWidth" value="${s.strokeWidth != null ? s.strokeWidth : 2}" min="0">
+            </div>
+            <div class="inspector-group">
+                <label>角の丸み (px)</label>
+                <input type="number" data-prop="borderRadius" value="${s.borderRadius || 0}" min="0">
             </div>
         `;
         return accordionItem('塗りつぶしと枠線', content);
@@ -768,6 +835,25 @@ class InspectorManager {
         }
     }
 
+    _getShadowValues(boxShadow) {
+        const defaults = { x: 8, y: 8, blur: 25, color: '#969696' };
+        if (!boxShadow || boxShadow === 'none') {
+            return defaults;
+        }
+
+        const colorMatch = boxShadow.match(/rgba?\(.*?\)|#[0-9a-fA-F]{3,6}/);
+        const color = colorMatch ? colorMatch[0] : defaults.color;
+        
+        const parts = boxShadow.replace(color, '').trim().split(/\s+/);
+        
+        return {
+            x: parseFloat(parts[0]) || defaults.x,
+            y: parseFloat(parts[1]) || defaults.y,
+            blur: parseFloat(parts[2]) || defaults.blur,
+            color: color
+        };
+    }
+
     handleInput(e) {
         e.stopPropagation();
         const el = this.app.getSelectedElement();
@@ -775,6 +861,11 @@ class InspectorManager {
 
         const prop = e.target.dataset.prop;
         if (!prop || prop === 'customCss') return;
+
+        if (prop.startsWith('shadow')) {
+            this._handleShadowInput(el, prop, e);
+            return;
+        }
 
         if (!this._inspectorInputTimeout) {
             this.app.stateManager._saveToHistory();
@@ -803,40 +894,54 @@ class InspectorManager {
             } else if (prop === 'height') {
                 this.app.updateState(stylePath, Utils.pixelsToPercent(value, CANVAS_HEIGHT));
             }
-        } else if ((prop === 'left' || prop === 'top') && unit === '%') {
-            this.app.updateState(stylePath, value); // 値はすでにパーセンテージなのでそのまま
         } else {
             this.app.updateState(stylePath, value);
         }
-        
-        // DOM要素のスタイル更新はApp.render()で行われるため、ここでは不要（あるいは、domElのtransformを直接更新する）
-        // ただし、animationのように直接DOMを操作する必要があるものもあるので、それは残す
-        // el.style には変更が反映されていないので、elData を最新の状態にする
-        const updatedElData = this.app.getSelectedElement(); // 最新のelDataを取得
 
+        const updatedElData = this.app.getSelectedElement();
         const domEl = this.app.elements.slideCanvas.querySelector(`[data-id="${el.id}"]`);
+
         if (domEl) {
-            this.app.applyStyles(domEl, updatedElData.style); // 最新のelData.styleを適用
-            
-            if (updatedElData.type === 'icon' && prop === 'color') {
-                const iconEl = domEl.querySelector('i, span');
-                if (iconEl) {
-                    iconEl.style.color = value;
+            this.app.applyStyles(domEl, updatedElData.style);
+
+            if (updatedElData.type === 'shape') {
+                const shapeSvg = domEl.querySelector('svg > *:not(defs)');
+                if (shapeSvg) {
+                    if (prop === 'fill') shapeSvg.setAttribute('fill', value);
+                    if (prop === 'stroke') {
+                        shapeSvg.setAttribute('stroke', value);
+                        const arrowhead = domEl.querySelector('marker polygon');
+                        if (arrowhead) arrowhead.setAttribute('fill', value);
+                    }
+                    if (prop === 'strokeWidth') shapeSvg.setAttribute('stroke-width', value);
+                    if (prop === 'borderRadius') {
+                        const elWidthPx = window.Utils.percentToPixels(updatedElData.style.width, window.CANVAS_WIDTH);
+                        const elHeightPx = window.Utils.percentToPixels(updatedElData.style.height, window.CANVAS_HEIGHT);
+                        if (elWidthPx > 0 && elHeightPx > 0) {
+                            const rx = (value / elWidthPx) * 100;
+                            const ry = (value / elHeightPx) * 100;
+                            shapeSvg.setAttribute('rx', rx);
+                            shapeSvg.setAttribute('ry', ry);
+                        }
+                    }
                 }
+            } else if (updatedElData.type === 'icon' && prop === 'color') {
+                const iconEl = domEl.querySelector('i, span');
+                if (iconEl) iconEl.style.color = value;
             }
         }
 
-        if (prop === 'animation') {
-            if (domEl) {
-                const oldAnimation = Object.values(domEl.classList).find(c => c.startsWith('animate__') && c !== value);
-                if(oldAnimation) domEl.classList.remove('animate__animated', oldAnimation);
+        if (prop === 'opacity') {
+            const opacityValue = document.getElementById('opacity-value');
+            if (opacityValue) opacityValue.textContent = `${Math.round(value * 100)}%`;
+        }
 
-                if (value) {
-                    domEl.classList.add('animate__animated', value);
-                    domEl.addEventListener('animationend', function handler() {
-                        domEl.classList.remove('animate__animated', value);
-                    }, { once: true });
-                }
+        if (prop === 'animation' && domEl) {
+            const oldAnimation = Object.values(domEl.classList).find(c => c.startsWith('animate__') && c !== value);
+            if (oldAnimation) domEl.classList.remove('animate__animated', oldAnimation);
+            if (value) {
+                domEl.classList.add('animate__animated', value);
+                domEl.addEventListener('animationend', () => domEl.classList.remove('animate__animated', value), { once: true });
             }
         }
 
@@ -844,6 +949,56 @@ class InspectorManager {
             this.app.saveState();
             this._inspectorInputTimeout = null;
         }, 300);
+    }
+
+    _handleShadowInput(el, prop, e) {
+        if (!this._inspectorInputTimeout) {
+            this.app.stateManager._saveToHistory();
+        }
+        if (this._inspectorInputTimeout) {
+            clearTimeout(this._inspectorInputTimeout);
+        }
+
+        const shadowControls = document.getElementById('shadow-controls');
+        if (prop === 'shadowEnabled') {
+            const isEnabled = e.target.checked;
+            shadowControls.style.display = isEnabled ? 'block' : 'none';
+            this._updateBoxShadow(el, isEnabled ? undefined : 'none');
+        } else {
+            if (e.target.type === 'range') {
+                const display = e.target.nextElementSibling;
+                if (display) display.textContent = `${e.target.value}px`;
+            }
+            this._updateBoxShadow(el);
+        }
+
+        this._inspectorInputTimeout = setTimeout(() => {
+            this.app.saveState();
+            this._inspectorInputTimeout = null;
+        }, 300);
+    }
+
+    _updateBoxShadow(el, value) {
+        let boxShadowValue = value;
+
+        if (boxShadowValue === undefined) {
+             const x = document.querySelector('[data-prop="shadowX"]').value;
+             const y = document.querySelector('[data-prop="shadowY"]').value;
+             const blur = document.querySelector('[data-prop="shadowBlur"]').value;
+             const color = document.querySelector('[data-prop="shadowColor"]').value;
+             boxShadowValue = `${x}px ${y}px ${blur}px ${color}`;
+        }
+
+        const slideIndex = this.app.getActiveSlideIndex();
+        const elementIndex = this.app.getElementIndex(el.id);
+        const stylePath = `presentation.slides.${slideIndex}.elements.${elementIndex}.style.boxShadow`;
+        
+        this.app.updateState(stylePath, boxShadowValue, {render: false});
+
+        const domEl = this.app.elements.slideCanvas.querySelector(`[data-id="${el.id}"]`);
+        if (domEl) {
+            domEl.style.boxShadow = boxShadowValue;
+        }
     }
 }
 

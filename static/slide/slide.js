@@ -927,6 +927,16 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                         shape.setAttribute('y', 0);
                         shape.setAttribute('width', 100);
                         shape.setAttribute('height', 100);
+                        if (style.borderRadius) {
+                            const elWidthPx = window.Utils.percentToPixels(style.width, window.CANVAS_WIDTH);
+                            const elHeightPx = window.Utils.percentToPixels(style.height, window.CANVAS_HEIGHT);
+                            if (elWidthPx > 0 && elHeightPx > 0) {
+                                const rx = style.borderRadius; // Use borderRadius directly as an absolute length
+                                const ry = style.borderRadius; // Use borderRadius directly as an absolute length
+                                shape.setAttribute('rx', rx);
+                                shape.setAttribute('ry', ry);
+                            }
+                        }
                         break;
                     case 'circle':
                         shape = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -1093,8 +1103,16 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                     fontSize: styles.fontSize ? `${styles.fontSize}px` : null,
                     fontFamily: styles.fontFamily || '',
                     backgroundColor: styles.backgroundColor || 'transparent',
-                    border: styles.border || 'none'
+                    border: styles.border || 'none',
+                    opacity: styles.opacity ?? 1,
+                    borderRadius: styles.borderRadius ? `${styles.borderRadius}px` : '0px',
+                    boxShadow: styles.boxShadow || 'none'
                 });
+
+                const img = element.querySelector('img');
+                if (img) {
+                    img.style.borderRadius = styles.borderRadius ? `${styles.borderRadius}px` : '0px';
+                }
 
                 // 縦書き対応
                 if (styles.vertical) {
@@ -1143,6 +1161,10 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
             _animationFrameId: null,
             _boundHandleMouseMove: null,
             _boundHandleMouseUp: null,
+
+            applyStyles(element, styles) {
+                StyleManager.applyStyles(element, styles);
+            },
 
             async init() {
                 try {
@@ -3602,7 +3624,17 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                     'el-forward-btn': () => this.bringElementForward(elId),
                     'el-backward-btn': () => this.sendElementBackward(elId),
                     'el-back-btn': () => this.sendElementToBack(elId),
-                    'el-delete-btn': () => { this.updateState('selectedElementIds', [elId]); this.deleteSelectedElements(); }
+                    'el-delete-btn': () => {
+                        const selectedIds = this.getState('selectedElementIds');
+                        if (selectedIds.includes(elId) && selectedIds.length > 1) {
+                            // 複数選択されている要素の中にelIdが含まれている場合、複数選択を維持して削除
+                            this.deleteSelectedElements();
+                        } else {
+                            // 単一選択の場合、またはelIdが選択されていない場合、elIdのみを選択して削除
+                            this.updateState('selectedElementIds', [elId]);
+                            this.deleteSelectedElements();
+                        }
+                    }
                 };
 
                 this.showContextMenu(e, 'element-context-menu', menuContent, handlers);
@@ -3984,9 +4016,12 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
             this._initCssEditor('element-css-editor-container', initialContent || '', (css) => {
                 const el = this.getSelectedElement();
                 if (el) {
-                    el.style.customCss = css;
-                    this.applyCustomCss();
-                    this.saveState();
+                    const elIndex = this.getElementIndex(el.id);
+                    const slideIndex = this.getActiveSlideIndex();
+                    if (elIndex > -1 && slideIndex > -1) {
+                        this.updateState(`presentation.slides.${slideIndex}.elements.${elIndex}.style.customCss`, css);
+                        this.render();
+                    }
                 }
             });
         },
@@ -4072,13 +4107,37 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
             let elementCss = '';
             slide.elements.forEach(el => {
                 if (el.style.customCss) {
-                    // Add !important to each rule to ensure it overrides inline styles
-                    const importantCss = el.style.customCss.split(';')
-                        .map(s => s.trim())
-                        .filter(s => s)
-                        .map(s => s + ' !important')
+                    // コメントを除去し、各ルールを安全に解析して !important を付与する
+                    const cssText = el.style.customCss.replace(/\/\*[\s\S]*?\*\//g, '');
+                    const importantCss = cssText.split(';')
+                        .map(rule => {
+                            if (rule.includes(':')) {
+                                const parts = rule.split(':');
+                                const property = parts.shift().trim();
+                                const value = parts.join(':').trim();
+                                if (property && value) {
+                                    return `${property}: ${value} !important`;
+                                }
+                            }
+                            return null;
+                        })
+                        .filter(Boolean) // 無効なルールを除外
                         .join('; ');
-                    elementCss += `[data-id="${el.id}"] { ${importantCss} }\n`;
+
+                    if (importantCss && el.type === 'shape') {
+                        // 図形要素の場合、ラッパーdivとSVG内部要素の両方に適用を試みる
+                        // これにより、border-radiusのようなdiv向けスタイルと、fillのようなSVG向けスタイルが両方機能する
+                        const shapeTags = ['rect', 'circle', 'polygon', 'line', 'path'];
+                        const svgSelectors = shapeTags.map(tag => `[data-id="${el.id}"] svg ${tag}`).join(', ');
+                        
+                        // SVG内部要素へのスタイル
+                        elementCss += `${svgSelectors} { ${importantCss} }\n`;
+                        // ラッパーdivへのスタイル
+                        elementCss += `[data-id="${el.id}"] { ${importantCss} }\n`;
+
+                    } else if (importantCss) {
+                        elementCss += `[data-id="${el.id}"] { ${importantCss} }\n`;
+                    }
                 }
             });
             document.getElementById('elements-custom-styles').textContent = elementCss;
@@ -4692,8 +4751,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const correctPattern = /^https?:\/\/[a-zA-Z0-9]/;
 
         if (typoPattern.test(text) && !correctPattern.test(text.trim())) {
+            // 実際の入力から正しくない部分を抽出
+            const typoMatch = text.match(/(h{1,2}t{1,2}p[s]?:\/\/|ttp[s]?:\/\/|https?:;\/\/|https?:\/\/\/|https?:\/\/$|https?:\/\/:|https?:\/\/\s|https?:\/\/\W|https?:\/{1,2}[^a-zA-Z0-9])/i);
+            let typoExample = '';
+            if (typoMatch && typoMatch[0]) {
+            typoExample = `（${typoMatch[0]}...）`;
+            }
             warning.style.display = 'block';
-            warning.textContent = 'URLにタイプミスがあります（正しくない例: hhtps://, https;//, https:/, http;//, ttp://, https::// など）。正しいURLか確認してください。';
+            warning.innerHTML = `URLにタイプミスがあります${typoExample}<br><span style="font-size:90%;">（例: hhtps://, https;//, https:/, http;//, ttp://, https::// など）<br>正しいURLか確認してください。</span>`;
         } else {
             warning.style.display = 'none';
             warning.textContent = '';

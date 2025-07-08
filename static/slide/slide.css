@@ -1,167 +1,53 @@
-/* --- モダンデザイン & 基本スタイル --- */
+/* ==========================================================================
+   1. Global Styles & Theme
+   ========================================================================== */
+
+/* --- 1.1 CSS Variables (Light & Dark Themes) --- */
 :root {
+    /* Colors */
     --primary-color: #007bff;
     --primary-color-hover: #0056b3;
+    --danger-color: #dc3545;
     --bg-light: #f8f9fa;
     --bg-white: #ffffff;
     --border-color: #dee2e6;
     --text-primary: #212529;
     --text-secondary: #6c757d;
-    --danger-color: #dc3545;
+
+    /* UI Elements */
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
     --border-radius: 8px;
     --transition: all 0.2s ease-in-out;
+
+    /* Guides & Highlights */
     --guide-color: #ff4757;
-    /* スマートガイドの色 */
     --highlight-color: rgba(0, 123, 255, 0.1);
     --highlight-color-light: rgba(0, 123, 255, 0.05);
 }
 
-/* ダークモード用カラー変数 */
 [data-theme="dark"] {
+    /* Colors */
     --primary-color: #4dabf7;
     --primary-color-hover: #339af0;
+    --danger-color: #ff6b6b;
     --bg-light: #1a1a1a;
     --bg-white: #2d2d2d;
     --border-color: #424242;
     --text-primary: #ffffff;
     --text-secondary: #cccccc;
-    /* 視認性向上のため調整 */
-    --danger-color: #ff6b6b;
+
+    /* UI Elements */
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+
+    /* Guides & Highlights */
     --guide-color: #ff6b6b;
     --highlight-color: rgba(77, 171, 247, 0.15);
     --highlight-color-light: rgba(77, 171, 247, 0.1);
 }
 
-/* テーマ切り替えトグル */
-.theme-toggle {
-    position: relative;
-    display: inline-block;
-    width: 50px;
-    height: 26px;
-}
-
-.theme-toggle input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
-.theme-slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: #ccc;
-    transition: .4s;
-    border-radius: 26px;
-}
-
-.theme-slider:before {
-    position: absolute;
-    content: "";
-    height: 20px;
-    width: 20px;
-    left: 3px;
-    bottom: 3px;
-    background-color: white;
-    transition: .4s;
-    border-radius: 50%;
-}
-
-input:checked+.theme-slider {
-    background-color: var(--primary-color);
-}
-
-input:checked+.theme-slider:before {
-    transform: translateX(24px);
-}
-
-/* 設定ページのスタイル */
-.settings-group {
-    margin-bottom: 24px;
-    padding: 16px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-    background-color: var(--bg-white);
-}
-
-.settings-group h3 {
-    margin: 0 0 16px 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.settings-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.settings-item:last-child {
-    border-bottom: none;
-}
-
-.settings-item label {
-    font-size: 14px;
-    color: var(--text-primary);
-    flex-grow: 1;
-}
-
-.settings-item .settings-control {
-    margin-left: 16px;
-}
-
-.settings-description {
-    font-size: 12px;
-    color: var(--text-secondary);
-    margin-top: 4px;
-}
-
-/* ダークモード時のフォーム要素調整 */
-[data-theme="dark"] input,
-[data-theme="dark"] select,
-[data-theme="dark"] textarea {
-    background-color: var(--bg-light);
-    border-color: var(--border-color);
-    color: var(--text-primary);
-}
-
-[data-theme="dark"] input:focus,
-[data-theme="dark"] select:focus,
-[data-theme="dark"] textarea:focus {
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(77, 171, 247, 0.25);
-}
-
-/* ダークモード時のモーダル調整 */
-[data-theme="dark"] .modal__container {
-    background-color: var(--bg-white);
-    color: var(--text-primary);
-}
-
-/* ダークモード時のアイコン項目調整 */
-[data-theme="dark"] .icon-item:hover {
-    background-color: var(--bg-light);
-}
-
-/* グリッド表示機能 */
-.slide-canvas.show-grid {
-    background-image:
-        linear-gradient(rgba(0, 0, 0, 0.1) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 0, 0, 0.1) 1px, transparent 1px);
-    background-size: 20px 20px;
-}
-
-
+/* --- 1.2 Basic Styles --- */
 * {
     box-sizing: border-box;
     margin: 0;
@@ -179,18 +65,57 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
-.slide-element.text {
-    font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+/* --- 1.3 Dark Mode Adjustments for Common Elements --- */
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+    background-color: var(--bg-light);
+    border-color: var(--border-color);
+    color: var(--text-primary);
 }
 
+[data-theme="dark"] input:focus,
+[data-theme="dark"] select:focus,
+[data-theme="dark"] textarea:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(77, 171, 247, 0.25);
+}
+
+[data-theme="dark"] .modal__container {
+    background-color: var(--bg-white);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .icon-item:hover {
+    background-color: var(--bg-light);
+}
+
+/* ==========================================================================
+   2. Application Layout
+   ========================================================================== */
+
+/* --- 2.1 Main Containers --- */
 #app-container {
     display: flex;
-    height: 100dvh;
     flex-direction: column;
+    height: 100dvh;
     overflow: hidden;
 }
 
-/* --- ツールバー --- */
+#app-body {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+#center-content {
+    display: flex;
+    flex-grow: 1;
+    overflow: hidden !important;
+}
+
+/* --- 2.2 Toolbar --- */
 #toolbar {
     display: flex;
     align-items: center;
@@ -241,274 +166,109 @@ body {
     margin: 0 12px;
 }
 
-#export-menu {
-    border-radius: var(--border-radius);
-    padding: 4px;
-}
-
-#export-menu div {
-    border-radius: 4px;
-}
-
-#export-menu div:hover {
-    background-color: var(--bg-light);
-}
-
-/* --- メインレイアウト (New) --- */
-#app-body {
-    /* Replaces main */
-    display: flex;
-    flex-grow: 1;
-    overflow: hidden !important;
-}
-
-/* --- 左サイドバー (New) --- */
+/* --- 2.3 Left Sidebar --- */
 #left-sidebar {
+    position: relative;
+    width: 340px;
     background-color: var(--bg-white);
     border-right: 1px solid var(--border-color);
     display: flex;
-    /* flex-direction is now row */
     transition: width 0.2s ease;
     flex-shrink: 0;
-    width: 340px;
-    /* Default total width */
+}
+
+#sidebar-resize-handle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 6px;
+    height: 100%;
+    cursor: ew-resize;
+    z-index: 10;
+    background: transparent;
 }
 
 #sidebar-tabs {
     display: flex;
     flex-direction: column;
-    /* Vertical tabs */
     padding: 8px;
     gap: 8px;
     border-right: 1px solid var(--border-color);
     background-color: var(--bg-light);
-    /* Slightly different bg for tabs */
     flex-shrink: 0;
     z-index: 100;
 }
 
-.sidebar-tab-button {
-    width: 100%;
-    /* Take full width of the tab container */
-    height: auto;
-    padding: 8px 4px;
-    background: none;
-    border: none;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    /* Icon and text vertically aligned */
-    align-items: center;
-    justify-content: center;
-    color: var(--text-secondary);
-    transition: var(--transition);
-    gap: 4px;
-    /* Space between icon and text */
-}
-
-.sidebar-tab-button i {
-    font-size: 18px;
-    /* Icon size */
-    margin-bottom: 2px;
-}
-
-.sidebar-tab-button span {
-    font-size: 10px;
-    /* Text label size */
-    line-height: 1.2;
-    display: block;
-}
-
-.sidebar-tab-button:hover {
-    background-color: var(--bg-light);
-    /* Hover effect */
-    color: var(--text-primary);
-}
-
-.sidebar-tab-button.active {
-    background-color: var(--primary-color);
-    color: white;
-}
-
 #sidebar-content {
-    overflow-y: hidden;
     flex-grow: 1;
+    overflow-y: auto;
     padding: 16px;
-    /* Padding for content inside tabs */
 }
 
-.sidebar-tab-content {
-    display: none;
-    /* Padding is now on sidebar-content */
-}
-
-.sidebar-tab-content.active {
-    display: block;
-}
-
-/* スライド一覧のスタイル (旧 #left-pane の一部を適用) */
-#slide-list {
-    list-style: none;
-    padding: 0;
-    /* Adjusted from 16px to 0 as tab content has padding */
-    /* overflow-y: auto; /* sidebar-content handles scrolling */
-    /* flex-grow: 1; */
-}
-
-.sidebar-add-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    /* Center content if text is short */
-    gap: 8px;
-    padding: 10px;
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-white);
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    transition: var(--transition);
-    font-size: 13px;
-    color: var(--text-primary);
-    text-align: left;
-}
-
-.sidebar-add-btn:hover {
-    background-color: var(--bg-light);
-    border-color: var(--primary-color-hover);
-}
-
-.sidebar-add-btn i {
-    color: var(--primary-color);
-}
-
-/* #left-pane-header is now inside a tab, style accordingly */
-#left-pane-header {
-    /* This ID is still used for the "スライド一覧" title */
-    padding-bottom: 10px;
-    font-size: 16px;
-    /* Keep font size */
-    font-weight: 600;
-    /* Keep font weight */
-    /* border-bottom: 1px solid var(--border-color); Removed, as tabs have border */
-}
-
-.slide-thumbnail {
-    cursor: pointer;
-    border: 2px solid transparent;
-    border-radius: var(--border-radius);
-    padding: 4px;
-    margin-right: 12px;
-    margin-bottom: 0;
-    position: relative;
-    transition: var(--transition);
-    flex-shrink: 0;
-    width: 160px;
-}
-
-/* 追加ボタン用サムネイル */
-.slide-thumbnail.add-slide {
-    border: 2px solid transparent;
-    background: var(--bg-light);
-    /* ダークモード対応 */
-    color: var(--primary-color);
-    justify-content: center;
-    align-items: center;
-    opacity: 0.95;
-    transition: background 0.2s, opacity 0.2s;
-    box-shadow: none;
-}
-
-.slide-thumbnail.add-slide:hover {
-    background: var(--bg-light);
-    /* ダークモード対応 */
-    opacity: 1;
-}
-
-.add-slide-content i {
-    font-size: 170px;
-    color: #aaa;
-    opacity: 1;
-    transition: color 0.2s, opacity 0.2s;
-    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.08));
-}
-
-.slide-thumbnail.add-slide:hover .add-slide-content i {
-    color: #007bff;
-    opacity: 1;
-}
-
-.slide-thumbnail:hover {
-    background-color: var(--bg-light);
-}
-
-.slide-thumbnail.active {
-    border-color: var(--primary-color);
-    background-color: var(--bg-light);
-    /* ダークモード対応 */
-}
-
-.slide-thumbnail.dragging {
-    opacity: 0.5;
-}
-
-.slide-thumbnail.drag-over {
-    border-style: dashed;
-}
-
-.slide-thumbnail-wrapper {
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    background-color: var(--bg-white);
-    border: 1px solid var(--border-color);
-    position: relative;
-    overflow: hidden;
-    border-radius: 4px;
-}
-
-.slide-thumbnail-content {
-    position: absolute;
-    top: 0;
-    left: 0;
-    transform-origin: top left;
-    background-color: var(--bg-white);
-    /* ダークモード対応 */
-}
-
-.thumbnail-index {
-    position: absolute;
-    top: 0;
-    left: 0;
-    background: var(--text-secondary);
-    color: white;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    text-align: center;
-    line-height: 22px;
-    font-size: 12px;
-    font-weight: 500;
-    z-index: 1;
-}
-
-.slide-thumbnail.active .thumbnail-index {
-    background: var(--primary-color);
-}
-
-/* --- 中央キャンバスエリア (New, 旧 #main-pane) --- */
+/* --- 2.4 Main Canvas Area --- */
 #main-canvas-area {
-    /* Replaces #main-pane */
     flex-grow: 1;
     display: flex;
     justify-content: center;
     align-items: center;
     padding: 24px;
+    overflow: hidden;
     min-width: 0;
     min-height: 0;
     background-color: var(--bg-light);
-    /* Added for contrast if needed */
 }
 
+/* --- 2.5 Right Sidebar --- */
+#right-sidebar {
+    position: relative;
+    width: 300px;
+    background-color: var(--bg-white);
+    border-left: 1px solid var(--border-color);
+    display: none;
+    /* Initially hidden */
+    flex-direction: column;
+    overflow: hidden;
+}
+
+#right-sidebar-resize-handle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 6px;
+    height: 100%;
+    cursor: ew-resize;
+    z-index: 10;
+    background: transparent;
+}
+
+/* --- 2.6 Bottom Pane --- */
+#bottom-pane {
+    flex-shrink: 0;
+    height: 140px;
+    background-color: var(--bg-white);
+    border-top: 1px solid var(--border-color);
+    padding: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+}
+
+#bottom-pane #slide-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+/* ==========================================================================
+   3. Core Components
+   ========================================================================== */
+
+/* --- 3.1 Slide Canvas & Related --- */
 #slide-wrapper {
     position: relative;
     max-width: 90vw;
@@ -539,10 +299,43 @@ body {
     opacity: 0;
 }
 
-/* --- スライド要素 --- */
+.slide-canvas.show-grid {
+    background-image:
+        linear-gradient(rgba(0, 0, 0, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.1) 1px, transparent 1px);
+    background-size: 20px 20px;
+}
+
+#zoom-display {
+    position: absolute;
+    right: 24px;
+    top: 60px;
+    z-index: 100;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 2px 10px;
+    font-size: 13px;
+}
+
+#zoom-reset-btn {
+    position: absolute;
+    right: 24px;
+    top: 24px;
+    z-index: 100;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+/* --- 3.2 Slide Elements & Editing Tools --- */
 .slide-element {
     position: absolute;
     cursor: move;
+    transition: opacity 0.2s, border-radius 0.2s;
 }
 
 .slide-element.text {
@@ -550,6 +343,15 @@ body {
     line-height: 1.3;
     word-wrap: break-word;
     max-width: 100%;
+    font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+}
+
+.slide-element.text[contenteditable="false"] {
+    caret-color: transparent;
+}
+
+.slide-element.text[contenteditable="true"] {
+    cursor: text;
 }
 
 .slide-element img {
@@ -558,25 +360,68 @@ body {
     pointer-events: none;
 }
 
-.slide-element[contenteditable="false"] {
-    caret-color: transparent;
-}
-
-.slide-element[contenteditable="true"] {
-    cursor: text;
-}
-
 .slide-element.icon {
     width: auto;
     height: auto;
 }
 
+.icon-element {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.iframe-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000;
+    background-color: transparent;
+    cursor: move;
+}
+
+.element-error-placeholder {
+    color: #dc3545;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    padding: 8px;
+    font-size: 12px;
+    text-align: center;
+}
+
+.image-edit-overlay-btn {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.slide-element:hover .image-edit-overlay-btn {
+    opacity: 1;
+}
+
+/* Element Selection & Resizing */
 .slide-element.selected {
     outline: 2px solid var(--primary-color);
     z-index: 9999 !important;
 }
 
-/* 複数選択時のバウンディングボックス */
 .selection-bounding-box {
     position: absolute;
     border: 1px dashed var(--primary-color);
@@ -584,7 +429,6 @@ body {
     z-index: 9998;
 }
 
-/* 範囲選択用ラバーバンド */
 .selection-box {
     position: absolute;
     border: 2px solid #3399ff;
@@ -594,70 +438,6 @@ body {
     border-radius: 4px;
 }
 
-/* スマートガイドライン */
-.guide-line {
-    position: absolute;
-    background-color: var(--guide-color);
-    z-index: 10000;
-    pointer-events: none;
-}
-
-.guide-line.horizontal {
-    width: 100%;
-    height: 1px;
-    left: 0;
-}
-
-.guide-line.vertical {
-    height: 100%;
-    width: 1px;
-    top: 0;
-}
-
-.guide-label {
-    position: absolute;
-    background: var(--guide-color);
-    color: white;
-    padding: 2px 5px;
-    border-radius: 3px;
-    font-size: 12px;
-    font-weight: 500;
-}
-
-.guide-line.horizontal .guide-label {
-    left: 50%;
-    transform: translateX(-50%) translateY(-100%);
-    top: -2px;
-}
-
-.guide-line.vertical .guide-label {
-    top: 50%;
-    transform: translateY(-50%) translateX(-100%);
-    left: -2px;
-}
-
-/* サイズ一致ガイド用のスタイル */
-.guide-line.size-match {
-    background-color: var(--guide-color);
-    border: 0;
-    opacity: 0.7;
-}
-
-.guide-line.size-match.vertical {
-    background-image: linear-gradient(to bottom, var(--guide-color) 0%, var(--guide-color) 50%, transparent 50%);
-    background-position: left;
-    background-size: 1px 8px;
-    background-repeat: repeat-y;
-}
-
-.guide-line.size-match.horizontal {
-    background-image: linear-gradient(to right, var(--guide-color) 0%, var(--guide-color) 50%, transparent 50%);
-    background-position: top;
-    background-size: 8px 1px;
-    background-repeat: repeat-x;
-}
-
-/* --- リサイズハンドル --- */
 .resize-handle {
     position: absolute;
     width: 10px;
@@ -716,12 +496,227 @@ body {
     cursor: nwse-resize;
 }
 
-/* --- インスペクター (Now inside left-sidebar) --- */
-/* #right-pane styles are largely deprecated or moved to #left-sidebar */
+/* Smart Guides */
+.guide-line {
+    position: absolute;
+    background-color: var(--guide-color);
+    z-index: 10000;
+    pointer-events: none;
+}
+
+.guide-line.horizontal {
+    width: 100%;
+    height: 1px;
+    left: 0;
+}
+
+.guide-line.vertical {
+    height: 100%;
+    width: 1px;
+    top: 0;
+}
+
+.guide-label {
+    position: absolute;
+    background: var(--guide-color);
+    color: white;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.guide-line.horizontal .guide-label {
+    left: 50%;
+    transform: translateX(-50%) translateY(-100%);
+    top: -2px;
+}
+
+.guide-line.vertical .guide-label {
+    top: 50%;
+    transform: translateY(-50%) translateX(-100%);
+    left: -2px;
+}
+
+.guide-line.size-match {
+    background-color: var(--guide-color);
+    border: 0;
+    opacity: 0.7;
+}
+
+.guide-line.size-match.vertical {
+    background-image: linear-gradient(to bottom, var(--guide-color) 0%, var(--guide-color) 50%, transparent 50%);
+    background-position: left;
+    background-size: 1px 8px;
+    background-repeat: repeat-y;
+}
+
+.guide-line.size-match.horizontal {
+    background-image: linear-gradient(to right, var(--guide-color) 0%, var(--guide-color) 50%, transparent 50%);
+    background-position: top;
+    background-size: 8px 1px;
+    background-repeat: repeat-x;
+}
+
+/* --- 3.3 Left Sidebar Components --- */
+/* Tab Navigation */
+.sidebar-tab-button {
+    width: 100%;
+    height: auto;
+    padding: 8px 4px;
+    background: none;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    transition: var(--transition);
+    gap: 4px;
+}
+
+.sidebar-tab-button i {
+    font-size: 18px;
+    margin-bottom: 2px;
+}
+
+.sidebar-tab-button span {
+    font-size: 10px;
+    line-height: 1.2;
+    display: block;
+}
+
+.sidebar-tab-button:hover {
+    background-color: var(--bg-light);
+    color: var(--text-primary);
+}
+
+.sidebar-tab-button.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.sidebar-tab-content {
+    display: none;
+}
+
+.sidebar-tab-content.active {
+    display: block;
+}
+
+/* Slide List (in sidebar) */
+#left-sidebar #slide-list {
+    list-style: none;
+    padding: 0;
+}
+
+.slide-thumbnail {
+    cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: var(--border-radius);
+    padding: 4px;
+    margin-right: 12px;
+    /* For horizontal layout in bottom pane */
+    margin-bottom: 0;
+    /* For horizontal layout in bottom pane */
+    position: relative;
+    transition: var(--transition);
+    flex-shrink: 0;
+    width: 160px;
+    /* For horizontal layout in bottom pane */
+}
+
+.slide-thumbnail:hover {
+    background-color: var(--bg-light);
+}
+
+.slide-thumbnail.active {
+    border-color: var(--primary-color);
+    background-color: var(--bg-light);
+}
+
+.slide-thumbnail.dragging {
+    opacity: 0.5;
+}
+
+.slide-thumbnail.drag-over {
+    border-style: dashed;
+}
+
+.slide-thumbnail-wrapper {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background-color: var(--bg-white);
+    border: 1px solid var(--border-color);
+    position: relative;
+    overflow: hidden;
+    border-radius: 4px;
+}
+
+.slide-thumbnail-content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: top left;
+    background-color: var(--bg-white);
+}
+
+.thumbnail-index {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: var(--text-secondary);
+    color: white;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 22px;
+    font-size: 12px;
+    font-weight: 500;
+    z-index: 1;
+}
+
+.slide-thumbnail.active .thumbnail-index {
+    background: var(--primary-color);
+}
+
+/* Add Slide Button (in sidebar or bottom pane) */
+.slide-thumbnail.add-slide {
+    border: 2px solid transparent;
+    background: var(--bg-light);
+    color: var(--primary-color);
+    justify-content: center;
+    align-items: center;
+    opacity: 0.95;
+    transition: background 0.2s, opacity 0.2s;
+    box-shadow: none;
+}
+
+.slide-thumbnail.add-slide:hover {
+    background: var(--bg-light);
+    opacity: 1;
+}
+
+.add-slide-content i {
+    font-size: 170px;
+    color: #aaa;
+    opacity: 1;
+    transition: color 0.2s, opacity 0.2s;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.08));
+}
+
+.slide-thumbnail.add-slide:hover .add-slide-content i {
+    color: var(--primary-color);
+    opacity: 1;
+}
+
+/* Inspector Panel */
 #inspector h3 {
     margin-top: 0;
     margin-bottom: 24px;
-    /* Keep spacing for titles within inspector */
     font-size: 16px;
     font-weight: 600;
 }
@@ -755,10 +750,27 @@ body {
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb), 0.25);
-    /* ダークモード対応 */
 }
 
-/* --- Accordion --- */
+.inspector-group input[type="color"] {
+    padding: 4px;
+    height: 38px;
+}
+
+.pos-size-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+#no-selection-message {
+    color: var(--text-secondary);
+    text-align: center;
+    margin-top: 50px;
+    padding: 20px;
+}
+
+/* Accordion (for Inspector) */
 .accordion {
     width: 100%;
 }
@@ -804,72 +816,260 @@ body {
     background-color: transparent;
 }
 
-.inspector-group input[type="color"] {
-    padding: 4px;
-    height: 38px;
-}
-
-.pos-size-grid {
+/* Element Addition Components */
+#element-add-buttons-container {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
 }
 
-#no-selection-message {
-    /* Still relevant, but now inside a tab */
-    color: var(--text-secondary);
-    text-align: center;
-    margin-top: 50px;
-    /* Or adjust based on tab layout */
-    padding: 20px;
-}
-
-#delete-element-btn {
-    width: 100%;
-    padding: 8px 16px;
+.shape-select-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
+    background-color: var(--bg-white);
     cursor: pointer;
-    background-color: var(--danger-color);
-    color: white;
-    border: none;
-    font-weight: 500;
     transition: var(--transition);
 }
 
-#delete-element-btn:hover {
-    background-color: #c82333;
+.shape-select-btn:hover {
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
 }
 
-/* --- プレゼンテーションモード --- */
-body.presentation-mode {
-    background-color: #000;
+.shape-select-btn span {
+    font-size: 14px;
+    color: var(--text-primary);
 }
 
-.presentation-mode #app-container {
-    display: none;
-}
-
-#presentation-view {
-    display: none;
-    width: 100vw;
-    height: 100vh;
-    background-color: #000;
-    justify-content: center;
-    align-items: center;
-}
-
-.presentation-mode #presentation-view {
+/* Icon Library Components */
+.icon-provider-toggle {
+    margin-bottom: 10px;
     display: flex;
+    gap: 8px;
 }
 
-#presentation-slide-container {
-    position: relative;
+.icon-provider-toggle .sidebar-add-btn {
+    flex-grow: 1;
+}
+
+.icon-search-toolbar {
+    margin-bottom: 10px;
+}
+
+.icon-search-toolbar input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+.icon-style-selector-container {
+    margin-bottom: 10px;
+}
+
+.icon-style-selector-container label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-right: 6px;
+}
+
+.icon-style-selector-container select {
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+.icon-category-filter {
+    margin-bottom: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.category-filter-btn {
+    padding: 4px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: transparent;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.category-filter-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.icon-list-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.icon-item {
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    text-align: center;
+    min-width: 60px;
+}
+
+/* Dark mode for icon library inputs */
+[data-theme="dark"] #fa-icon-search-input,
+[data-theme="dark"] #mi-icon-search-input,
+[data-theme="dark"] #fa-style-select,
+[data-theme="dark"] #mi-style-select {
     background-color: var(--bg-white);
-    /* ダークモード対応 */
-    overflow: hidden;
+    border-color: var(--border-color);
+    color: var(--text-primary);
 }
 
-/* --- コンテキストメニュー --- */
+[data-theme="dark"] #fa-icon-category-filter button,
+[data-theme="dark"] #mi-icon-category-filter button {
+    background-color: var(--bg-light);
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] #fa-icon-category-filter button.active,
+[data-theme="dark"] #mi-icon-category-filter button.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/* Page Settings & Global CSS Editor */
+#page-settings p {
+    font-size: 12px;
+    color: #6c757d;
+    margin-bottom: 8px;
+}
+
+#global-css-input {
+    height: 300px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    position: relative;
+    /* For line numbers */
+}
+
+.line-numbers {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+    background: #f7f7f7;
+    color: #888;
+    text-align: right;
+    padding: 12px 4px 12px 0;
+    font-family: monospace;
+    font-size: 14px;
+    user-select: none;
+    overflow: hidden;
+    box-sizing: border-box;
+    border-radius: var(--border-radius) 0 0 var(--border-radius);
+}
+
+.css-editor-textarea {
+    display: block;
+    width: 100%;
+    height: 100%;
+    font-family: monospace;
+    font-size: 14px;
+    box-sizing: border-box;
+    resize: none;
+    border: 1px solid #ccc;
+    border-radius: var(--border-radius);
+    background: transparent;
+    color: inherit;
+    padding: 12px;
+    padding-left: 50px;
+    outline: none;
+}
+
+.css-completion-list {
+    position: fixed;
+    display: none;
+    list-style: none;
+    margin: 0;
+    padding: 4px;
+    background: white;
+    border: 1px solid #ccc;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.completion-item {
+    padding: 4px 8px;
+    cursor: pointer;
+}
+
+.completion-item.selected {
+    background-color: #eee;
+}
+
+.css-tooltip {
+    position: fixed;
+    display: none;
+    padding: 8px;
+    background: #333;
+    color: white;
+    border-radius: 4px;
+    z-index: 1001;
+    pointer-events: none;
+    font-size: 12px;
+    max-width: 300px;
+}
+
+/* --- 3.4 Right Sidebar Components (Script Panel) --- */
+#script-panel {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    overflow-y: auto;
+}
+
+#script-panel h3 {
+    margin-top: 0;
+    margin-bottom: 12px;
+    font-size: 16px;
+}
+
+#script-display {
+    flex-grow: 1;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 8px;
+    overflow-y: auto;
+    min-height: 100px;
+}
+
+/* --- 3.5 Floating UI (Context Menus, Notifications, etc.) --- */
+/* Context Menu */
+.context-menu {
+    position: fixed;
+    z-index: 99999;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-md);
+    padding: 4px;
+    border-radius: var(--border-radius);
+    min-width: 140px;
+}
+
 #slide-context-menu,
 #element-context-menu {
     border-radius: var(--border-radius);
@@ -903,7 +1103,6 @@ body.presentation-mode {
     position: absolute;
     left: 100%;
     top: -5px;
-    /* 親メニューのpaddingと合わせる */
     background-color: var(--bg-white);
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow-md);
@@ -911,380 +1110,76 @@ body.presentation-mode {
     border-radius: var(--border-radius);
     min-width: 140px;
     z-index: 100000;
-    /* 親メニューより上 */
 }
 
 .has-submenu:hover>.submenu {
     display: block;
 }
 
-/* アラインメントボタングループ */
-.btn-group {
-    display: flex;
-    gap: 4px;
-}
-
-.btn-group button {
-    padding: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.btn-group button svg {
-    width: 16px;
-    height: 16px;
-    stroke: currentColor;
-    stroke-width: 0.5;
-    fill: currentColor;
-}
-
-/* 図形選択モーダル */
-.shape-select-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 16px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-    background-color: var(--bg-white);
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.shape-select-btn:hover {
-    border-color: var(--primary-color);
-    box-shadow: var(--shadow-md);
-    transform: translateY(-2px);
-}
-
-/* アイコン検索・フィルターのダークモード対応 */
-[data-theme="dark"] #fa-icon-search-input,
-[data-theme="dark"] #mi-icon-search-input {
-    background-color: var(--bg-white);
-    border-color: var(--border-color);
-    color: var(--text-primary);
-}
-
-[data-theme="dark"] #fa-style-select,
-[data-theme="dark"] #mi-style-select {
-    background-color: var(--bg-white);
-    border-color: var(--border-color);
-    color: var(--text-primary);
-}
-
-[data-theme="dark"] #fa-icon-category-filter button,
-[data-theme="dark"] #mi-icon-category-filter button {
-    background-color: var(--bg-light);
-    border-color: var(--border-color);
-    color: var(--text-secondary);
-    /* 視認性向上のため調整 */
-}
-
-[data-theme="dark"] #fa-icon-category-filter button.active,
-[data-theme="dark"] #mi-icon-category-filter button.active {
-    background-color: var(--primary-color);
-    color: white;
-}
-
-.shape-select-btn span {
-    font-size: 14px;
-    color: var(--text-primary);
-}
-
-/* --- コンテキストメニューのサブメニュー対応 --- */
-.has-submenu {
-    position: relative;
-}
-
-.submenu {
-    display: none;
-    position: absolute;
-    left: 100%;
-    top: -5px;
-    /* 親メニューのpaddingと合わせる */
-    background-color: var(--bg-white);
-    border: 1px solid var(--border-color);
-    box-shadow: var(--shadow-md);
-    padding: 4px;
-    border-radius: var(--border-radius);
-    min-width: 140px;
-    z-index: 100000;
-    /* 親メニューより上 */
-}
-
-.has-submenu:hover>.submenu {
-    display: block;
-}
-
-.line-numbers {
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 40px;
-    background: #f7f7f7;
-    color: #888;
-    text-align: right;
-    padding: 12px 4px 12px 0;
-    font-family: monospace;
-    font-size: 14px;
-    user-select: none;
-    overflow: hidden;
-    box-sizing: border-box;
-    border-radius: var(--border-radius) 0 0 var(--border-radius);
-}
-
-.css-editor-textarea {
-    display: block;
-    width: 100%;
-    height: 100%;
-    font-family: monospace;
-    font-size: 14px;
-    box-sizing: border-box;
-    resize: none;
-    border: 1px solid #ccc;
-    border-radius: var(--border-radius);
-    background: transparent;
-    color: inherit;
-    padding: 12px;
-    padding-left: 50px;
-    outline: none;
-}
-
-.css-completion-list {
-    position: fixed;
-    display: none;
-    list-style: none;
-    margin: 0;
-    padding: 4px;
-    background: white;
-    border: 1px solid #ccc;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    z-index: 1000;
-    max-height: 150px;
-    overflow-y: auto;
-}
-
-.css-tooltip {
-    position: fixed;
-    display: none;
-    padding: 8px;
-    background: #333;
-    color: white;
-    border-radius: 4px;
-    z-index: 1001;
-    pointer-events: none;
-    font-size: 12px;
-    max-width: 300px;
-}
-
-.completion-item {
-    padding: 4px 8px;
-    cursor: pointer;
-}
-
-.completion-item.selected {
-    background-color: #eee;
-}
-
-/* サブメニュー内のアイテムのスタイル */
 .submenu>div {
     padding: 8px 12px;
     cursor: pointer;
     white-space: nowrap;
-    /* テキストが折り返さないように */
 }
 
-.submenu>div:hover {
-    background-color: var(--bg-light);
-}
-
-.line-numbers {
+/* Export Menu (Popover from Toolbar) */
+#export-menu {
+    display: none;
     position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 40px;
-    background: #f7f7f7;
-    color: #888;
-    text-align: right;
-    padding: 12px 4px 12px 0;
-    font-family: monospace;
-    font-size: 14px;
-    user-select: none;
-    overflow: hidden;
-    box-sizing: border-box;
-    border-radius: var(--border-radius) 0 0 var(--border-radius);
-}
-
-.css-editor-textarea {
-    display: block;
-    width: 100%;
-    height: 100%;
-    font-family: monospace;
-    font-size: 14px;
-    box-sizing: border-box;
-    resize: none;
-    border: 1px solid #ccc;
-    border-radius: var(--border-radius);
-    background: transparent;
-    color: inherit;
-    padding: 12px;
-    padding-left: 50px;
-    outline: none;
-}
-
-.css-completion-list {
-    position: fixed;
-    display: none;
-    list-style: none;
-    margin: 0;
-    padding: 4px;
-    background: white;
-    border: 1px solid #ccc;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    z-index: 1000;
-    max-height: 150px;
-    overflow-y: auto;
-}
-
-.css-tooltip {
-    position: fixed;
-    display: none;
-    padding: 8px;
-    background: #333;
-    color: white;
-    border-radius: 4px;
-    z-index: 1001;
-    pointer-events: none;
-    font-size: 12px;
-    max-width: 300px;
-}
-
-.completion-item {
-    padding: 4px 8px;
-    cursor: pointer;
-}
-
-.completion-item.selected {
-    background-color: #eee;
-}
-
-.category-filter-btn {
-    padding: 4px 10px;
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    background: transparent;
-    cursor: pointer;
-    font-size: 12px;
-    color: var(--text-secondary);
-}
-
-.category-filter-btn.active {
-    background-color: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
-}
-
-.icon-item {
-    padding: 10px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    text-align: center;
-    min-width: 60px;
-}
-
-.context-menu {
-    position: fixed;
-    z-index: 99999;
+    z-index: 10000;
     background: var(--bg-white);
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow-md);
-    padding: 4px;
     border-radius: var(--border-radius);
-    min-width: 140px;
+    padding: 4px;
+    min-width: 160px;
 }
 
-#zoom-reset-btn {
-    position: absolute;
-    right: 24px;
-    top: 24px;
-    z-index: 100;
-    background: var(--bg-white);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    padding: 4px 10px;
-    font-size: 13px;
-    cursor: pointer;
-}
-
-#zoom-display {
-    position: absolute;
-    right: 24px;
-    top: 60px;
-    z-index: 100;
-    background: var(--bg-white);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    padding: 2px 10px;
-    font-size: 13px;
-}
-
-.icon-element {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-}
-
-.iframe-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 10000;
-    background-color: transparent;
-    cursor: move;
-}
-
-.element-error-placeholder {
-    color: #dc3545;
-    background-color: #f8d7da;
-    border: 1px solid #f5c6cb;
+#export-menu div {
     border-radius: 4px;
-    padding: 8px;
-    font-size: 12px;
-    text-align: center;
 }
 
-.image-edit-overlay-btn {
-    position: absolute;
-    bottom: 5px;
-    right: 5px;
-    z-index: 10;
-    background: rgba(0, 0, 0, 0.7);
-    color: white;
-    border: none;
-    border-radius: 5px;
-    padding: 5px 10px;
+#export-menu div:hover {
+    background-color: var(--bg-light);
+}
+
+/* AI Suggestion Popover */
+#ai-suggestion-popover {
+    display: none;
+    position: fixed;
+    z-index: 10001;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-md);
+    border-radius: var(--border-radius);
+    padding: 12px;
+    max-width: 300px;
+}
+
+#ai-suggestion-actions {
+    margin-top: 10px;
+    text-align: right;
+}
+
+#ai-suggestion-cancel {
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background: transparent;
     cursor: pointer;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    opacity: 0;
-    transition: opacity 0.3s ease;
 }
 
-.slide-element:hover .image-edit-overlay-btn {
-    opacity: 1;
+#ai-suggestion-apply {
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: none;
+    background: var(--primary-color);
+    color: white;
+    cursor: pointer;
+    margin-left: 8px;
 }
 
-/* 通知 */
+/* Notifications */
 .notification {
     position: fixed;
     top: 20px;
@@ -1312,4 +1207,724 @@ body.presentation-mode {
         transform: translateX(0);
         opacity: 1;
     }
+}
+
+/* ==========================================================================
+   4. Modals
+   ========================================================================== */
+
+/* --- 4.1 Settings Page / Modal --- */
+.settings-group {
+    margin-bottom: 24px;
+    padding: 16px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--bg-white);
+}
+
+.settings-group h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.settings-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.settings-item:last-child {
+    border-bottom: none;
+}
+
+.settings-item label {
+    font-size: 14px;
+    color: var(--text-primary);
+    flex-grow: 1;
+}
+
+.settings-item .settings-control {
+    margin-left: 16px;
+}
+
+.settings-description {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* Theme Toggle Switch */
+.theme-toggle {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 26px;
+}
+
+.theme-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.theme-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 26px;
+}
+
+.theme-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked+.theme-slider {
+    background-color: var(--primary-color);
+}
+
+input:checked+.theme-slider:before {
+    transform: translateX(24px);
+}
+
+/* --- 4.2 Shape Selection Modal --- */
+#shape-modal .modal__container {
+    max-width: 500px;
+}
+
+#shape-modal .modal__close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    z-index: 1001;
+}
+
+#shape-modal-content {
+    padding: 24px;
+}
+
+#shape-selection-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 16px;
+}
+
+#shape-selection-container .shape-select-btn svg {
+    width: 80px;
+    height: 80px;
+}
+
+/* --- 4.3 QR Code Modal --- */
+#qr-modal .modal__container {
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+#qr-modal .modal__close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    z-index: 1001;
+}
+
+#qr-modal-content {
+    padding: 24px;
+}
+
+#qr-modal .qr-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+}
+
+#qr-modal .qr-settings-panel {
+    background: var(--bg-light);
+    border-radius: 12px;
+    padding: 20px;
+}
+
+#qr-modal .qr-setting-group {
+    margin-bottom: 20px;
+}
+
+#qr-modal .qr-setting-group h3 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    color: var(--text-primary);
+}
+
+#qr-modal .qr-input-grid {
+    display: grid;
+    gap: 12px;
+}
+
+#qr-modal .qr-label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+#qr-modal #qr-text {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+#qr-modal #qr-size {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #ddd;
+    outline: none;
+}
+
+#qr-modal .qr-color-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+#qr-modal .qr-color-picker-wrapper {
+    text-align: center;
+}
+
+#qr-modal .qr-color-picker-wrapper .qr-label {
+    display: block;
+    margin-bottom: 8px;
+}
+
+#qr-modal .qr-color-input-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+#qr-modal .qr-color-input {
+    width: 60px;
+    height: 60px;
+    border: 3px solid var(--bg-white);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+#qr-modal .qr-style-grid {
+    display: grid;
+    gap: 16px;
+}
+
+#qr-modal .qr-style-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+#qr-modal .qr-style-btn,
+#qr-modal .qr-corner-btn {
+    padding: 8px;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-white);
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#qr-modal #qr-logo-upload {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+#qr-modal .qr-submit-btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+#qr-modal .qr-submit-btn i {
+    margin-right: 8px;
+}
+
+#qr-modal .qr-preview-panel {
+    background: var(--bg-white);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+#qr-modal .qr-preview-panel h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    color: var(--text-primary);
+    text-align: center;
+}
+
+#qr-modal .qr-preview-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 300px;
+}
+
+#qr-modal #qr-preview {
+    display: inline-block;
+    padding: 20px;
+    background: #fafbfc;
+    border: 2px dashed var(--border-color);
+    border-radius: 12px;
+    min-width: 200px;
+    min-height: 200px;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+#qr-modal #qr-warning {
+    display: none;
+    color: var(--danger-color);
+    font-size: 13px;
+    margin-top: 12px;
+    padding: 8px;
+    background: #f8d7da;
+    border-radius: 6px;
+    text-align: center;
+}
+
+/* --- 4.4 Chart Modal --- */
+#chart-modal .modal__container {
+    max-width: 900px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+#chart-modal .modal__close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    z-index: 1001;
+}
+
+#chart-modal-content {
+    padding: 24px;
+}
+
+#chart-modal .chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+}
+
+#chart-modal .chart-settings-panel {
+    background: var(--bg-light);
+    border-radius: 12px;
+    padding: 20px;
+}
+
+#chart-modal .chart-setting-group {
+    margin-bottom: 20px;
+}
+
+#chart-modal .chart-setting-group h3 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    color: var(--text-primary);
+}
+
+#chart-modal .chart-type-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    gap: 8px;
+}
+
+#chart-modal .chart-type-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 8px;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-white);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+#chart-modal .chart-type-btn i {
+    font-size: 20px;
+    margin-bottom: 4px;
+    color: var(--text-secondary);
+}
+
+#chart-modal .chart-type-btn span {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+#chart-modal .chart-data-grid {
+    display: grid;
+    gap: 12px;
+}
+
+#chart-modal .chart-label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+#chart-modal .chart-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+#chart-modal #chart-data-spreadsheet {
+    height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+}
+
+#chart-modal #chart-data-spreadsheet table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#chart-modal #chart-data-spreadsheet thead {
+    position: sticky;
+    top: 0;
+    background: var(--bg-light);
+}
+
+#chart-modal #chart-data-spreadsheet th {
+    padding: 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+#chart-modal .chart-table-action-col {
+    width: 40px;
+}
+
+#chart-modal .chart-data-actions {
+    display: flex;
+    gap: 8px;
+}
+
+#chart-modal .chart-data-actions .sidebar-add-btn {
+    flex-grow: 1;
+}
+
+#chart-modal .chart-csv-paste {
+    display: none;
+    width: 100%;
+    height: 80px;
+}
+
+#chart-modal .chart-style-grid {
+    display: grid;
+    gap: 16px;
+}
+
+#chart-modal .chart-palette-options {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+#chart-modal .color-palette-btn {
+    width: 40px;
+    height: 40px;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+#chart-modal .color-palette-btn:nth-child(1) {
+    background: linear-gradient(45deg, #007bff 0%, #007bff 20%, #28a745 20%, #28a745 40%, #dc3545 40%, #dc3545 60%, #ffc107 60%, #ffc107 80%, #6f42c1 80%);
+}
+
+#chart-modal .color-palette-btn:nth-child(2) {
+    background: linear-gradient(45deg, #e74c3c 0%, #e74c3c 20%, #f39c12 20%, #f39c12 40%, #f1c40f 40%, #f1c40f 60%, #2ecc71 60%, #2ecc71 80%, #3498db 80%);
+}
+
+#chart-modal .color-palette-btn:nth-child(3) {
+    background: linear-gradient(45deg, #8e44ad 0%, #8e44ad 20%, #9b59b6 20%, #9b59b6 40%, #e67e22 40%, #e67e22 60%, #d35400 60%, #d35400 80%, #c0392b 80%);
+}
+
+#chart-modal .chart-input-small {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 12px;
+    margin-top: 8px;
+}
+
+#chart-modal .chart-range-slider {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #ddd;
+    outline: none;
+}
+
+#chart-modal .chart-checkbox-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+#chart-modal .chart-checkbox-label {
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+#chart-modal .chart-checkbox-label input {
+    margin-right: 8px;
+    transform: scale(1.2);
+}
+
+#chart-modal .chart-submit-btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+#chart-modal .chart-submit-btn i {
+    margin-right: 8px;
+}
+
+#chart-modal .chart-preview-panel {
+    background: var(--bg-white);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+#chart-modal .chart-preview-panel h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    color: var(--text-primary);
+    text-align: center;
+}
+
+#chart-modal .chart-preview-container {
+    position: relative;
+    height: 400px;
+}
+
+#chart-modal #chart-preview {
+    width: 100%;
+    height: 100%;
+}
+
+/* --- 4.5 Image Edit Modal --- */
+#imgedit-modal .modal__container {
+    max-width: 1400px;
+    max-height: 90vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+#imgedit-modal .modal__close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    z-index: 1001;
+}
+
+#imgedit-modal .imgedit-main-content {
+    flex-grow: 1;
+}
+
+#imgedit-modal #imgedit-crop-btn {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+#imgedit-modal #imgedit-undo-btn {
+    width: 100%;
+}
+
+#imgedit-modal #imgedit-brush-color {
+    width: 100%;
+    height: 30px;
+}
+
+#imgedit-modal .imgedit-action-group {
+    margin-top: 20px;
+}
+
+/* ==========================================================================
+   5. Presentation Mode
+   ========================================================================== */
+body.presentation-mode {
+    background-color: #000;
+}
+
+.presentation-mode #app-container {
+    display: none;
+}
+
+#presentation-view {
+    display: none;
+    width: 100vw;
+    height: 100vh;
+    background-color: #000;
+    justify-content: center;
+    align-items: center;
+}
+
+.presentation-mode #presentation-view {
+    display: flex;
+}
+
+#presentation-slide-container {
+    position: relative;
+    background-color: var(--bg-white);
+    overflow: hidden;
+}
+
+/* ==========================================================================
+   6. Utility & General Component Styles
+   ========================================================================== */
+.sidebar-add-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-white);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 13px;
+    color: var(--text-primary);
+    text-align: left;
+}
+
+.sidebar-add-btn:hover {
+    background-color: var(--bg-light);
+    border-color: var(--primary-color-hover);
+}
+
+.sidebar-add-btn i {
+    color: var(--primary-color);
+}
+
+.small-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.danger-btn {
+    background-color: var(--danger-color);
+    border-color: var(--danger-color);
+}
+
+.btn-group {
+    display: flex;
+    gap: 4px;
+}
+
+.btn-group button {
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-group button svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    stroke-width: 0.5;
+    fill: currentColor;
+}
+
+#delete-element-btn {
+    width: 100%;
+    padding: 8px 16px;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    background-color: var(--danger-color);
+    color: white;
+    border: none;
+    font-weight: 500;
+    transition: var(--transition);
+}
+
+#delete-element-btn:hover {
+    background-color: #c82333;
+}
+
+.hidden-input {
+    display: none;
 }

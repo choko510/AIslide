@@ -1,4 +1,3 @@
-/* モダンなモーダルデザインのためのCSS */
 .modal {
     font-family: 'Noto Sans Japanese', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
 }
@@ -175,22 +174,5 @@
         border-radius: 12px 12px 0px 0px;
         position: absolute;
         bottom: 0;
-    }
-
-    .ranking-header {
-        display: block;
-    }
-
-    .score-dashboard {
-        grid-template-columns: 1fr 1fr;
-    }
-
-    .score-card__value {
-        font-size: 1.5rem;
-    }
-
-    .tab {
-        padding: 8px 12px;
-        font-size: 0.9rem;
     }
 }

@@ -10,12 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://site-assets.fontawesome.com">
     <!-- Preload critical CSS -->
-    <link rel="preload" as="style" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/all.css"
-        onload="this.rel='stylesheet'">
     <link rel="preload" as="style" href="slide.css" onload="this.rel='stylesheet'">
-    <link rel="preload" as="style" href="ai/ai.css" onload="this.rel='stylesheet'">
-    <link rel="preload" as="style"
-        href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap"
+    <link rel="preload" as="style" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/all.css"
         onload="this.rel='stylesheet'">
     <!-- Google Fonts for imgedit.html -->
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
@@ -26,8 +22,6 @@
         <div id="toolbar">
             <button id="add-slide-btn" title="スライド追加"><i class="fas fa-plus"></i><span>スライド追加</span></button>
             <button id="delete-slide-btn" title="スライド削除"><i class="fas fa-trash-alt"></i><span>スライド削除</span></button>
-            <div class="separator"></div>
-            <!-- Element add buttons moved to sidebar -->
             <div class="separator"></div>
             <!-- アラインメントボタングループ -->
             <div class="btn-group">
@@ -52,16 +46,14 @@
             <button id="present-btn" title="プレゼンテーション開始"><i class="fas fa-play"></i><span>開始</span></button>
             <button id="export-btn" title="エクスポート"><i class="fas fa-download"></i><span>エクスポート</span></button>
             <button id="toggle-script-panel-btn" title="台本パネル表示/非表示"><i class="fas fa-book"></i><span>台本</span></button>
-            <div id="export-menu"
-                style="display:none;position:absolute;z-index:10000;background:#fff;border:1px solid var(--border-color);box-shadow:var(--shadow-md);min-width:160px;">
+            <div id="export-menu">
             </div>
         </div>
 
-        <div id="app-body" style="display: flex; flex-direction: column; flex-grow: 1; overflow: hidden;">
-            <div id="center-content" style="display: flex; flex-grow: 1; overflow: hidden !important;">
-                <aside id="left-sidebar" style="position: relative;">
-                    <div id="sidebar-resize-handle"
-                        style="position: absolute; top: 0; right: 0; width: 6px; height: 100%; cursor: ew-resize; z-index: 10; background: transparent;">
+        <div id="app-body">
+            <div id="center-content">
+                <aside id="left-sidebar">
+                    <div id="sidebar-resize-handle">
                     </div>
                     <div id="sidebar-tabs">
                         <button class="sidebar-tab-button active" data-tab="elements">
@@ -92,11 +84,10 @@
                     </div>
                     <div id="sidebar-content">
                         <div class="sidebar-tab-content active" data-tab-content="elements">
-                            <div id="element-add-buttons-container"
-                                style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div id="element-add-buttons-container">
                                 <button id="add-text-btn" class="sidebar-add-btn"><i
                                         class="fas fa-font fa-fw"></i><span>テキスト</span></button>
-                                <input type="file" id="image-upload-input" accept="image/*" style="display: none;">
+                                <input type="file" id="image-upload-input" accept="image/*" class="hidden-input">
                                 <button id="add-image-btn" class="sidebar-add-btn"><i
                                         class="fas fa-image fa-fw"></i><span>画像</span></button>
                                 <button id="add-image-edit-btn" class="sidebar-add-btn"><i
@@ -116,49 +107,43 @@
                             </div>
                         </div>
                         <div class="sidebar-tab-content" data-tab-content="icons">
-                            <div style="margin-bottom: 10px; display: flex; gap: 8px;">
-                                <button id="fa-toggle-btn" class="sidebar-add-btn active" style="flex-grow: 1;"><i
+                            <div class="icon-provider-toggle">
+                                <button id="fa-toggle-btn" class="sidebar-add-btn active"><i
                                         class="fa-brands fa-font-awesome"></i><span>Font Awesome</span></button>
-                                <button id="mi-toggle-btn" class="sidebar-add-btn" style="flex-grow: 1;"><i
+                                <button id="mi-toggle-btn" class="sidebar-add-btn"><i
                                         class="material-icons">star</i><span>Material Icons</span></button>
                             </div>
 
                             <!-- Font Awesome Section -->
                             <div id="font-awesome-section">
-                                <div id="fa-icon-search-toolbar" style="margin-bottom: 10px;">
-                                    <input type="text" id="fa-icon-search-input" placeholder="Font Awesomeアイコン検索..."
-                                        style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: var(--border-radius);">
+                                <div class="icon-search-toolbar">
+                                    <input type="text" id="fa-icon-search-input" placeholder="Font Awesomeアイコン検索...">
                                 </div>
-                                <div style="margin-bottom: 10px;">
-                                    <label
-                                        style="font-size:12px;color:var(--text-secondary);margin-right:6px;">スタイル</label>
-                                    <select id="fa-style-select" style="padding:4px 8px;border-radius:6px;">
+                                <div class="icon-style-selector-container">
+                                    <label>スタイル</label>
+                                    <select id="fa-style-select">
                                         <option value="fas">Solid</option>
                                         <option value="far">Regular</option>
                                         <option value="fal">Light</option>
                                         <option value="fat">Thin</option>
                                     </select>
                                 </div>
-                                <div id="fa-icon-category-filter"
-                                    style="margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px;">
+                                <div id="fa-icon-category-filter" class="icon-category-filter">
                                     <!-- Font Awesome カテゴリーボタンはJSで動的に生成されます -->
                                 </div>
-                                <div id="fa-icon-list-container"
-                                    style="display: flex; flex-wrap: wrap; gap: 10px; max-height: 400px; overflow-y: auto;">
+                                <div id="fa-icon-list-container" class="icon-list-container">
                                     <!-- Font Awesome アイコンはここにJavaScriptで描画されます -->
                                 </div>
                             </div>
 
                             <!-- Material Icons Section -->
                             <div id="material-icons-section" style="display: none;">
-                                <div id="mi-icon-search-toolbar" style="margin-bottom: 10px;">
-                                    <input type="text" id="mi-icon-search-input" placeholder="Material Icons検索..."
-                                        style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: var(--border-radius);">
+                                <div class="icon-search-toolbar">
+                                    <input type="text" id="mi-icon-search-input" placeholder="Material Icons検索...">
                                 </div>
-                                <div style="margin-bottom: 10px;">
-                                    <label
-                                        style="font-size:12px;color:var(--text-secondary);margin-right:6px;">スタイル</label>
-                                    <select id="mi-style-select" style="padding:4px 8px;border-radius:6px;">
+                                <div class="icon-style-selector-container">
+                                    <label>スタイル</label>
+                                    <select id="mi-style-select">
                                         <option value="material-icons">Filled</option>
                                         <option value="material-icons-outlined">Outlined</option>
                                         <option value="material-icons-round">Round</option>
@@ -166,12 +151,10 @@
                                         <option value="material-icons-two-tone">Two Tone</option>
                                     </select>
                                 </div>
-                                <div id="mi-icon-category-filter"
-                                    style="margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px;">
+                                <div id="mi-icon-category-filter" class="icon-category-filter">
                                     <!-- Material Icons カテゴリーボタンはJSで動的に生成されます -->
                                 </div>
-                                <div id="mi-icon-list-container"
-                                    style="display: flex; flex-wrap: wrap; gap: 10px; max-height: 400px; overflow-y: auto;">
+                                <div id="mi-icon-list-container" class="icon-list-container">
                                     <!-- Material Icons はここにJavaScriptで描画されます -->
                                 </div>
                             </div>
@@ -182,13 +165,10 @@
                         </div>
                         <div class="sidebar-tab-content" data-tab-content="page-settings">
                             <h3>ページ全体のカスタムCSS</h3>
-                            <p style="font-size:12px; color: #6c757d; margin-bottom: 8px;">ここに記述したCSSは、すべてのスライドに適用されます。
-                            </p>
-                            <div id="global-css-input"
-                                style="height: 300px; border: 1px solid var(--border-color); border-radius: var(--border-radius);">
+                            <p>ここに記述したCSSは、すべてのスライドに適用されます。</p>
+                            <div id="global-css-input">
                             </div>
-                            <button id="save-global-css-btn" class="sidebar-add-btn"
-                                style="width:100%; margin-top: 10px; justify-content: center;">ページCSSを適用</button>
+                            <button id="save-global-css-btn" class="sidebar-add-btn">ページCSSを適用</button>
                         </div>
                         <div class="sidebar-tab-content" data-tab-content="settings">
                             <div id="settings-panel">
@@ -212,8 +192,7 @@
                                             <div class="settings-description">UIのフォントサイズを調整します</div>
                                         </label>
                                         <div class="settings-control">
-                                            <select id="font-size-setting"
-                                                style="padding: 4px 8px; border-radius: 4px;">
+                                            <select id="font-size-setting">
                                                 <option value="small">小</option>
                                                 <option value="normal" selected>標準</option>
                                                 <option value="large">大</option>
@@ -270,8 +249,7 @@
                                             <div class="settings-description">プレゼンテーションデータをJSONファイルとして保存</div>
                                         </label>
                                         <div class="settings-control">
-                                            <button id="export-data-btn" class="sidebar-add-btn"
-                                                style="padding: 6px 12px; font-size: 12px;">
+                                            <button id="export-data-btn" class="sidebar-add-btn small-btn">
                                                 <i class="fas fa-download"></i> エクスポート
                                             </button>
                                         </div>
@@ -283,9 +261,8 @@
                                         </label>
                                         <div class="settings-control">
                                             <input type="file" id="import-data-input" accept=".json"
-                                                style="display: none;">
-                                            <button id="import-data-btn" class="sidebar-add-btn"
-                                                style="padding: 6px 12px; font-size: 12px;">
+                                                class="hidden-input">
+                                            <button id="import-data-btn" class="sidebar-add-btn small-btn">
                                                 <i class="fas fa-upload"></i> インポート
                                             </button>
                                         </div>
@@ -296,8 +273,7 @@
                                             <div class="settings-description">すべてのプレゼンテーションデータを削除</div>
                                         </label>
                                         <div class="settings-control">
-                                            <button id="clear-data-btn" class="sidebar-add-btn"
-                                                style="padding: 6px 12px; font-size: 12px; background-color: var(--danger-color); border-color: var(--danger-color);">
+                                            <button id="clear-data-btn" class="sidebar-add-btn small-btn danger-btn">
                                                 <i class="fas fa-trash"></i> 全削除
                                             </button>
                                         </div>
@@ -307,10 +283,8 @@
                         </div>
                         <div class="sidebar-tab-content" data-tab-content="chat">
                             <div id="chat-panel">
-                                <div id="ai-controls"
-                                    style="margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px;">
-                                    <div id="ai-mode-selector"
-                                        style="display: flex; justify-content: space-around; background: var(--bg-secondary); padding: 4px; border-radius: var(--border-radius);">
+                                <div id="ai-controls">
+                                    <div id="ai-mode-selector">
                                         <button class="ai-mode-btn active" data-mode="design" title="デザインモード">
                                             <i class="fas fa-palette"></i>
                                             <span>デザイン</span>
@@ -324,24 +298,22 @@
                                             <span>聞く</span>
                                         </button>
                                     </div>
-                                    <div style="display: flex; gap: 8px;">
-                                        <button id="reset-chat-btn" class="sidebar-add-btn" title="チャット履歴をリセットします"
-                                            style="width: 100%; justify-content: center; margin-bottom: 10px;">
+                                    <div class="chat-reset-container">
+                                        <button id="reset-chat-btn" class="sidebar-add-btn" title="チャット履歴をリセットします">
                                             <i class="fas fa-sync-alt"></i> チャットをリセット
                                         </button>
                                     </div>
-                                    <div id="ai-control-buttons" style="display: none; gap: 8px; margin-bottom: 10px;">
-                                        <button id="pause-ai-btn" class="sidebar-add-btn" title="AIの自動実行を一時停止します"
-                                            style="flex-grow: 1; justify-content: center; background-color: var(--warning-color);">
+                                    <div id="ai-control-buttons">
+                                        <button id="pause-ai-btn" class="sidebar-add-btn warning-btn"
+                                            title="AIの自動実行を一時停止します">
                                             <i class="fas fa-pause"></i> 一時停止
                                         </button>
-                                        <button id="resume-ai-btn" class="sidebar-add-btn" title="AIの自動実行を再開します"
-                                            style="flex-grow: 1; justify-content: center; background-color: var(--success-color); display: none;">
+                                        <button id="resume-ai-btn" class="sidebar-add-btn success-btn"
+                                            title="AIの自動実行を再開します" style="display: none;">
                                             <i class="fas fa-play"></i> 再開
                                         </button>
                                     </div>
-                                    <div
-                                        style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+                                    <div class="ai-toggles-container">
                                         <label class="ai-toggle-label">
                                             <i class="fas fa-robot"></i>
                                             <span>自律モード</span>
@@ -361,52 +333,38 @@
                                     </div>
                                 </div>
                                 <!-- 自律モード用UI -->
-                                <div id="autonomous-goal-container"
-                                    style="display:none; flex-direction:column; gap:8px; margin-bottom:10px;">
-                                    <input type="text" id="autonomous-goal-input" placeholder="最終目標を入力..."
-                                        style="padding:8px; border-radius:6px; border:1px solid var(--border-color);">
-                                    <button id="start-autonomous-btn" class="sidebar-add-btn"
-                                        style="align-self:flex-end;">開始</button>
+                                <div id="autonomous-goal-container">
+                                    <input type="text" id="autonomous-goal-input" placeholder="最終目標を入力...">
+                                    <button id="start-autonomous-btn" class="sidebar-add-btn">開始</button>
                                 </div>
-                                <div id="chat-messages"
-                                    style="height: 60vh; max-height: 700px; overflow-y: auto; border: 1px solid var(--border-color); padding: 10px; margin-bottom: 10px; border-radius: var(--border-radius);">
+                                <div id="chat-messages">
                                 </div>
-                                <div id="chat-input-container" style="display: flex;">
-                                    <input type="text" id="chat-input"
-                                        style="flex-grow: 1; padding: 8px; border: 1px solid var(--border-color); border-radius: var(--border-radius) 0 0 var(--border-radius);"
-                                        placeholder="AIにスライドの変更を指示...">
-                                    <button id="send-chat-btn"
-                                        style="padding: 8px 15px; border-radius: 0 var(--border-radius) var(--border-radius) 0; border: 1px solid var(--border-color); border-left: none; background: var(--primary-color); color: white; cursor: pointer;">送信</button>
+                                <div id="chat-input-container">
+                                    <input type="text" id="chat-input" placeholder="AIにスライドの変更を指示...">
+                                    <button id="send-chat-btn">送信</button>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </aside>
-                <div id="main-canvas-area"
-                    style="flex-grow: 1; display: flex; justify-content: center; align-items: center; padding: 24px; overflow: hidden; min-width: 0; min-height: 0;">
+                <div id="main-canvas-area">
                     <div id="slide-wrapper"> <!-- slide-wrapperのスタイルは既存のmain-pane内のものとほぼ同じはず -->
                         <div id="slide-canvas"></div>
                     </div>
                 </div>
-                <aside id="right-sidebar"
-                    style="position: relative; width: 300px; background-color: var(--bg-white); border-left: 1px solid var(--border-color); display: none; flex-direction: column; overflow: hidden;">
-                    <div id="right-sidebar-resize-handle"
-                        style="position: absolute; top: 0; left: 0; width: 6px; height: 100%; cursor: ew-resize; z-index: 10; background: transparent;">
+                <aside id="right-sidebar">
+                    <div id="right-sidebar-resize-handle">
                     </div>
-                    <div id="script-panel"
-                        style="padding: 16px; display: flex; flex-direction: column; flex-grow: 1; overflow-y: auto;">
-                        <h3 style="margin-top: 0; margin-bottom: 12px; font-size: 16px;">台本</h3>
-                        <div id="script-display" contenteditable="false"
-                            style="flex-grow: 1; border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 8px; overflow-y: auto; min-height: 100px;">
+                    <div id="script-panel">
+                        <h3>台本</h3>
+                        <div id="script-display" contenteditable="false">
                         </div>
                     </div>
                 </aside>
             </div>
-            <div id="bottom-pane"
-                style="flex-shrink: 0; height: 140px; background-color: var(--bg-white); border-top: 1px solid var(--border-color); padding: 8px; overflow: hidden; display: flex; align-items: center;">
+            <div id="bottom-pane">
                 <div id="slide-list-container">
-                    <ul id="slide-list"
-                        style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: row; align-items: center; width: 100%; height: 100%;">
+                    <ul id="slide-list">
                     </ul>
                 </div>
             </div>
@@ -420,175 +378,130 @@
     <!-- QRコード生成モーダル -->
     <div class="modal micromodal-slide" id="qr-modal" aria-hidden="true">
         <div class="modal__overlay" tabindex="-1" data-micromodal-close>
-            <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title"
-                style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
-                <button class="modal__close" aria-label="Close modal" data-micromodal-close
-                    style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; color: #6c757d; cursor: pointer; z-index: 1001;">&times;</button>
-                <main class="modal__content" id="qr-modal-content" style="padding: 24px;">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;">
+            <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title">
+                <button class="modal__close" aria-label="Close modal" data-micromodal-close>&times;</button>
+                <main class="modal__content" id="qr-modal-content">
+                    <div class="qr-grid">
                         <!-- 左側：設定パネル -->
-                        <div style="background: #f8f9fa; border-radius: 12px; padding: 20px;">
+                        <div class="qr-settings-panel">
                             <form id="qr-create-form">
                                 <!-- 基本設定 -->
-                                <div style="margin-bottom: 20px;">
-                                    <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #495057;">基本設定</h3>
-                                    <div style="display: grid; gap: 12px;">
+                                <div class="qr-setting-group">
+                                    <h3>基本設定</h3>
+                                    <div class="qr-input-grid">
                                         <div>
-                                            <label
-                                                style="display: block; margin-bottom: 4px; font-size: 13px; color: #6c757d; font-weight: 500;">QRコード内容</label>
-                                            <input type="text" id="qr-text" value="" required placeholder="URLやテキストを入力"
-                                                style="width: 100%; padding: 10px 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px;">
+                                            <label class="qr-label">QRコード内容</label>
+                                            <input type="text" id="qr-text" value="" required placeholder="URLやテキストを入力">
                                         </div>
                                         <div>
-                                            <label
-                                                style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">サイズ:
-                                                <span id="qr-size-value">256</span>px</label>
-                                            <input type="range" id="qr-size" value="256" min="128" max="512" step="16"
-                                                style="width: 100%; height: 6px; border-radius: 3px; background: #ddd; outline: none;">
+                                            <label class="qr-label">サイズ: <span id="qr-size-value">256</span>px</label>
+                                            <input type="range" id="qr-size" value="256" min="128" max="512" step="16">
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- カラー設定 -->
-                                <div style="margin-bottom: 20px;">
-                                    <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #495057;">カラー</h3>
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                                        <div style="text-align: center;">
-                                            <label
-                                                style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">QRコード色</label>
-                                            <div style="position: relative; display: inline-block;">
+                                <div class="qr-setting-group">
+                                    <h3>カラー</h3>
+                                    <div class="qr-color-grid">
+                                        <div class="qr-color-picker-wrapper">
+                                            <label class="qr-label">QRコード色</label>
+                                            <div class="qr-color-input-wrapper">
                                                 <input type="color" id="qr-color" value="#000000"
-                                                    style="width: 60px; height: 60px; border: 3px solid #fff; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                                    class="qr-color-input">
                                             </div>
                                         </div>
-                                        <div style="text-align: center;">
-                                            <label
-                                                style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">背景色</label>
-                                            <div style="position: relative; display: inline-block;">
+                                        <div class="qr-color-picker-wrapper">
+                                            <label class="qr-label">背景色</label>
+                                            <div class="qr-color-input-wrapper">
                                                 <input type="color" id="qr-bg-color" value="#ffffff"
-                                                    style="width: 60px; height: 60px; border: 3px solid #fff; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                                    class="qr-color-input">
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- スタイル設定 -->
-                                <div style="margin-bottom: 20px;">
-                                    <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #495057;">スタイル</h3>
-                                    <div style="display: grid; gap: 16px;">
+                                <div class="qr-setting-group">
+                                    <h3>スタイル</h3>
+                                    <div class="qr-style-grid">
                                         <div>
-                                            <label
-                                                style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">ドット形状</label>
-                                            <div
-                                                style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                                                <div
-                                                    style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                                                    <button type="button" class="qr-style-btn" data-style="square"
-                                                        title="四角"
-                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
-                                                            width="24" height="24" viewBox="0 0 24 24">
-                                                            <path d="M0 0h24v24H0z" fill="currentColor" />
-                                                        </svg></button>
-                                                    <button type="button" class="qr-style-btn" data-style="dots"
-                                                        title="丸"
-                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
-                                                            width="24" height="24" viewBox="0 0 24 24">
-                                                            <circle cx="12" cy="12" r="12" fill="currentColor" />
-                                                        </svg></button>
-                                                    <button type="button" class="qr-style-btn" data-style="rounded"
-                                                        title="角丸"
-                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
-                                                            width="24" height="24" viewBox="0 0 24 24">
-                                                            <rect width="24" height="24" rx="6" fill="currentColor" />
-                                                        </svg></button>
-                                                    <button type="button" class="qr-style-btn" data-style="classy"
-                                                        title="クラッシー"
-                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
-                                                            width="24" height="24" viewBox="0 0 24 24">
-                                                            <path
-                                                                d="M0 12C0 5.373 5.373 0 12 0h12v12C24 18.627 18.627 24 12 24S0 18.627 0 12z"
-                                                                fill="currentColor" />
-                                                        </svg></button>
-                                                    <button type="button" class="qr-style-btn"
-                                                        data-style="classy-rounded" title="クラッシー丸"
-                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
-                                                            width="24" height="24" viewBox="0 0 24 24">
-                                                            <path
-                                                                d="M0 12C0 5.373 5.373 0 12 0h12v12C24 18.627 18.627 24 12 24S0 18.627 0 12z"
-                                                                clip-rule="evenodd" fill-rule="evenodd"
-                                                                fill="currentColor" />
-                                                        </svg></button>
-                                                    <button type="button" class="qr-style-btn"
-                                                        data-style="extra-rounded" title="超丸"
-                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
-                                                            width="24" height="24" viewBox="0 0 24 24">
-                                                            <rect width="24" height="24" rx="12" fill="currentColor" />
-                                                        </svg></button>
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <label
-                                                    style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">枠線形状</label>
-                                                <div
-                                                    style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                                                    <button type="button" class="qr-corner-btn" data-corner="square"
-                                                        title="四角"
-                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
-                                                            width="24" height="24" viewBox="0 0 24 24">
-                                                            <rect width="16" height="16" x="4" y="4"
-                                                                stroke="currentColor" stroke-width="4"
-                                                                fill="transparent" />
-                                                        </svg></button>
-                                                    <button type="button" class="qr-corner-btn" data-corner="dot"
-                                                        title="丸"
-                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
-                                                            width="24" height="24" viewBox="0 0 24 24">
-                                                            <circle cx="12" cy="12" r="8" stroke="currentColor"
-                                                                stroke-width="4" fill="transparent" />
-                                                        </svg></button>
-                                                    <button type="button" class="qr-corner-btn"
-                                                        data-corner="extra-rounded" title="超丸"
-                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
-                                                            width="24" height="24" viewBox="0 0 24 24">
-                                                            <rect width="16" height="16" x="4" y="4" rx="6"
-                                                                stroke="currentColor" stroke-width="4"
-                                                                fill="transparent" />
-                                                        </svg></button>
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <label
-                                                    style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">ロゴ画像（任意）</label>
-                                                <input type="file" id="qr-logo-upload" accept="image/*"
-                                                    style="width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px;">
+                                            <label class="qr-label">ドット形状</label>
+                                            <div class="qr-style-options">
+                                                <button type="button" class="qr-style-btn" data-style="square"
+                                                    title="四角"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                        <path d="M0 0h24v24H0z" fill="currentColor" />
+                                                    </svg></button>
+                                                <button type="button" class="qr-style-btn" data-style="dots"
+                                                    title="丸"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                        <circle cx="12" cy="12" r="12" fill="currentColor" />
+                                                    </svg></button>
+                                                <button type="button" class="qr-style-btn" data-style="rounded"
+                                                    title="角丸"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                        <rect width="24" height="24" rx="6" fill="currentColor" />
+                                                    </svg></button>
+                                                <button type="button" class="qr-style-btn" data-style="classy"
+                                                    title="クラッシー"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                        <path
+                                                            d="M0 12C0 5.373 5.373 0 12 0h12v12C24 18.627 18.627 24 12 24S0 18.627 0 12z"
+                                                            fill="currentColor" />
+                                                    </svg></button>
+                                                <button type="button" class="qr-style-btn" data-style="classy-rounded"
+                                                    title="クラッシー丸"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                        <path
+                                                            d="M0 12C0 5.373 5.373 0 12 0h12v12C24 18.627 18.627 24 12 24S0 18.627 0 12z"
+                                                            clip-rule="evenodd" fill-rule="evenodd"
+                                                            fill="currentColor" />
+                                                    </svg></button>
+                                                <button type="button" class="qr-style-btn" data-style="extra-rounded"
+                                                    title="超丸"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                        <rect width="24" height="24" rx="12" fill="currentColor" />
+                                                    </svg></button>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <button type="submit"
-                                        style="width: 100%; padding: 12px; background: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.2s;">
-                                        <i class="fas fa-plus" style="margin-right: 8px;"></i>スライドに追加
-                                    </button>
+                                        <div>
+                                            <label class="qr-label">枠線形状</label>
+                                            <div class="qr-style-options">
+                                                <button type="button" class="qr-corner-btn" data-corner="square"
+                                                    title="四角"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                        <rect width="16" height="16" x="4" y="4" stroke="currentColor"
+                                                            stroke-width="4" fill="transparent" />
+                                                    </svg></button>
+                                                <button type="button" class="qr-corner-btn" data-corner="dot"
+                                                    title="丸"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                        <circle cx="12" cy="12" r="8" stroke="currentColor"
+                                                            stroke-width="4" fill="transparent" />
+                                                    </svg></button>
+                                                <button type="button" class="qr-corner-btn" data-corner="extra-rounded"
+                                                    title="超丸"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                        <rect width="16" height="16" x="4" y="4" rx="6"
+                                                            stroke="currentColor" stroke-width="4" fill="transparent" />
+                                                    </svg></button>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label class="qr-label">ロゴ画像（任意）</label>
+                                            <input type="file" id="qr-logo-upload" accept="image/*">
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="submit" class="qr-submit-btn">
+                                    <i class="fas fa-plus"></i>スライドに追加
+                                </button>
                             </form>
                         </div>
 
                         <!-- 右側：プレビュー -->
-                        <div
-                            style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
-                            <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #495057; text-align: center;">プレビュー
-                            </h3>
-                            <div
-                                style="display: flex; justify-content: center; align-items: center; min-height: 300px;">
-                                <div id="qr-preview"
-                                    style="display: inline-block; padding: 20px; background: #fafbfc; border: 2px dashed #dee2e6; border-radius: 12px; min-width: 200px; min-height: 200px; text-align: center; color: #6c757d;">
+                        <div class="qr-preview-panel">
+                            <h3>プレビュー</h3>
+                            <div class="qr-preview-container">
+                                <div id="qr-preview">
                                     QRコード内容を入力してください
                                 </div>
                             </div>
-                            <div id="qr-warning"
-                                style="display: none; color: #dc3545; font-size: 13px; margin-top: 12px; padding: 8px; background: #f8d7da; border-radius: 6px; text-align: center;">
-                            </div>
+                            <div id="qr-warning"></div>
                         </div>
                     </div>
                 </main>
@@ -599,82 +512,62 @@
     <!-- グラフ作成用モーダル -->
     <div class="modal micromodal-slide" id="chart-modal" aria-hidden="true">
         <div class="modal__overlay" tabindex="-1" data-micromodal-close>
-            <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="chart-modal-title"
-                style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
-                <button class="modal__close" aria-label="Close modal" data-micromodal-close
-                    style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; color: #6c757d; cursor: pointer; z-index: 1001;">&times;</button>
-                <main class="modal__content" id="chart-modal-content" style="padding: 24px;">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;">
+            <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="chart-modal-title">
+                <button class="modal__close" aria-label="Close modal" data-micromodal-close>&times;</button>
+                <main class="modal__content" id="chart-modal-content">
+                    <div class="chart-grid">
                         <!-- 左側：設定パネル -->
-                        <div style="background: #f8f9fa; border-radius: 12px; padding: 20px;">
+                        <div class="chart-settings-panel">
                             <form id="chart-create-form">
                                 <!-- グラフ種類選択 -->
-                                <div style="margin-bottom: 20px;">
-                                    <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #495057;">グラフの種類</h3>
-                                    <div
-                                        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 8px;">
-                                        <button type="button" class="chart-type-btn" data-type="bar"
-                                            style="display: flex; flex-direction: column; align-items: center; padding: 12px 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
-                                            <i class="fas fa-chart-bar"
-                                                style="font-size: 20px; margin-bottom: 4px; color: #6c757d;"></i>
-                                            <span style="font-size: 11px; color: #6c757d;">棒グラフ</span>
+                                <div class="chart-setting-group">
+                                    <h3>グラフの種類</h3>
+                                    <div class="chart-type-grid">
+                                        <button type="button" class="chart-type-btn" data-type="bar">
+                                            <i class="fas fa-chart-bar"></i>
+                                            <span>棒グラフ</span>
                                         </button>
-                                        <button type="button" class="chart-type-btn" data-type="line"
-                                            style="display: flex; flex-direction: column; align-items: center; padding: 12px 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
-                                            <i class="fas fa-chart-line"
-                                                style="font-size: 20px; margin-bottom: 4px; color: #6c757d;"></i>
-                                            <span style="font-size: 11px; color: #6c757d;">折れ線</span>
+                                        <button type="button" class="chart-type-btn" data-type="line">
+                                            <i class="fas fa-chart-line"></i>
+                                            <span>折れ線</span>
                                         </button>
-                                        <button type="button" class="chart-type-btn" data-type="pie"
-                                            style="display: flex; flex-direction: column; align-items: center; padding: 12px 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
-                                            <i class="fas fa-chart-pie"
-                                                style="font-size: 20px; margin-bottom: 4px; color: #6c757d;"></i>
-                                            <span style="font-size: 11px; color: #6c757d;">円グラフ</span>
+                                        <button type="button" class="chart-type-btn" data-type="pie">
+                                            <i class="fas fa-chart-pie"></i>
+                                            <span>円グラフ</span>
                                         </button>
-                                        <button type="button" class="chart-type-btn" data-type="doughnut"
-                                            style="display: flex; flex-direction: column; align-items: center; padding: 12px 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
-                                            <i class="fas fa-dot-circle"
-                                                style="font-size: 20px; margin-bottom: 4px; color: #6c757d;"></i>
-                                            <span style="font-size: 11px; color: #6c757d;">ドーナツ</span>
+                                        <button type="button" class="chart-type-btn" data-type="doughnut">
+                                            <i class="fas fa-dot-circle"></i>
+                                            <span>ドーナツ</span>
                                         </button>
-                                        <button type="button" class="chart-type-btn" data-type="radar"
-                                            style="display: flex; flex-direction: column; align-items: center; padding: 12px 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; transition: all 0.2s;">
-                                            <i class="fas fa-project-diagram"
-                                                style="font-size: 20px; margin-bottom: 4px; color: #6c757d;"></i>
-                                            <span style="font-size: 11px; color: #6c757d;">レーダー</span>
+                                        <button type="button" class="chart-type-btn" data-type="radar">
+                                            <i class="fas fa-project-diagram"></i>
+                                            <span>レーダー</span>
                                         </button>
                                     </div>
                                 </div>
 
                                 <!-- データ入力 -->
-                                <div style="margin-bottom: 20px;">
-                                    <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #495057;">データ</h3>
-                                    <div style="display: grid; gap: 12px;">
+                                <div class="chart-setting-group">
+                                    <h3>データ</h3>
+                                    <div class="chart-data-grid">
                                         <div>
-                                            <label
-                                                style="display: block; margin-bottom: 4px; font-size: 13px; color: #6c757d; font-weight: 500;">タイトル</label>
+                                            <label class="chart-label">タイトル</label>
                                             <input type="text" id="chart-title" placeholder="グラフタイトル"
-                                                style="width: 100%; padding: 10px 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px;">
+                                                class="chart-input">
                                         </div>
                                         <div>
-                                            <label
-                                                style="display: block; margin-bottom: 4px; font-size: 13px; color: #6c757d; font-weight: 500;">データセット名</label>
+                                            <label class="chart-label">データセット名</label>
                                             <input type="text" id="chart-dataset-label" value="Dataset" required
-                                                style="width: 100%; padding: 10px 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px;">
+                                                class="chart-input">
                                         </div>
                                         <!-- 新しいスプレッドシートUI -->
-                                        <div id="chart-data-spreadsheet"
-                                            style="height: 200px; overflow-y: auto; border: 1px solid #ced4da; border-radius: 6px;">
-                                            <table style="width: 100%; border-collapse: collapse;">
-                                                <thead style="position: sticky; top: 0; background: #f8f9fa;">
+                                        <div id="chart-data-spreadsheet">
+                                            <table>
+                                                <thead>
                                                     <tr>
-                                                        <th
-                                                            style="padding: 8px; text-align: left; border-bottom: 1px solid #ced4da;">
-                                                            ラベル</th>
-                                                        <th
-                                                            style="padding: 8px; text-align: left; border-bottom: 1px solid #ced4da;">
-                                                            値</th>
-                                                        <th style="width: 40px; border-bottom: 1px solid #ced4da;"></th>
+                                                        <th>ラベル</th>
+                                                        <th>値</th>
+                                                        <th class="chart-table-action-col"></th>
                                                     </tr>
                                                 </thead>
                                                 <tbody id="chart-data-tbody">
@@ -682,78 +575,66 @@
                                                 </tbody>
                                             </table>
                                         </div>
-                                        <div style="display: flex; gap: 8px;">
-                                            <button type="button" id="add-chart-row-btn" class="sidebar-add-btn"
-                                                style="flex-grow: 1;">行を追加</button>
-                                            <button type="button" id="paste-csv-btn" class="sidebar-add-btn"
-                                                style="flex-grow: 1;">CSV/TSVを貼り付け</button>
+                                        <div class="chart-data-actions">
+                                            <button type="button" id="add-chart-row-btn"
+                                                class="sidebar-add-btn">行を追加</button>
+                                            <button type="button" id="paste-csv-btn"
+                                                class="sidebar-add-btn">CSV/TSVを貼り付け</button>
                                         </div>
-                                        <textarea id="csv-paste-area" style="display:none; width: 100%; height: 80px;"
+                                        <textarea id="csv-paste-area" class="chart-csv-paste"
                                             placeholder="ここにCSV/TSVデータを貼り付け"></textarea>
                                     </div>
                                 </div>
 
                                 <!-- スタイル設定 -->
-                                <div style="margin-bottom: 20px;">
-                                    <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #495057;">スタイル</h3>
-                                    <div style="display: grid; gap: 16px;">
+                                <div class="chart-setting-group">
+                                    <h3>スタイル</h3>
+                                    <div class="chart-style-grid">
                                         <div>
-                                            <label
-                                                style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">カラーパレット</label>
-                                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                            <label class="chart-label">カラーパレット</label>
+                                            <div class="chart-palette-options">
                                                 <button type="button" class="color-palette-btn"
-                                                    data-colors="#007bff,#28a745,#dc3545,#ffc107,#6f42c1"
-                                                    style="width: 40px; height: 40px; border: 2px solid #dee2e6; border-radius: 8px; cursor: pointer; background: linear-gradient(45deg, #007bff 0%, #007bff 20%, #28a745 20%, #28a745 40%, #dc3545 40%, #dc3545 60%, #ffc107 60%, #ffc107 80%, #6f42c1 80%);"></button>
+                                                    data-colors="#007bff,#28a745,#dc3545,#ffc107,#6f42c1"></button>
                                                 <button type="button" class="color-palette-btn"
-                                                    data-colors="#e74c3c,#f39c12,#f1c40f,#2ecc71,#3498db"
-                                                    style="width: 40px; height: 40px; border: 2px solid #dee2e6; border-radius: 8px; cursor: pointer; background: linear-gradient(45deg, #e74c3c 0%, #e74c3c 20%, #f39c12 20%, #f39c12 40%, #f1c40f 40%, #f1c40f 60%, #2ecc71 60%, #2ecc71 80%, #3498db 80%);"></button>
+                                                    data-colors="#e74c3c,#f39c12,#f1c40f,#2ecc71,#3498db"></button>
                                                 <button type="button" class="color-palette-btn"
-                                                    data-colors="#8e44ad,#9b59b6,#e67e22,#d35400,#c0392b"
-                                                    style="width: 40px; height: 40px; border: 2px solid #dee2e6; border-radius: 8px; cursor: pointer; background: linear-gradient(45deg, #8e44ad 0%, #8e44ad 20%, #9b59b6 20%, #9b59b6 40%, #e67e22 40%, #e67e22 60%, #d35400 60%, #d35400 80%, #c0392b 80%);"></button>
+                                                    data-colors="#8e44ad,#9b59b6,#e67e22,#d35400,#c0392b"></button>
                                             </div>
                                             <input type="text" id="chart-colors" placeholder="カスタム色（カンマ区切り）"
-                                                style="width: 100%; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 12px; margin-top: 8px;">
+                                                class="chart-input-small">
                                         </div>
 
                                         <div>
-                                            <label
-                                                style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">線の太さ:
-                                                <span id="line-width-value">2</span>px</label>
+                                            <label class="chart-label">線の太さ: <span
+                                                    id="line-width-value">2</span>px</label>
                                             <input type="range" id="chart-line-width" min="1" max="10" value="2"
-                                                style="width: 100%; height: 6px; border-radius: 3px; background: #ddd; outline: none;">
+                                                class="chart-range-slider">
                                         </div>
 
-                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                                            <label
-                                                style="display: flex; align-items: center; font-size: 14px; color: #495057; cursor: pointer;">
-                                                <input type="checkbox" id="chart-show-legend" checked
-                                                    style="margin-right: 8px; transform: scale(1.2);">
+                                        <div class="chart-checkbox-grid">
+                                            <label class="chart-checkbox-label">
+                                                <input type="checkbox" id="chart-show-legend" checked>
                                                 凡例を表示
                                             </label>
-                                            <label
-                                                style="display: flex; align-items: center; font-size: 14px; color: #495057; cursor: pointer;">
-                                                <input type="checkbox" id="chart-show-grid" checked
-                                                    style="margin-right: 8px; transform: scale(1.2);">
+                                            <label class="chart-checkbox-label">
+                                                <input type="checkbox" id="chart-show-grid" checked>
                                                 グリッド線を表示
                                             </label>
                                         </div>
                                     </div>
                                 </div>
 
-                                <button type="submit"
-                                    style="width: 100%; padding: 12px; background: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.2s;">
-                                    <i class="fas fa-plus" style="margin-right: 8px;"></i>グラフを作成
+                                <button type="submit" class="chart-submit-btn">
+                                    <i class="fas fa-plus"></i>グラフを作成
                                 </button>
                             </form>
                         </div>
 
                         <!-- 右側：プレビュー -->
-                        <div
-                            style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
-                            <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #495057; text-align: center;">プレビュー
-                            </h3>
-                            <div style="position: relative; height: 400px;">
-                                <canvas id="chart-preview" style="width: 100%; height: 100%;"></canvas>
+                        <div class="chart-preview-panel">
+                            <h3>プレビュー</h3>
+                            <div class="chart-preview-container">
+                                <canvas id="chart-preview"></canvas>
                             </div>
                         </div>
                     </div>
@@ -765,42 +646,39 @@
     <!-- 図形選択用モーダル -->
     <div class="modal micromodal-slide" id="shape-modal" aria-hidden="true">
         <div class="modal__overlay" tabindex="-1" data-micromodal-close>
-            <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="shape-modal-title"
-                style="max-width: 500px;">
-                <button class="modal__close" aria-label="Close modal" data-micromodal-close
-                    style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; color: #6c757d; cursor: pointer; z-index: 1001;">&times;</button>
+            <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="shape-modal-title">
+                <button class="modal__close" aria-label="Close modal" data-micromodal-close>&times;</button>
                 <header class="modal__header">
                     <h2 class="modal__title" id="shape-modal-title">図形を選択</h2>
                 </header>
-                <main class="modal__content" id="shape-modal-content" style="padding: 24px;">
-                    <div id="shape-selection-container"
-                        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 16px;">
+                <main class="modal__content" id="shape-modal-content">
+                    <div id="shape-selection-container">
                         <button class="shape-select-btn" data-shape="rectangle">
-                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
+                            <svg viewBox="0 0 100 100">
                                 <rect x="10" y="25" width="80" height="50" fill="#ccc"></rect>
                             </svg>
                             <span>四角形</span>
                         </button>
                         <button class="shape-select-btn" data-shape="circle">
-                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
+                            <svg viewBox="0 0 100 100">
                                 <circle cx="50" cy="50" r="40" fill="#ccc"></circle>
                             </svg>
                             <span>円</span>
                         </button>
                         <button class="shape-select-btn" data-shape="triangle">
-                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
+                            <svg viewBox="0 0 100 100">
                                 <polygon points="50,10 90,90 10,90" fill="#ccc"></polygon>
                             </svg>
                             <span>三角形</span>
                         </button>
                         <button class="shape-select-btn" data-shape="line">
-                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
+                            <svg viewBox="0 0 100 100">
                                 <line x1="10" y1="50" x2="90" y2="50" stroke="#ccc" stroke-width="5"></line>
                             </svg>
                             <span>線</span>
                         </button>
                         <button class="shape-select-btn" data-shape="arrow">
-                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
+                            <svg viewBox="0 0 100 100">
                                 <defs>
                                     <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5"
                                         orient="auto">
@@ -813,14 +691,14 @@
                             <span>矢印</span>
                         </button>
                         <button class="shape-select-btn" data-shape="star">
-                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
+                            <svg viewBox="0 0 100 100">
                                 <polygon points="50,5 61,40 98,40 68,62 79,96 50,75 21,96 32,62 2,40 39,40" fill="#ccc">
                                 </polygon>
                             </svg>
                             <span>星</span>
                         </button>
                         <button class="shape-select-btn" data-shape="speech-bubble">
-                            <svg viewBox="0 0 100 100" style="width: 80px; height: 80px;">
+                            <svg viewBox="0 0 100 100">
                                 <path d="M10 10 H 90 V 70 H 60 L 50 90 L 40 70 H 10 Z" fill="#ccc" stroke="#ccc"
                                     stroke-width="2"></path>
                             </svg>
@@ -835,16 +713,14 @@
     <!-- 画像編集用モーダル -->
     <div class="modal micromodal-slide" id="imgedit-modal" aria-hidden="true">
         <div class="modal__overlay" tabindex="-1" data-micromodal-close>
-            <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="imgedit-modal-title"
-                style="max-width: 1400px; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column;">
-                <button class="modal__close" aria-label="Close modal" data-micromodal-close
-                    style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; color: #6c757d; cursor: pointer; z-index: 1001;">&times;</button>
+            <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="imgedit-modal-title">
+                <button class="modal__close" aria-label="Close modal" data-micromodal-close>&times;</button>
                 <header class="imgedit-header">
                     <h1>高機能 画像編集アプリ</h1>
                     <p>背景削除、フィルター、切り抜きなどの編集ができます。</p>
                 </header>
 
-                <main class="imgedit-main-content" style="flex-grow: 1;">
+                <main class="imgedit-main-content">
                     <!-- コントロールパネル -->
                     <aside class="imgedit-controls-panel">
                         <div class="imgedit-file-loader">
@@ -905,8 +781,7 @@
                             <!-- トリミングと変形 -->
                             <div class="imgedit-control-group">
                                 <h2>トリミングと変形</h2>
-                                <button id="imgedit-crop-btn" class="imgedit-secondary-btn"
-                                    style="width: 100%; margin-bottom: 10px;">トリミング</button>
+                                <button id="imgedit-crop-btn" class="imgedit-secondary-btn">トリミング</button>
                                 <div class="imgedit-button-group">
                                     <button id="imgedit-rotate-left" title="左に90度回転">
                                         <i class="fa-solid fa-rotate-left"></i>
@@ -926,7 +801,7 @@
                             <!-- 元に戻す -->
                             <div class="imgedit-control-group">
                                 <h2>操作履歴</h2>
-                                <button id="imgedit-undo-btn" class="imgedit-secondary-btn" style="width: 100%;">
+                                <button id="imgedit-undo-btn" class="imgedit-secondary-btn">
                                     <i class="fa-solid fa-undo"></i>
                                     <span>元に戻す</span>
                                 </button>
@@ -969,8 +844,7 @@
                                         </div>
                                         <div class="imgedit-slider-group">
                                             <label for="imgedit-brush-color">色</label>
-                                            <input type="color" id="imgedit-brush-color" value="#FF0000"
-                                                style="width: 100%; height: 30px;">
+                                            <input type="color" id="imgedit-brush-color" value="#FF0000">
                                         </div>
                                     </div>
                                     <div id="imgedit-eraser-settings" class="hidden">
@@ -980,7 +854,7 @@
                                                 data-unit="px"><output>20px</output>
                                         </div>
                                     </div>
-                                    <div class="imgedit-action-group" style="margin-top: 20px;">
+                                    <div class="imgedit-action-group">
                                         <button id="imgedit-cancel-paint" class="imgedit-danger-btn">キャンセル</button>
                                         <button id="imgedit-clear-paint" class="imgedit-secondary-btn">全消去</button>
                                     </div>
@@ -1017,30 +891,20 @@
     </div>
 
     <!-- AI提案ポップオーバー -->
-    <div id="ai-suggestion-popover"
-        style="display: none; position: fixed; z-index: 10001; background: var(--bg-white); border: 1px solid var(--border-color); box-shadow: var(--shadow-md); border-radius: var(--border-radius); padding: 12px; max-width: 300px;">
+    <div id="ai-suggestion-popover">
         <div id="ai-suggestion-content"></div>
-        <div id="ai-suggestion-actions" style="margin-top: 10px; text-align: right;">
-            <button id="ai-suggestion-cancel"
-                style="padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: transparent; cursor: pointer;">キャンセル</button>
-            <button id="ai-suggestion-apply"
-                style="padding: 4px 8px; border-radius: 4px; border: none; background: var(--primary-color); color: white; cursor: pointer; margin-left: 8px;">適用</button>
+        <div id="ai-suggestion-actions">
+            <button id="ai-suggestion-cancel">キャンセル</button>
+            <button id="ai-suggestion-apply">適用</button>
         </div>
     </div>
 
-    <!-- Export Menu -->
-    <div id="export-menu"
-        style="display:none;position:absolute;z-index:10000;background:#fff;border:1px solid var(--border-color);box-shadow:var(--shadow-md);min-width:160px;">
-        <div style="padding:8px 12px;cursor:pointer;" id="export-png-btn">PNGで保存 (このスライドのみ)</div>
-        <div style="padding:8px 12px;cursor:pointer;" id="export-png-all-btn">PNGで保存 (全スライド)</div>
-        <div style="padding:8px 12px;cursor:pointer;" id="export-pdf-btn">PDFで保存 (全スライド)</div>
-        <div style="padding:8px 12px;cursor:pointer;" id="export-pptx-btn">PPTXで保存 (全スライド)</div>
-    </div>
 
     <!-- Styles -->
-    <link rel="stylesheet" href="modal.css">
-    <link href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet" href="ai/ai.css">
+    <link rel="stylesheet" href="micromodal.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="imgedit/imgedit.css">
 
     <!-- Third-party scripts -->

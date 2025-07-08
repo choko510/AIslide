@@ -931,8 +931,8 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                             const elWidthPx = window.Utils.percentToPixels(style.width, window.CANVAS_WIDTH);
                             const elHeightPx = window.Utils.percentToPixels(style.height, window.CANVAS_HEIGHT);
                             if (elWidthPx > 0 && elHeightPx > 0) {
-                                const rx = (style.borderRadius / elWidthPx) * 100;
-                                const ry = (style.borderRadius / elHeightPx) * 100;
+                                const rx = style.borderRadius; // Use borderRadius directly as an absolute length
+                                const ry = style.borderRadius; // Use borderRadius directly as an absolute length
                                 shape.setAttribute('rx', rx);
                                 shape.setAttribute('ry', ry);
                             }

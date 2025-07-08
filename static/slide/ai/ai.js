@@ -11,7 +11,7 @@ class AIHandler {
         // autonomousModeが未定義の場合に備えて初期化
         this.state.autonomousMode = this.state.autonomousMode || {};
         this.elements = app.elements;
-        this.apiEndpoint = 'http://localhost:3000/ask-ai';
+        this.apiEndpoint = '/api/ask-ai';
         this.aiMode = 'design'; // 'design', 'plan', 'ask'
         
         /** @type {Array<{role: 'user' | 'assistant', content: string}>} */
@@ -119,6 +119,7 @@ class AIHandler {
                 view_slide: '<view_slide slide_id="..." />: スライドを閲覧する',
                 switch_ai_mode: '<switch_ai_mode mode="design|plan|ask" />: AIのモードを指定されたモードに切り替える',
                 add_element: `<add_element type="text|image|video|table|icon|iframe|qrcode" [slide_id="..."]>\\n  <content><![CDATA[...]]></content>\\n  <style top, left, width, heightは0-100の%指定。fontSizeは数値(px)のみ。 top="..." left="..." width="..." height="..." zIndex="..." color="..." fontSize="..." fontFamily="..." rotation="..." animation="アニメーション名 継続時間 タイミング関数 遅延時間 イテレーション回数 方向 フィルモード (例: fadeIn 1s ease-out 0.5s forwards)" />\\n  <customCss>...</customCss>\\n</add_element>: アクティブまたは指定スライドに要素を追加。HTMLを含む場合はcontentを子要素としCDATAで囲む。`,
+                add_shape: `<add_shape type="rectangle|circle|triangle|line|arrow|star|speech-bubble" [slide_id="..."]>\n  <style fill="#cccccc" stroke="transparent" strokeWidth="2" ... />\n  <customCss>...</customCss>\n</add_shape>: 図形要素を追加（カスタムCSSも指定可）`,
                 add_chart: `<add_chart type="bar|line|pie|doughnut|radar" [slide_id="..."]>\n  <title>グラフのタイトル</title>\n  <labels>ラベル1,ラベル2,ラベル3</labels>\n  <datasets>\n    <dataset label="データセット1" data="10,20,30" [color="#ff0000"] />\n    <dataset label="データセット2" data="15,25,35" [color="rgba(0,0,255,0.5)"] />\n  </datasets>\n  <options showLegend="true" showGrid="true" />\n  <style ... />\n</add_chart>: グラフ要素を追加。複数のデータセットも可。色は単色(#RRGGBB)またはカンマ区切りの複数色で指定。`,
                 add_icon: `<add_icon iconType="fa|mi" iconClass="..." [slide_id="..."]>\n  <style ... />\n  <customCss>...</customCss>\n</add_icon>: アイコン要素を追加（カスタムCSSも指定可）`,
                 add_qrcode: `<add_qrcode text="..." size="..." color="..." bgColor="..." [slide_id="..."]>\n  <style ... />\n  <customCss>...</customCss>\n</add_qrcode>: QRコード画像を生成し追加（カスタムCSSも指定可）`,
@@ -129,7 +130,7 @@ class AIHandler {
             },
             
             modeCommands: {
-                design: ['sequence', 'create_slide', 'delete_slide', 'edit_element', 'view_slide', 'add_element', 'add_chart', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'view_slide_as_image', 'reorder_slides', 'complete', 'question'],
+                design: ['sequence', 'create_slide', 'delete_slide', 'edit_element', 'view_slide', 'add_element', 'add_shape', 'add_chart', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'view_slide_as_image', 'reorder_slides', 'complete', 'question'],
                 plan: ['sequence', 'view_slide', 'switch_ai_mode', 'question', 'view_slide_as_image', 'complete'],
                 ask: ['sequence', 'view_slide', 'view_slide_as_image']
             },
@@ -158,6 +159,9 @@ class AIHandler {
 <add_qrcode text="https://example.com" size="256" color="#000" bgColor="#fff">
     <customCss>box-shadow:0 0 8px #0003;</customCss>
 </add_qrcode>
+<add_shape type="rectangle">
+    <style top="25" left="25" width="50" height="50" fill="blue" />
+</add_shape>
 <switch_ai_mode mode="design" />
 `
         };
@@ -915,7 +919,7 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
         const commandName = commandNode.tagName.toLowerCase();
         const knownCommands = [
             'create_slide', 'delete_slide', 'edit_element', 'view_slide', 'sequence',
-            'add_element', 'add_chart', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'question',
+            'add_element', 'add_shape', 'add_chart', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'question',
             'view_slide_as_image', 'reorder_slides', 'complete'
         ];
         if (!knownCommands.includes(commandName)) {
@@ -973,6 +977,7 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
             case 'edit_element': return this.handleEditElement(commandNode);
             case 'view_slide': return this.handleViewSlide(commandNode);
             case 'add_element': return this.handleAddElement(commandNode);
+            case 'add_shape': return this.handleAddShape(commandNode);
             case 'add_chart': return this.handleAddChart(commandNode);
             case 'add_icon': return this.handleAddIcon(commandNode);
             case 'add_qrcode': return this.handleAddQrcode(commandNode);
@@ -1097,9 +1102,9 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
                 this.app.addElementToSlide(newSlideId, type, content, style);
             });
         }
-        // 2. create_slide直下のadd_element/add_icon/add_qrcodeも順次実行
+        // 2. create_slide直下のadd_element/add_icon/add_qrcode/add_shapeも順次実行
         const childNodes = Array.from(commandNode.children).filter(
-            n => ["add_element", "add_icon", "add_qrcode"].includes(n.tagName?.toLowerCase())
+            n => ["add_element", "add_icon", "add_qrcode", "add_shape"].includes(n.tagName?.toLowerCase())
         );
         for (const node of childNodes) {
             const tag = node.tagName.toLowerCase();
@@ -1112,17 +1117,24 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
             } else if (tag === "add_qrcode") {
                 await this.handleAddQrcodeWithSlide(node, newSlideId);
                 elementCount++;
+            } else if (tag === "add_shape") {
+                this.handleAddShapeWithSlide(node, newSlideId);
+                elementCount++;
             }
         }
         this.app.setActiveSlide(newSlideId);
         return { success: true, message: `新しいスライド(ID: ${newSlideId})を作成し、${elementCount}個の要素を追加しました。` };
     }
     
-    // add_element/add_icon/add_qrcodeを特定スライドIDで追加するためのラッパー
+    // add_element/add_icon/add_qrcode/add_shapeを特定スライドIDで追加するためのラッパー
     handleAddElementWithSlide(node, slideId) {
         // slide_idを一時的に上書きしてhandleAddElementを使う
         node.setAttribute("slide_id", slideId);
         return this.handleAddElement(node);
+    }
+    handleAddShapeWithSlide(node, slideId) {
+        node.setAttribute("slide_id", slideId);
+        return this.handleAddShape(node);
     }
     handleAddIconWithSlide(node, slideId) {
         node.setAttribute("slide_id", slideId);
@@ -1190,6 +1202,37 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
         if (!newEl) throw new Error('要素の追加に失敗しました');
         if (customCssNode) newEl.style.customCss = customCssNode.textContent;
         return { success: true, message: `要素(type=${type})を追加しました。`, element: newEl };
+    }
+    handleAddShape(commandNode) {
+        const shapeType = commandNode.getAttribute('type');
+        const validShapes = ["rectangle", "circle", "triangle", "line", "arrow", "star", "speech-bubble"];
+        if (!validShapes.includes(shapeType)) {
+            throw new Error(`無効な図形タイプです: ${shapeType}`);
+        }
+        
+        // add_elementコマンドに変換して処理を委譲
+        const addElementNode = new DOMParser().parseFromString('<add_element/>', 'text/xml').documentElement;
+        addElementNode.setAttribute('type', 'shape');
+        
+        const contentNode = addElementNode.ownerDocument.createElement('content');
+        // `addElement`はcontentが文字列であることを期待するため、オブジェクトをJSON文字列化
+        contentNode.textContent = JSON.stringify({ shapeType: shapeType });
+        addElementNode.appendChild(contentNode);
+        
+        // slide_idとstyle, customCssをコピー
+        if (commandNode.hasAttribute('slide_id')) {
+            addElementNode.setAttribute('slide_id', commandNode.getAttribute('slide_id'));
+        }
+        const styleNode = commandNode.querySelector('style');
+        if (styleNode) {
+            addElementNode.appendChild(styleNode.cloneNode(true));
+        }
+        const customCssNode = commandNode.querySelector('customCss');
+        if (customCssNode) {
+            addElementNode.appendChild(customCssNode.cloneNode(true));
+        }
+        
+        return this.handleAddElement(addElementNode);
     }
     handleAddIcon(commandNode) {
         const iconType = commandNode.getAttribute('iconType');

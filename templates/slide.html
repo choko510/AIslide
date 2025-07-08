@@ -39,6 +39,7 @@
                 <button id="align-bottom-btn" title="下揃え"><i class="fas fa-align-bottom"></i></button>
                 <button id="distribute-h-btn" title="水平方向へ等間隔に配置"><i class="fas fa-grip-lines"></i></button>
                 <button id="distribute-v-btn" title="垂直方向へ等間隔に配置"><i class="fas fa-grip-lines-vertical"></i></button>
+                <button id="tidy-up-btn" title="等間隔に整列"><i class="fas fa-sort-amount-down"></i></button>
             </div>
             <div class="separator"></div>
             <button id="group-btn" title="グループ化 (Ctrl+G)"><i class="fas fa-object-group"></i></button>
@@ -325,23 +326,23 @@
                                     </div>
                                     <div style="display: flex; gap: 8px;">
                                         <button id="reset-chat-btn" class="sidebar-add-btn" title="チャット履歴をリセットします"
-                                            style="flex-grow: 1; justify-content: center;">
+                                            style="width: 100%; justify-content: center; margin-bottom: 10px;">
                                             <i class="fas fa-sync-alt"></i> チャットをリセット
                                         </button>
                                     </div>
-                                    <div id="ai-control-buttons" style="display: none; gap: 8px; margin-top: 8px;">
+                                    <div id="ai-control-buttons" style="display: none; gap: 8px; margin-bottom: 10px;">
                                         <button id="pause-ai-btn" class="sidebar-add-btn" title="AIの自動実行を一時停止します"
-                                            style="width: 100%; justify-content: center; background-color: var(--warning-color);">
+                                            style="flex-grow: 1; justify-content: center; background-color: var(--warning-color);">
                                             <i class="fas fa-pause"></i> 一時停止
                                         </button>
                                         <button id="resume-ai-btn" class="sidebar-add-btn" title="AIの自動実行を再開します"
-                                            style="width: 100%; justify-content: center; background-color: var(--success-color); display: none;">
+                                            style="flex-grow: 1; justify-content: center; background-color: var(--success-color); display: none;">
                                             <i class="fas fa-play"></i> 再開
                                         </button>
                                     </div>
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                                        <label
-                                            style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; border: 1px solid var(--border-color); border-radius: var(--border-radius); cursor: pointer;">
+                                    <div
+                                        style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+                                        <label class="ai-toggle-label">
                                             <i class="fas fa-robot"></i>
                                             <span>自律モード</span>
                                             <div class="toggle-switch">
@@ -349,8 +350,7 @@
                                                 <span class="slider"></span>
                                             </div>
                                         </label>
-                                        <label
-                                            style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; border: 1px solid var(--border-color); border-radius: var(--border-radius); cursor: pointer;">
+                                        <label class="ai-toggle-label">
                                             <i class="fas fa-bolt"></i>
                                             <span>自動実行</span>
                                             <div class="toggle-switch">
@@ -415,6 +415,185 @@
 
     <div id="presentation-view">
         <div id="presentation-slide-container"></div>
+    </div>
+
+    <!-- QRコード生成モーダル -->
+    <div class="modal micromodal-slide" id="qr-modal" aria-hidden="true">
+        <div class="modal__overlay" tabindex="-1" data-micromodal-close>
+            <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title"
+                style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+                <button class="modal__close" aria-label="Close modal" data-micromodal-close
+                    style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; color: #6c757d; cursor: pointer; z-index: 1001;">&times;</button>
+                <main class="modal__content" id="qr-modal-content" style="padding: 24px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;">
+                        <!-- 左側：設定パネル -->
+                        <div style="background: #f8f9fa; border-radius: 12px; padding: 20px;">
+                            <form id="qr-create-form">
+                                <!-- 基本設定 -->
+                                <div style="margin-bottom: 20px;">
+                                    <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #495057;">基本設定</h3>
+                                    <div style="display: grid; gap: 12px;">
+                                        <div>
+                                            <label
+                                                style="display: block; margin-bottom: 4px; font-size: 13px; color: #6c757d; font-weight: 500;">QRコード内容</label>
+                                            <input type="text" id="qr-text" value="" required placeholder="URLやテキストを入力"
+                                                style="width: 100%; padding: 10px 12px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px;">
+                                        </div>
+                                        <div>
+                                            <label
+                                                style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">サイズ:
+                                                <span id="qr-size-value">256</span>px</label>
+                                            <input type="range" id="qr-size" value="256" min="128" max="512" step="16"
+                                                style="width: 100%; height: 6px; border-radius: 3px; background: #ddd; outline: none;">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- カラー設定 -->
+                                <div style="margin-bottom: 20px;">
+                                    <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #495057;">カラー</h3>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                        <div style="text-align: center;">
+                                            <label
+                                                style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">QRコード色</label>
+                                            <div style="position: relative; display: inline-block;">
+                                                <input type="color" id="qr-color" value="#000000"
+                                                    style="width: 60px; height: 60px; border: 3px solid #fff; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                            </div>
+                                        </div>
+                                        <div style="text-align: center;">
+                                            <label
+                                                style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">背景色</label>
+                                            <div style="position: relative; display: inline-block;">
+                                                <input type="color" id="qr-bg-color" value="#ffffff"
+                                                    style="width: 60px; height: 60px; border: 3px solid #fff; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- スタイル設定 -->
+                                <div style="margin-bottom: 20px;">
+                                    <h3 style="margin: 0 0 12px 0; font-size: 16px; color: #495057;">スタイル</h3>
+                                    <div style="display: grid; gap: 16px;">
+                                        <div>
+                                            <label
+                                                style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">ドット形状</label>
+                                            <div
+                                                style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                                                <div
+                                                    style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                                                    <button type="button" class="qr-style-btn" data-style="square"
+                                                        title="四角"
+                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
+                                                            width="24" height="24" viewBox="0 0 24 24">
+                                                            <path d="M0 0h24v24H0z" fill="currentColor" />
+                                                        </svg></button>
+                                                    <button type="button" class="qr-style-btn" data-style="dots"
+                                                        title="丸"
+                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
+                                                            width="24" height="24" viewBox="0 0 24 24">
+                                                            <circle cx="12" cy="12" r="12" fill="currentColor" />
+                                                        </svg></button>
+                                                    <button type="button" class="qr-style-btn" data-style="rounded"
+                                                        title="角丸"
+                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
+                                                            width="24" height="24" viewBox="0 0 24 24">
+                                                            <rect width="24" height="24" rx="6" fill="currentColor" />
+                                                        </svg></button>
+                                                    <button type="button" class="qr-style-btn" data-style="classy"
+                                                        title="クラッシー"
+                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
+                                                            width="24" height="24" viewBox="0 0 24 24">
+                                                            <path
+                                                                d="M0 12C0 5.373 5.373 0 12 0h12v12C24 18.627 18.627 24 12 24S0 18.627 0 12z"
+                                                                fill="currentColor" />
+                                                        </svg></button>
+                                                    <button type="button" class="qr-style-btn"
+                                                        data-style="classy-rounded" title="クラッシー丸"
+                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
+                                                            width="24" height="24" viewBox="0 0 24 24">
+                                                            <path
+                                                                d="M0 12C0 5.373 5.373 0 12 0h12v12C24 18.627 18.627 24 12 24S0 18.627 0 12z"
+                                                                clip-rule="evenodd" fill-rule="evenodd"
+                                                                fill="currentColor" />
+                                                        </svg></button>
+                                                    <button type="button" class="qr-style-btn"
+                                                        data-style="extra-rounded" title="超丸"
+                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
+                                                            width="24" height="24" viewBox="0 0 24 24">
+                                                            <rect width="24" height="24" rx="12" fill="currentColor" />
+                                                        </svg></button>
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label
+                                                    style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">枠線形状</label>
+                                                <div
+                                                    style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                                                    <button type="button" class="qr-corner-btn" data-corner="square"
+                                                        title="四角"
+                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
+                                                            width="24" height="24" viewBox="0 0 24 24">
+                                                            <rect width="16" height="16" x="4" y="4"
+                                                                stroke="currentColor" stroke-width="4"
+                                                                fill="transparent" />
+                                                        </svg></button>
+                                                    <button type="button" class="qr-corner-btn" data-corner="dot"
+                                                        title="丸"
+                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
+                                                            width="24" height="24" viewBox="0 0 24 24">
+                                                            <circle cx="12" cy="12" r="8" stroke="currentColor"
+                                                                stroke-width="4" fill="transparent" />
+                                                        </svg></button>
+                                                    <button type="button" class="qr-corner-btn"
+                                                        data-corner="extra-rounded" title="超丸"
+                                                        style="padding: 8px; border: 2px solid #dee2e6; border-radius: 8px; background: white; cursor: pointer; display: flex; justify-content: center; align-items: center;"><svg
+                                                            width="24" height="24" viewBox="0 0 24 24">
+                                                            <rect width="16" height="16" x="4" y="4" rx="6"
+                                                                stroke="currentColor" stroke-width="4"
+                                                                fill="transparent" />
+                                                        </svg></button>
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label
+                                                    style="display: block; margin-bottom: 8px; font-size: 13px; color: #6c757d; font-weight: 500;">ロゴ画像（任意）</label>
+                                                <input type="file" id="qr-logo-upload" accept="image/*"
+                                                    style="width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 6px; font-size: 14px;">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button type="submit"
+                                        style="width: 100%; padding: 12px; background: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.2s;">
+                                        <i class="fas fa-plus" style="margin-right: 8px;"></i>スライドに追加
+                                    </button>
+                            </form>
+                        </div>
+
+                        <!-- 右側：プレビュー -->
+                        <div
+                            style="background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+                            <h3 style="margin: 0 0 16px 0; font-size: 16px; color: #495057; text-align: center;">プレビュー
+                            </h3>
+                            <div
+                                style="display: flex; justify-content: center; align-items: center; min-height: 300px;">
+                                <div id="qr-preview"
+                                    style="display: inline-block; padding: 20px; background: #fafbfc; border: 2px dashed #dee2e6; border-radius: 12px; min-width: 200px; min-height: 200px; text-align: center; color: #6c757d;">
+                                    QRコード内容を入力してください
+                                </div>
+                            </div>
+                            <div id="qr-warning"
+                                style="display: none; color: #dc3545; font-size: 13px; margin-top: 12px; padding: 8px; background: #f8d7da; border-radius: 6px; text-align: center;">
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
     </div>
 
     <!-- グラフ作成用モーダル -->
@@ -849,6 +1028,15 @@
         </div>
     </div>
 
+    <!-- Export Menu -->
+    <div id="export-menu"
+        style="display:none;position:absolute;z-index:10000;background:#fff;border:1px solid var(--border-color);box-shadow:var(--shadow-md);min-width:160px;">
+        <div style="padding:8px 12px;cursor:pointer;" id="export-png-btn">PNGで保存 (このスライドのみ)</div>
+        <div style="padding:8px 12px;cursor:pointer;" id="export-png-all-btn">PNGで保存 (全スライド)</div>
+        <div style="padding:8px 12px;cursor:pointer;" id="export-pdf-btn">PDFで保存 (全スライド)</div>
+        <div style="padding:8px 12px;cursor:pointer;" id="export-pptx-btn">PPTXで保存 (全スライド)</div>
+    </div>
+
     <!-- Styles -->
     <link rel="stylesheet" href="modal.css">
     <link href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css" rel="stylesheet">
@@ -856,16 +1044,18 @@
     <link rel="stylesheet" href="imgedit/imgedit.css">
 
     <!-- Third-party scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/micromodal@0.6.1/dist/micromodal.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.9.2/lib/qr-code-styling.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.1.0/dist/fuse.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
 
     <!-- App scripts -->
     <script src="ai/ai.js" defer></script>
     <script type="module" src="presentation.js"></script>
+    <script type="module" src="icon.js"></script>
+    <script type="module" src="inspector.js"></script>
     <script type="module" src="slide.js"></script>
     <script type="module" src="slideScript.js"></script>
     <script src="imgedit/imgedit.js" defer></script>

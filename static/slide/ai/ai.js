@@ -23,9 +23,13 @@ class AIHandler {
         this.isPaused = false; // AIの自動実行が一時停止中かどうかのフラグ
         this.pendingNextAction = null; // 一時停止中に保留された次のアクション
 
+        this.selfCorrectionCount = 0; // 自己修正の試行回数カウンタ
+        this.MAX_SELF_CORRECTION = 3; // 自己修正の最大試行回数
+        this.popoverAbortController = null; // 提案ポップオーバーのイベントリスナー管理用
+
         this.init();
     }
-
+    
     // --- 初期化とイベント関連 ---
 
     init() {
@@ -263,11 +267,14 @@ class AIHandler {
             return;
         }
 
+        // 新しい対話の開始時に自己修正カウントをリセット
         if (!prompt) {
+            this.selfCorrectionCount = 0;
             this.isAIResponding = true;
             this.isPaused = false;
             this.pendingNextAction = null;
             this.updateAIControlButtons();
+            this._updateChatUIState(true);
         }
 
         if (!isRetry) {
@@ -309,6 +316,7 @@ class AIHandler {
 
             this.isAIResponding = false;
             this.updateAIControlButtons();
+            this._updateChatUIState(false);
         }
     }
 
@@ -329,11 +337,13 @@ class AIHandler {
                 // 自動実行がオフの場合は、ここで応答終了とみなす
                 this.isAIResponding = false;
                 this.updateAIControlButtons();
+                this._updateChatUIState(false);
             }
         } else {
             // 実行ボタンがない場合（質問や完了メッセージ）も応答終了
             this.isAIResponding = false;
             this.updateAIControlButtons();
+            this._updateChatUIState(false);
         }
     }
 
@@ -369,6 +379,7 @@ class AIHandler {
             // ループが継続しない場合
             this.isAIResponding = false;
             this.updateAIControlButtons();
+            this._updateChatUIState(false);
         }
     }
     
@@ -433,8 +444,17 @@ class AIHandler {
                 
                 // エラーからの自己修正ロジック
                 if (this.elements.autoExecuteToggle?.checked) {
+                    this.selfCorrectionCount++;
+                    if (this.selfCorrectionCount > this.MAX_SELF_CORRECTION) {
+                         this.displayMessage(`AIによる自己修正が上限回数(${this.MAX_SELF_CORRECTION}回)に達しました。処理を中断します。`, 'error');
+                         this.isAIResponding = false;
+                         this.updateAIControlButtons();
+                         this._updateChatUIState(false);
+                         return { success: false, imageDataProcessed: false };
+                    }
+
                     resultContainer.appendChild(document.createElement('br'));
-                    resultContainer.appendChild(document.createTextNode('AIが修正を試みます...'));
+                    resultContainer.appendChild(document.createTextNode(`AIが修正を試みます... (試行 ${this.selfCorrectionCount}/${this.MAX_SELF_CORRECTION})`));
                     
                     const feedback = `
 <error_feedback>
@@ -459,12 +479,15 @@ ${result.message}
                     const loadingMsgDiv = this.displayMessage('AIがコマンドを修正中...', 'loading');
                     
                     // _requestToAIを直接呼ぶ
-                    this._requestToAI().then(aiResponse => {
+                    this._requestToAI(loadingMsgDiv).then(aiResponse => {
                         loadingMsgDiv.remove();
                         this._processAIResponse(aiResponse);
                     }).catch(aiError => {
                         loadingMsgDiv.remove();
                         this.displayMessage(`AIによるコマンド修正中にエラーが発生しました: ${aiError.message}`, 'error');
+                        this.isAIResponding = false;
+                        this.updateAIControlButtons();
+                        this._updateChatUIState(false);
                     });
                 }
                 return { success: false, imageDataProcessed: false };
@@ -1084,66 +1107,77 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
     async handleCreateSlide(commandNode) {
         const newSlideId = this.app.addSlide(true);
         let elementCount = 0;
-        // 1. elementsタグ配下のelementも従来通り処理
-        const elementsNode = commandNode.querySelector('elements');
-        if (elementsNode) {
-            const elementNodes = Array.from(elementsNode.querySelectorAll('element'));
-            elementCount += elementNodes.length;
-            elementNodes.forEach(elNode => {
-                const type = elNode.getAttribute('type');
-                const content = elNode.querySelector('content')?.textContent || '';
-                const styleNode = elNode.querySelector('style');
+
+        // 互換性のために古い<elements>タグもサポート
+        const legacyElementsNode = commandNode.querySelector('elements');
+        if (legacyElementsNode) {
+            const elementNodes = Array.from(legacyElementsNode.querySelectorAll('element'));
+             for (const elNode of elementNodes) {
+                await this._addElementFromNode(elNode, newSlideId);
+                elementCount++;
+            }
+        }
+
+        // create_slide直下の子要素も処理
+        const childElementNodes = Array.from(commandNode.children).filter(
+            n => ["add_element", "add_icon", "add_qrcode", "add_shape", "add_chart"].includes(n.tagName?.toLowerCase())
+        );
+
+        for (const node of childElementNodes) {
+            await this._addElementFromNode(node, newSlideId);
+            elementCount++;
+        }
+        
+        this.app.setActiveSlide(newSlideId);
+        return { success: true, message: `新しいスライド(ID: ${newSlideId})を作成し、${elementCount}個の要素を追加しました。` };
+    }
+
+    /**
+     * 汎用的な要素追加ヘルパー
+     * @param {Element} node - aommandNode
+     * @param {string} slideId - 追加先のスライドID
+     * @private
+     */
+    async _addElementFromNode(node, slideId) {
+        // slide_id属性を強制的に設定して、各ハンドラに処理を委譲
+        node.setAttribute("slide_id", slideId);
+        const tagName = node.tagName.toLowerCase();
+
+        switch(tagName) {
+            case 'element': // 古い形式のサポート
+                const type = node.getAttribute('type');
+                const content = node.querySelector('content')?.textContent || '';
+                const styleNode = node.querySelector('style');
                 const style = {};
                 if (styleNode) {
                     for (const attr of styleNode.attributes) {
                         style[attr.name] = isNaN(Number(attr.value)) ? attr.value : parseFloat(attr.value);
                     }
                 }
-                this.app.addElementToSlide(newSlideId, type, content, style);
-            });
+                this.app.addElementToSlide(slideId, type, content, style);
+                break;
+            case 'add_element':
+                this.handleAddElement(node);
+                break;
+            case 'add_shape':
+                this.handleAddShape(node);
+                break;
+            case 'add_chart':
+                this.handleAddChart(node);
+                break;
+            case 'add_icon':
+                 this.handleAddIcon(node);
+                break;
+            case 'add_qrcode':
+                await this.handleAddQrcode(node);
+                break;
+            default:
+                // 未知の要素タイプは無視
+                console.warn(`Unsupported element type in create_slide: ${tagName}`);
+                break;
         }
-        // 2. create_slide直下のadd_element/add_icon/add_qrcode/add_shapeも順次実行
-        const childNodes = Array.from(commandNode.children).filter(
-            n => ["add_element", "add_icon", "add_qrcode", "add_shape"].includes(n.tagName?.toLowerCase())
-        );
-        for (const node of childNodes) {
-            const tag = node.tagName.toLowerCase();
-            if (tag === "add_element") {
-                this.handleAddElementWithSlide(node, newSlideId);
-                elementCount++;
-            } else if (tag === "add_icon") {
-                this.handleAddIconWithSlide(node, newSlideId);
-                elementCount++;
-            } else if (tag === "add_qrcode") {
-                await this.handleAddQrcodeWithSlide(node, newSlideId);
-                elementCount++;
-            } else if (tag === "add_shape") {
-                this.handleAddShapeWithSlide(node, newSlideId);
-                elementCount++;
-            }
-        }
-        this.app.setActiveSlide(newSlideId);
-        return { success: true, message: `新しいスライド(ID: ${newSlideId})を作成し、${elementCount}個の要素を追加しました。` };
     }
     
-    // add_element/add_icon/add_qrcode/add_shapeを特定スライドIDで追加するためのラッパー
-    handleAddElementWithSlide(node, slideId) {
-        // slide_idを一時的に上書きしてhandleAddElementを使う
-        node.setAttribute("slide_id", slideId);
-        return this.handleAddElement(node);
-    }
-    handleAddShapeWithSlide(node, slideId) {
-        node.setAttribute("slide_id", slideId);
-        return this.handleAddShape(node);
-    }
-    handleAddIconWithSlide(node, slideId) {
-        node.setAttribute("slide_id", slideId);
-        return this.handleAddIcon(node);
-    }
-    async handleAddQrcodeWithSlide(node, slideId) {
-        node.setAttribute("slide_id", slideId);
-        return await this.handleAddQrcode(node);
-    }
     handleDeleteSlide(commandNode) {
         const slideId = commandNode.getAttribute('slide_id');
         if (!slideId) throw new Error('slide_id is required.');
@@ -1179,7 +1213,7 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
         const slide = slides.find(s => s.id === slideId);
         if (!slide) return { success: false, message: `Slide ${slideId} not found.` };
         this.app.setActiveSlide(slideId);
-        return { success: true, slide: JSON.parse(JSON.stringify(slide)) };
+        return { success: true, slide: structuredClone(slide) };
     }
     
     // --- 新規追加: 要素追加・アイコン追加・QRコード追加コマンド ---
@@ -1402,7 +1436,7 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
         if (!this.state.aiCheckpoints) {
             this.state.aiCheckpoints = {};
         }
-        this.state.aiCheckpoints[checkpointId] = JSON.parse(JSON.stringify(pres));
+        this.state.aiCheckpoints[checkpointId] = structuredClone(pres);
 
         const checkpointMsgContent = `
             <div class="checkpoint-controls">
@@ -1422,7 +1456,7 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
         }
 
         if (confirm('このチェックポイントの状態に復元しますか？\nこれ以降のチェックポイントは無効になります。')) {
-            this.state.presentation = JSON.parse(JSON.stringify(this.state.aiCheckpoints[checkpointId]));
+            this.state.presentation = structuredClone(this.state.aiCheckpoints[checkpointId]);
             
             // 復元後のアクティブスライドIDを安全に設定
             if (this.state.presentation.slides && this.state.presentation.slides.length > 0) {
@@ -1520,6 +1554,30 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
     }
 
     // --- AI応答制御 ---
+
+    _updateChatUIState(isResponding) {
+        this.elements.aiChatInput.disabled = isResponding;
+        this.elements.sendChatBtn.disabled = isResponding;
+        this.elements.resetChatBtn.disabled = isResponding;
+        
+        // トグルスイッチ類
+        if (this.elements.autonomousModeToggle) {
+            this.elements.autonomousModeToggle.disabled = isResponding;
+        }
+        if (this.elements.autoExecuteToggle) {
+            this.elements.autoExecuteToggle.disabled = isResponding;
+        }
+        
+        // 自律モードのボタン
+        if (this.elements.startAutonomousBtn) {
+            this.elements.startAutonomousBtn.disabled = isResponding;
+        }
+
+        // モード選択ボタン
+        this.elements.aiModeButtons.forEach(btn => {
+            btn.disabled = isResponding;
+        });
+    }
 
     updateAIControlButtons() {
         if (!this.elements.aiControlButtons) return;
@@ -1674,13 +1732,19 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
             popover.style.display = 'none';
         };
         
-        // イベントリスナーを一度削除してから再設定
-        applyBtn.replaceWith(applyBtn.cloneNode(true));
-        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
-        document.getElementById('ai-suggestion-apply').onclick = applyHandler;
-        document.getElementById('ai-suggestion-cancel').onclick = cancelHandler;
+        // AbortControllerを使用してイベントリスナーを管理
+        if (this.popoverAbortController) {
+            this.popoverAbortController.abort();
+        }
+        this.popoverAbortController = new AbortController();
+        const { signal } = this.popoverAbortController;
 
+        const newApplyBtn = document.getElementById('ai-suggestion-apply');
+        const newCancelBtn = document.getElementById('ai-suggestion-cancel');
 
+        newApplyBtn.addEventListener('click', applyHandler, { signal });
+        newCancelBtn.addEventListener('click', cancelHandler, { signal });
+        
         const targetElement = document.querySelector(`[data-id="${elementId}"]`);
         if (targetElement) {
             const rect = targetElement.getBoundingClientRect();

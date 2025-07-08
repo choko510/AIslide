@@ -1,3 +1,8 @@
+:root {
+    --success-color: #28a745; /* AIメッセージの背景色から */
+    --warning-color: #ffc107; /* チェックポイントメッセージの背景色から */
+}
+
 /* --- チャットUIスタイル --- */
 .chat-message {
     padding: 12px 16px;

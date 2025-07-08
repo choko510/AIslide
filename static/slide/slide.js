@@ -3624,7 +3624,17 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                     'el-forward-btn': () => this.bringElementForward(elId),
                     'el-backward-btn': () => this.sendElementBackward(elId),
                     'el-back-btn': () => this.sendElementToBack(elId),
-                    'el-delete-btn': () => { this.updateState('selectedElementIds', [elId]); this.deleteSelectedElements(); }
+                    'el-delete-btn': () => {
+                        const selectedIds = this.getState('selectedElementIds');
+                        if (selectedIds.includes(elId) && selectedIds.length > 1) {
+                            // 複数選択されている要素の中にelIdが含まれている場合、複数選択を維持して削除
+                            this.deleteSelectedElements();
+                        } else {
+                            // 単一選択の場合、またはelIdが選択されていない場合、elIdのみを選択して削除
+                            this.updateState('selectedElementIds', [elId]);
+                            this.deleteSelectedElements();
+                        }
+                    }
                 };
 
                 this.showContextMenu(e, 'element-context-menu', menuContent, handlers);

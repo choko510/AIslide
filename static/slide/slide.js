@@ -836,6 +836,8 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
             static _createChart(elData) {
                 const canvas = document.createElement('canvas');
                 canvas.id = `chart-${elData.id}`;
+                canvas.width = 500; // 仮の幅
+                canvas.height = 300; // 仮の高さ
                 
                 Object.assign(canvas.style, {
                     width: '100%',
@@ -1052,15 +1054,15 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
 
             static _initializeChart(canvas, config) {
                 // Chart.jsの遅延初期化
-                setTimeout(() => {
-                    try {
-                        if (canvas && window.Chart && config) {
-                            new Chart(canvas.getContext('2d'), config);
-                        }
-                    } catch (error) {
-                        ErrorHandler.handle(error, 'chart_initialization');
+                try {
+                    if (canvas && window.Chart && config) {
+                        // Chart.jsに渡す前にconfigを再度ディープクローンする
+                        const chartConfig = Utils.deepClone(config);
+                        new Chart(canvas.getContext('2d'), chartConfig);
                     }
-                }, 0);
+                } catch (error) {
+                    ErrorHandler.handle(error, 'chart_initialization');
+                }
             }
 
             static _createErrorPlaceholder(type) {
@@ -1479,7 +1481,7 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                 this.elements.groupBtn.disabled = selectedElementCount < 2;
                 this.elements.ungroupBtn.disabled = selectedGroupCount === 0;
 
-                // Undo/Redoボタンの状態更新
+                // Undo/Redo buttons
                 this.elements.undoBtn.disabled = this.stateManager._undoStack.length === 0;
                 this.elements.redoBtn.disabled = this.stateManager._redoStack.length === 0;
             },
@@ -2948,6 +2950,7 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                 return { success: true };
             },
             addElementToSlide(slideId, type, content, style) {
+                this.stateManager._saveToHistory(); // 履歴保存を追加
                 const activeSlideIndex = this.state.presentation.slides.findIndex(s => s.id === slideId);
                 if (activeSlideIndex === -1) return null;
 
@@ -3517,7 +3520,20 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                 });
                 return slideContainer;
             },
-            moveSlide(fromId, toId) { this.stateManager._saveToHistory(); const s = this.state.presentation.slides; const fromIdx = s.findIndex(s => s.id === fromId), toIdx = s.findIndex(s => s.id === toId); if (fromIdx === -1 || toIdx === -1) return; const [moved] = s.splice(fromIdx, 1); s.splice(toIdx, 0, moved); this.render(); this.saveState(); },
+            moveSlide(fromId, toId) {
+                this.stateManager._saveToHistory();
+                const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
+                    const fromIndex = draftSlides.findIndex(s => s.id === fromId);
+                    const toIndex = draftSlides.findIndex(s => s.id === toId);
+                    if (fromIndex !== -1 && toIndex !== -1) {
+                        const [moved] = draftSlides.splice(fromIndex, 1);
+                        draftSlides.splice(toIndex, 0, moved);
+                    }
+                });
+                this.updateState('presentation.slides', updatedSlides);
+                this.render();
+                this.saveState();
+            },
             duplicateSlide(slideId) {
                 this.stateManager._saveToHistory();
                 const slideIndex = this.state.presentation.slides.findIndex(s => s.id === slideId);
@@ -3624,19 +3640,33 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
             // 複製（現状のコピー機能）
             duplicateElement(elId) {
                 this.stateManager._saveToHistory();
-                const slide = this.getActiveSlide();
-                if (!slide) return;
-                const idx = slide.elements.findIndex(el => el.id === elId);
-                if (idx === -1) return;
-                const newEl = JSON.parse(JSON.stringify(slide.elements[idx]));
-                newEl.id = this.generateId('el');
-                newEl.style.left += 2;
-                newEl.style.top += 2;
-                slide.elements.push(newEl);
-                this.updateState('selectedElementIds', [newEl.id]);
-                this.render();
-                this.saveState();
-                this.applyCustomCss();
+                const activeSlideIndex = this.getActiveSlideIndex();
+                if (activeSlideIndex === -1) return;
+            
+                let newElId = null;
+            
+                const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
+                    const currentSlide = draftSlides[activeSlideIndex];
+                    const originalElementIndex = currentSlide.elements.findIndex(el => el.id === elId);
+                    if (originalElementIndex === -1) return;
+            
+                    const newEl = JSON.parse(JSON.stringify(currentSlide.elements[originalElementIndex]));
+                    newEl.id = this.generateId('el');
+                    newEl.style.left = (newEl.style.left || 0) + 2;
+                    newEl.style.top = (newEl.style.top || 0) + 2;
+                    newEl.style.zIndex = currentSlide.elements.length + 1;
+                    
+                    currentSlide.elements.push(newEl);
+                    newElId = newEl.id;
+                });
+            
+                if (newElId) {
+                    this.updateState('presentation.slides', updatedSlides);
+                    this.updateState('selectedElementIds', [newElId]);
+                    this.render();
+                    this.saveState();
+                    this.applyCustomCss();
+                }
             },
             // クリップボードコピー
             copyToClipboard(elId) {
@@ -3649,17 +3679,28 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
             // クリップボードペースト
             pasteFromClipboard() {
                 this.stateManager._saveToHistory();
-                const slide = this.getActiveSlide();
-                if (!slide || !window._slideClipboard) return;
-                const newEl = JSON.parse(JSON.stringify(window._slideClipboard));
-                newEl.id = this.generateId('el');
-                newEl.style.left += 4;
-                newEl.style.top += 4;
-                slide.elements.push(newEl);
-                this.updateState('selectedElementIds', [newEl.id]);
-                this.render();
-                this.saveState();
-                this.applyCustomCss();
+                const activeSlideIndex = this.getActiveSlideIndex();
+                if (activeSlideIndex === -1 || !window._slideClipboard) return;
+
+                let newElId = null;
+                const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
+                    const slide = draftSlides[activeSlideIndex];
+                    const newEl = JSON.parse(JSON.stringify(window._slideClipboard));
+                    newEl.id = this.generateId('el');
+                    newEl.style.left = (newEl.style.left || 0) + 4;
+                    newEl.style.top = (newEl.style.top || 0) + 4;
+                    newEl.style.zIndex = slide.elements.length + 1;
+                    slide.elements.push(newEl);
+                    newElId = newEl.id;
+                });
+
+                if (newElId) {
+                    this.updateState('presentation.slides', updatedSlides);
+                    this.updateState('selectedElementIds', [newElId]);
+                    this.render();
+                    this.saveState();
+                    this.applyCustomCss();
+                }
             },
 
             initCategoryFilters(iconType) {
@@ -3772,46 +3813,55 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
             },
 
             addIconElement(iconType, iconClass, style = {}) {
-                const slide = this.getActiveSlide();
-                if (!slide) return;
+                const activeSlideIndex = this.getActiveSlideIndex();
+                if (activeSlideIndex === -1) return;
+                
+                let newElId = null;
 
-                const defaultFontSize = 48;
-                const fontSize = style.fontSize || defaultFontSize;
-                const canvasWidth = this.state.presentation.settings.width || CANVAS_WIDTH;
-                const canvasHeight = this.state.presentation.settings.height || CANVAS_HEIGHT;
+                const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
+                    const slide = draftSlides[activeSlideIndex];
+                    const defaultFontSize = 48;
+                    const fontSize = style.fontSize || defaultFontSize;
+                    const canvasWidth = this.state.presentation.settings.width || CANVAS_WIDTH;
+                    const canvasHeight = this.state.presentation.settings.height || CANVAS_HEIGHT;
 
-                const newEl = {
-                    id: this.generateId('el'),
-                    type: 'icon',
-                    iconType: iconType, // Store icon type (fa or mi)
-                    content: iconClass, // Class string for FA, class name for MI
-                    style: {
-                        top: 20,
-                        left: 20,
-                        width: (fontSize / canvasWidth) * 100,
-                        height: (fontSize / canvasHeight) * 100,
-                        rotation: 0,
-                        color: '#212529',
-                        fontSize: fontSize,
-                        animation: '',
-                        ...style // 渡されたスタイルで上書き
+                    const newEl = {
+                        id: this.generateId('el'),
+                        type: 'icon',
+                        iconType: iconType, // Store icon type (fa or mi)
+                        content: iconClass, // Class string for FA, class name for MI
+                        style: {
+                            top: 20,
+                            left: 20,
+                            width: (fontSize / canvasWidth) * 100,
+                            height: (fontSize / canvasHeight) * 100,
+                            rotation: 0,
+                            color: '#212529',
+                            fontSize: fontSize,
+                            animation: '',
+                            zIndex: slide.elements.length + 1,
+                            ...style // 渡されたスタイルで上書き
+                        }
+                    };
+
+                    if (iconType === 'mi') {
+                        newEl.miContent = iconClass;
+                        const miStyleSelect = document.getElementById('mi-style-select');
+                        if (miStyleSelect) {
+                            newEl.content = miStyleSelect.value;
+                        }
                     }
-                };
 
-                if (iconType === 'mi') {
-                    // For Material Icons, also store the actual icon name (content for span tag)
-                    newEl.miContent = iconClass;
-                    // Material Iconsのスタイルを適用
-                    const miStyleSelect = document.getElementById('mi-style-select');
-                    if (miStyleSelect) {
-                        newEl.content = miStyleSelect.value; // e.g., "material-icons-outlined"
-                    }
+                    slide.elements.push(newEl);
+                    newElId = newEl.id;
+                });
+
+                if(newElId) {
+                    this.updateState('presentation.slides', updatedSlides);
+                    this.updateState('selectedElementIds', [newElId]);
+                    this.saveState();
+                    this.render();
                 }
-
-                slide.elements.push(newEl);
-                this.updateState('selectedElementIds', [newEl.id]);
-                this.saveState();
-                this.render();
             },
             // Inspectorでアイコンのスタイルを変更する関数
             updateIconStyle(element, newStylePrefix) {
@@ -4826,15 +4876,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!chartInstance) return;
             const slide = window.App?.getActiveSlide();
             if (!slide) return;
-            const newEl = {
-                id: App.generateId('el'), type: 'chart', content: Utils.deepClone(chartInstance.config),
-                style: { top: 20, left: 20, width: 50, height: 30, zIndex: slide.elements.length + 1, rotation: 0, animation: '' }
-            };
-            slide.elements.push(newEl);
-            App.updateState('selectedElementIds', [newEl.id]);
-            App.saveState();
-            App.render();
-            MicroModal.close('chart-modal');
+
+            // Chart.jsのconfigから非シリアライズ可能なプロパティを削除
+            const cleanConfig = Utils.deepClone(chartInstance.config);
+            if (cleanConfig.options && cleanConfig.options.plugins && cleanConfig.options.plugins.legend && cleanConfig.options.plugins.legend.labels) {
+                // Chart.jsが追加する可能性のある関数を削除
+                delete cleanConfig.options.plugins.legend.labels.generateLabels;
+            }
+            
+            const newElContent = Utils.deepClone(cleanConfig);
+            const newElStyle = { top: 20, left: 20, width: 50, height: 30, zIndex: slide.elements.length + 1, rotation: 0, animation: '' };
+
+            // App.addElementToSlide を使用して要素を追加
+            const addedElement = App.addElementToSlide(slide.id, 'chart', newElContent, newElStyle);
+            
+            if (addedElement) {
+                App.updateState('selectedElementIds', [addedElement.id]);
+                App.saveState();
+                App.render();
+                MicroModal.close('chart-modal');
+            }
         };
     }
 

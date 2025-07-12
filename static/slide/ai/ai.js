@@ -1129,10 +1129,10 @@ ${result.message}
             if (!color) throw new Error('単色背景にはcolor属性が必要です。');
             updates['presentation.settings.backgroundColor'] = color;
         } else if (type === 'gradient') {
-            const startColor = commandNode.getAttribute('start_color');
-            const endColor = commandNode.getAttribute('end_color');
+            const startColor = commandNode.getAttribute('gradient_start_color');
+            const endColor = commandNode.getAttribute('gradient_end_color');
             const angle = commandNode.getAttribute('angle');
-            if (!startColor || !endColor) throw new Error('グラデーション背景にはstart_colorとend_color属性が必要です。');
+            if (!startColor || !endColor) throw new Error('グラデーション背景にはgradient_start_colorとgradient_end_color属性が必要です。');
 
             updates['presentation.settings.gradientStart'] = startColor;
             updates['presentation.settings.gradientEnd'] = endColor;

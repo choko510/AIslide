@@ -55,7 +55,8 @@
 }
 
 body {
-    font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+    font-family: "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
     background-color: var(--bg-light);
     color: var(--text-primary);
     overflow: hidden;
@@ -132,14 +133,16 @@ body {
    ========================================================================== */
 .color-picker-window {
     position: fixed;
-    z-index: 1050; /* 他のUIより手前に表示 */
+    z-index: 1050;
+    /* 他のUIより手前に表示 */
     background-color: var(--bg-white);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-md);
     width: 280px;
-    display: none; /* 初期状態は非表示 */
-    font-family: 'Noto Sans JP', sans-serif;
+    display: none;
+    /* 初期状態は非表示 */
+    font-family: "Noto Sans JP", sans-serif;
 }
 
 .color-picker-header {
@@ -200,7 +203,8 @@ body {
 
 .color-map-container {
     width: 100%;
-    padding-bottom: 75%; /* 4:3 Aspect Ratio */
+    padding-bottom: 75%;
+    /* 4:3 Aspect Ratio */
     position: relative;
     margin-bottom: 15px;
 }
@@ -211,7 +215,8 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsla(0, 100%, 50%, 0));
+    background: linear-gradient(to top, #000, transparent),
+        linear-gradient(to right, #fff, hsla(0, 100%, 50%, 0));
     cursor: crosshair;
     border-radius: 4px;
     overflow: hidden;
@@ -249,7 +254,8 @@ body {
     margin-bottom: 15px;
 }
 
-.hue-slider-container, .alpha-slider-container {
+.hue-slider-container,
+.alpha-slider-container {
     flex-grow: 1;
     height: 15px;
     position: relative;
@@ -260,20 +266,30 @@ body {
 .hue-slider {
     width: 100%;
     height: 100%;
-    background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+    background: linear-gradient(to right,
+            #f00,
+            #ff0,
+            #0f0,
+            #0ff,
+            #00f,
+            #f0f,
+            #f00);
     cursor: pointer;
 }
 
 .alpha-slider {
     width: 100%;
     height: 100%;
-    background: linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,1)); /* This will be updated by JS */
+    background: linear-gradient(to right,
+            rgba(0, 0, 0, 0),
+            rgba(0, 0, 0, 1));
+    /* This will be updated by JS */
     cursor: pointer;
     /* 透明度スライダーの背景にチェックボードパターンを追加 */
     background-image: linear-gradient(45deg, #ccc 25%, transparent 25%),
-                      linear-gradient(-45deg, #ccc 25%, transparent 25%),
-                      linear-gradient(45deg, transparent 75%, #ccc 75%),
-                      linear-gradient(-45deg, transparent 75%, #ccc 75%);
+        linear-gradient(-45deg, #ccc 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #ccc 75%),
+        linear-gradient(-45deg, transparent 75%, #ccc 75%);
     background-size: 10px 10px;
     background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
 }
@@ -301,7 +317,8 @@ body {
 
 .color-inputs input {
     flex-grow: 1;
-    flex-basis: 0; /* 追加 */
+    flex-basis: 0;
+    /* 追加 */
     padding: 8px;
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
@@ -321,7 +338,8 @@ body {
     margin-bottom: 10px;
     max-height: 100px;
     overflow-y: auto;
-    padding-right: 5px; /* Scrollbar space */
+    padding-right: 5px;
+    /* Scrollbar space */
 }
 
 .palette-color-item {
@@ -339,9 +357,9 @@ body {
     height: 100%;
     /* 透明度のある色のためにチェックボードパターンを追加 */
     background-image: linear-gradient(45deg, #ccc 25%, transparent 25%),
-                      linear-gradient(-45deg, #ccc 25%, transparent 25%),
-                      linear-gradient(45deg, transparent 75%, #ccc 75%),
-                      linear-gradient(-45deg, transparent 75%, #ccc 75%);
+        linear-gradient(-45deg, #ccc 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #ccc 75%),
+        linear-gradient(-45deg, transparent 75%, #ccc 75%);
     background-size: 10px 10px;
     background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
 }
@@ -357,7 +375,8 @@ body {
     padding: 2px 4px;
     font-size: 10px;
     cursor: pointer;
-    display: none; /* Hidden by default */
+    display: none;
+    /* Hidden by default */
 }
 
 .palette-color-item:hover .delete-palette-color {
@@ -467,6 +486,7 @@ body {
 .gradient-controls {
     margin-bottom: 15px;
 }
+
 .gradient-controls label {
     font-size: 12px;
     color: var(--text-secondary);
@@ -512,9 +532,9 @@ body {
 
 [data-theme="dark"] .palette-color-box {
     background-image: linear-gradient(45deg, #555 25%, transparent 25%),
-                      linear-gradient(-45deg, #555 25%, transparent 25%),
-                      linear-gradient(45deg, transparent 75%, #555 75%),
-                      linear-gradient(-45deg, transparent 75%, #555 75%);
+        linear-gradient(-45deg, #555 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #555 75%),
+        linear-gradient(-45deg, transparent 75%, #555 75%);
 }
 
 [data-theme="dark"] .color-actions button {
@@ -533,13 +553,16 @@ body {
 @media (max-width: 768px) {
     body {
         /* interactive-widget=resizes-content をサポートするビューポート設定 */
-        padding-bottom: env(safe-area-inset-bottom); /* iPhone X/XR/XS Max/11/12/13/14/15 の下部のセーフエリアを考慮 */
+        padding-bottom: env(safe-area-inset-bottom);
+        /* iPhone X/XR/XS Max/11/12/13/14/15 の下部のセーフエリアを考慮 */
     }
 
     #app-container {
         flex-direction: column;
-        height: 100dvh; /* モバイルでの高さ調整 */
-        padding-bottom: 70px; /* mobile-nav-barの高さ分確保 */
+        height: 100dvh;
+        /* モバイルでの高さ調整 */
+        padding-bottom: 70px;
+        /* mobile-nav-barの高さ分確保 */
     }
 
     /* #toolbar はモバイルでは表示しないが、デスクトップのスタイルで制御 */
@@ -560,35 +583,45 @@ body {
         bottom: 0;
         left: 0;
         width: 100%;
-        height: calc(100% - 70px); /* ナビゲーションバーの高さ分を引く */
+        height: calc(100% - 70px);
+        /* ナビゲーションバーの高さ分を引く */
         background-color: var(--bg-white);
         box-shadow: var(--shadow-md);
-        transform: translateY(100%); /* 画面外に隠す */
+        transform: translateY(100%);
+        /* 画面外に隠す */
         transition: transform 0.3s ease-out;
-        z-index: 999; /* モバイルナビゲーションバーより上 */
-        display: block !important; /* デスクトップのdisplay:noneを上書き */
+        z-index: 999;
+        /* モバイルナビゲーションバーより上 */
+        display: block !important;
+        /* デスクトップのdisplay:noneを上書き */
         padding-bottom: env(safe-area-inset-bottom);
     }
 
     #sidebar-content.active {
-        transform: translateY(0%); /* 表示 */
+        transform: translateY(0%);
+        /* 表示 */
     }
 
     #sidebar-tabs {
-        display: none; /* モバイルではサイドバータブ自体は非表示 */
+        display: none;
+        /* モバイルではサイドバータブ自体は非表示 */
     }
 
     #app-body {
-        flex-direction: column; /* 要素を縦に並べる */
+        flex-direction: column;
+        /* 要素を縦に並べる */
         flex-grow: 1;
         overflow: hidden;
     }
 
     #center-content {
-        flex-direction: column; /* メインコンテンツも縦に並べる */
+        flex-direction: column;
+        /* メインコンテンツも縦に並べる */
         flex-grow: 1;
-        overflow-y: auto; /* スクロール可能にする */
-        padding: 0; /* パディングをリセット */
+        overflow-y: auto;
+        /* スクロール可能にする */
+        padding: 0;
+        /* パディングをリセット */
     }
 
     #main-canvas-area {
@@ -596,60 +629,80 @@ body {
         display: flex;
         justify-content: center;
         align-items: center;
-        padding: 16px 0; /* モバイルでのパディング調整 */
-        min-width: unset; /* 最小幅を解除 */
-        min-height: unset; /* 最小高さを解除 */
+        padding: 16px 0;
+        /* モバイルでのパディング調整 */
+        min-width: unset;
+        /* 最小幅を解除 */
+        min-height: unset;
+        /* 最小高さを解除 */
         background-color: var(--bg-light);
-        width: 100%; /* 幅を100%に */
-        height: auto; /* 高さを自動に */
+        width: 100%;
+        /* 幅を100%に */
+        height: auto;
+        /* 高さを自動に */
     }
 
     #slide-wrapper {
-        width: 95vw; /* モバイルでのスライド幅調整 */
+        width: 95vw;
+        /* モバイルでのスライド幅調整 */
         max-width: 95vw;
         height: auto;
         aspect-ratio: 16 / 9;
     }
 
     #slide-canvas {
-        width: 100%; /* スライドキャンバスの幅を100%に */
-        height: 100%; /* スライドキャンバスの高さを100%に */
+        width: 100%;
+        /* スライドキャンバスの幅を100%に */
+        height: 100%;
+        /* スライドキャンバスの高さを100%に */
         box-shadow: var(--shadow-md);
         border-radius: var(--border-radius);
     }
 
     #bottom-pane {
-        height: 80px; /* 高さを調整 */
+        height: 80px;
+        /* 高さを調整 */
         padding: 8px;
-        border-bottom: 1px solid var(--border-color); /* 下部に移動したのでborder-topからborder-bottomに */
-        border-top: none; /* 元のborder-topを解除 */
-        overflow-x: auto; /* 横スクロール可能に */
+        border-bottom: 1px solid var(--border-color);
+        /* 下部に移動したのでborder-topからborder-bottomに */
+        border-top: none;
+        /* 元のborder-topを解除 */
+        overflow-x: auto;
+        /* 横スクロール可能に */
         overflow-y: hidden;
-        white-space: nowrap; /* スライドサムネイルを1行に */
-        -webkit-overflow-scrolling: touch; /* スムーズなスクロール */
+        white-space: nowrap;
+        /* スライドサムネイルを1行に */
+        -webkit-overflow-scrolling: touch;
+        /* スムーズなスクロール */
         display: flex;
         align-items: center;
         background-color: var(--bg-white);
     }
 
     #slide-list-container {
-        height: 100%; /* bottom-paneの高さに合わせる */
+        height: 100%;
+        /* bottom-paneの高さに合わせる */
     }
 
     #slide-list {
         display: flex;
-        flex-direction: row; /* スライドを横に並べる */
+        flex-direction: row;
+        /* スライドを横に並べる */
         align-items: center;
         height: 100%;
-        gap: 8px; /* サムネイル間のスペース */
-        padding: 0 8px; /* 左右のパディング */
+        gap: 8px;
+        /* サムネイル間のスペース */
+        padding: 0 8px;
+        /* 左右のパディング */
     }
 
     .slide-thumbnail {
-        width: 120px; /* モバイルでのサムネイル幅 */
+        width: 120px;
+        /* モバイルでのサムネイル幅 */
         height: auto;
         flex-shrink: 0;
-        margin-right: 0; /* 元のマージンをリセット */
+        margin-right: 0;
+        /* 元のマージンをリセット */
     }
 
     .slide-thumbnail-wrapper {
@@ -672,11 +725,14 @@ body {
         background-color: var(--bg-white);
         border-top: 1px solid var(--border-color);
         box-shadow: var(--shadow-sm);
-        flex-shrink: 0; /* 縮小させない */
-        position: fixed; /* 下部に固定 */
+        flex-shrink: 0;
+        /* 縮小させない */
+        position: fixed;
+        /* 下部に固定 */
         bottom: 0;
         z-index: 100;
-        height: 70px; /* ナビゲーションバーの高さ */
+        height: 70px;
+        /* ナビゲーションバーの高さ */
     }
 
     .mobile-nav-item {
@@ -684,7 +740,8 @@ body {
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        flex: 1; /* 等間隔に配置 */
+        flex: 1;
+        /* 等間隔に配置 */
         padding: 4px;
         border: none;
         background: none;
@@ -887,8 +944,7 @@ body {
 }
 
 .slide-canvas.show-grid {
-    background-image:
-        linear-gradient(rgba(0, 0, 0, 0.1) 1px, transparent 1px),
+    background-image: linear-gradient(rgba(0, 0, 0, 0.1) 1px, transparent 1px),
         linear-gradient(90deg, rgba(0, 0, 0, 0.1) 1px, transparent 1px);
     background-size: 20px 20px;
 }
@@ -930,7 +986,8 @@ body {
     line-height: 1.3;
     word-wrap: break-word;
     max-width: 100%;
-    font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+    font-family: "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
 }
 
 .slide-element.text[contenteditable="false"] {
@@ -945,6 +1002,8 @@ body {
     width: 100%;
     height: 100%;
     pointer-events: none;
+    object-fit: contain;
+    /* アスペクト比を維持して要素内に収める */
 }
 
 .slide-element.icon {
@@ -1132,14 +1191,20 @@ body {
 }
 
 .guide-line.size-match.vertical {
-    background-image: linear-gradient(to bottom, var(--guide-color) 0%, var(--guide-color) 50%, transparent 50%);
+    background-image: linear-gradient(to bottom,
+            var(--guide-color) 0%,
+            var(--guide-color) 50%,
+            transparent 50%);
     background-position: left;
     background-size: 1px 8px;
     background-repeat: repeat-y;
 }
 
 .guide-line.size-match.horizontal {
-    background-image: linear-gradient(to right, var(--guide-color) 0%, var(--guide-color) 50%, transparent 50%);
+    background-image: linear-gradient(to right,
+            var(--guide-color) 0%,
+            var(--guide-color) 50%,
+            transparent 50%);
     background-position: top;
     background-size: 8px 1px;
     background-repeat: repeat-x;
@@ -1537,50 +1602,50 @@ body {
 /* Page Settings & Global CSS Editor */
 #page-settings p,
 #page-settings .settings-description {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
 }
 
 #page-bg-color-input,
 #gradient-start-color,
 #gradient-end-color {
-  width: 100%;
-  height: 38px;
-  padding: 4px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  cursor: pointer;
-  background-color: var(--bg-white);
+    width: 100%;
+    height: 38px;
+    padding: 4px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    background-color: var(--bg-white);
 }
 
 #background-type-selector {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
 }
 
 #background-type-selector .sidebar-add-btn {
-  flex-grow: 1;
+    flex-grow: 1;
 }
 
 #background-type-selector .sidebar-add-btn:not(.active) {
-  background-color: transparent;
+    background-color: transparent;
 }
 
 .gradient-control {
-  margin-top: 12px;
+    margin-top: 12px;
 }
 
 .gradient-control label {
-  display: block;
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-bottom: 4px;
+    display: block;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
 }
 
 #gradient-angle {
-  width: 100%;
+    width: 100%;
 }
 
 #global-css-input {
@@ -1908,7 +1973,7 @@ body {
     right: 0;
     bottom: 0;
     background-color: #ccc;
-    transition: .4s;
+    transition: 0.4s;
     border-radius: 26px;
 }
 
@@ -1920,7 +1985,7 @@ body {
     left: 3px;
     bottom: 3px;
     background-color: white;
-    transition: .4s;
+    transition: 0.4s;
     border-radius: 50%;
 }
 
@@ -2138,7 +2203,10 @@ input:checked+.theme-slider:before {
 }
 
 #qr-modal #qr-preview {
-    display: inline-block;
+    display: flex;
+    /* inline-blockからflexに変更 */
+    justify-content: center;
+    align-items: center;
     padding: 20px;
     background: #fafbfc;
     border: 2px dashed var(--border-color);
@@ -2147,6 +2215,15 @@ input:checked+.theme-slider:before {
     min-height: 200px;
     text-align: center;
     color: var(--text-secondary);
+    aspect-ratio: 1 / 1;
+    /* アスペクト比を1:1に固定 */
+}
+
+#qr-modal #qr-preview svg,
+#qr-modal #qr-preview canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
 #qr-modal #qr-warning {
@@ -2319,15 +2396,42 @@ input:checked+.theme-slider:before {
 }
 
 #chart-modal .color-palette-btn:nth-child(1) {
-    background: linear-gradient(45deg, #007bff 0%, #007bff 20%, #28a745 20%, #28a745 40%, #dc3545 40%, #dc3545 60%, #ffc107 60%, #ffc107 80%, #6f42c1 80%);
+    background: linear-gradient(45deg,
+            #007bff 0%,
+            #007bff 20%,
+            #28a745 20%,
+            #28a745 40%,
+            #dc3545 40%,
+            #dc3545 60%,
+            #ffc107 60%,
+            #ffc107 80%,
+            #6f42c1 80%);
 }
 
 #chart-modal .color-palette-btn:nth-child(2) {
-    background: linear-gradient(45deg, #e74c3c 0%, #e74c3c 20%, #f39c12 20%, #f39c12 40%, #f1c40f 40%, #f1c40f 60%, #2ecc71 60%, #2ecc71 80%, #3498db 80%);
+    background: linear-gradient(45deg,
+            #e74c3c 0%,
+            #e74c3c 20%,
+            #f39c12 20%,
+            #f39c12 40%,
+            #f1c40f 40%,
+            #f1c40f 60%,
+            #2ecc71 60%,
+            #2ecc71 80%,
+            #3498db 80%);
 }
 
 #chart-modal .color-palette-btn:nth-child(3) {
-    background: linear-gradient(45deg, #8e44ad 0%, #8e44ad 20%, #9b59b6 20%, #9b59b6 40%, #e67e22 40%, #e67e22 60%, #d35400 60%, #d35400 80%, #c0392b 80%);
+    background: linear-gradient(45deg,
+            #8e44ad 0%,
+            #8e44ad 20%,
+            #9b59b6 20%,
+            #9b59b6 40%,
+            #e67e22 40%,
+            #e67e22 60%,
+            #d35400 60%,
+            #d35400 80%,
+            #c0392b 80%);
 }
 
 #chart-modal .chart-input-small {
@@ -2547,24 +2651,24 @@ body.presentation-mode {
     padding: 4px;
 }
 
-.color-picker-trigger > div {
+.color-picker-trigger>div {
     width: 100%;
     height: 100%;
     border-radius: 4px;
     /* 透明度のある色のためにチェックボードパターンを追加 */
     background-image: linear-gradient(45deg, #ccc 25%, transparent 25%),
-                      linear-gradient(-45deg, #ccc 25%, transparent 25%),
-                      linear-gradient(45deg, transparent 75%, #ccc 75%),
-                      linear-gradient(-45deg, transparent 75%, #ccc 75%);
+        linear-gradient(-45deg, #ccc 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #ccc 75%),
+        linear-gradient(-45deg, transparent 75%, #ccc 75%);
     background-size: 10px 10px;
     background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
 }
 
-[data-theme="dark"] .color-picker-trigger > div {
+[data-theme="dark"] .color-picker-trigger>div {
     background-image: linear-gradient(45deg, #555 25%, transparent 25%),
-                      linear-gradient(-45deg, #555 25%, transparent 25%),
-                      linear-gradient(45deg, transparent 75%, #555 75%),
-                      linear-gradient(-45deg, transparent 75%, #555 75%);
+        linear-gradient(-45deg, #555 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #555 75%),
+        linear-gradient(-45deg, transparent 75%, #555 75%);
 }
 
 #delete-element-btn {

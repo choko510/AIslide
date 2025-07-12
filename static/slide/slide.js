@@ -3138,6 +3138,7 @@ import { ColorPicker } from './ColorPicker.js';
                         return;
                     }
                     newEl.content = content; // content is the Base64 dataURL
+                    newEl.style.width = 30; // QRコードは正方形なのでwidthも設定
                     newEl.style.height = 30; // Default height, user can resize
                 } else if (type === 'video') {
                     const url = content || prompt('動画のURLを入力してください:', 'https://www.w3schools.com/html/mov_bbb.mp4');

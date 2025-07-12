@@ -2,22 +2,23 @@
 <html lang="ja">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <title>Web Slide Maker - Modern (Enhanced)</title>
     <!-- Preconnect for faster font loading -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://site-assets.fontawesome.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://site-assets.fontawesome.com" />
     <!-- Preload critical CSS -->
-    <link rel="preload" as="style" href="slide.css" onload="this.rel='stylesheet'">
+    <link rel="preload" as="style" href="slide.css?1" onload="this.rel='stylesheet'" />
     <link rel="preload" as="style" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/all.css"
-        onload="this.rel='stylesheet'">
+        onload="this.rel='stylesheet'" />
     <!-- Google Fonts for imgedit.html -->
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
 </head>
 
-<body class=""> <!-- paint-session-active クラスが動的に追加/削除される -->
+<body class="">
+    <!-- paint-session-active クラスが動的に追加/削除される -->
     <div id="app-container">
         <div id="toolbar">
             <button id="add-slide-btn" title="スライド追加"><i class="fas fa-plus"></i><span>スライド追加</span></button>
@@ -25,40 +26,64 @@
             <div class="separator"></div>
             <!-- アラインメントボタングループ -->
             <div class="btn-group">
-                <button id="align-left-btn" title="左揃え"><i class="fas fa-align-left"></i></button>
-                <button id="align-center-h-btn" title="水平中央揃え"><i class="fas fa-align-center"></i></button>
-                <button id="align-right-btn" title="右揃え"><i class="fas fa-align-right"></i></button>
-                <button id="align-top-btn" title="上揃え"><i class="fas fa-align-top"></i></button>
-                <button id="align-center-v-btn" title="垂直中央揃え"><i class="fas fa-arrows-alt-v"></i></button>
-                <button id="align-bottom-btn" title="下揃え"><i class="fas fa-align-bottom"></i></button>
-                <button id="distribute-h-btn" title="水平方向へ等間隔に配置"><i class="fas fa-grip-lines"></i></button>
-                <button id="distribute-v-btn" title="垂直方向へ等間隔に配置"><i class="fas fa-grip-lines-vertical"></i></button>
-                <button id="tidy-up-btn" title="等間隔に整列"><i class="fas fa-sort-amount-down"></i></button>
+                <button id="align-left-btn" title="左揃え">
+                    <i class="fas fa-align-left"></i>
+                </button>
+                <button id="align-center-h-btn" title="水平中央揃え">
+                    <i class="fas fa-align-center"></i>
+                </button>
+                <button id="align-right-btn" title="右揃え">
+                    <i class="fas fa-align-right"></i>
+                </button>
+                <button id="align-top-btn" title="上揃え">
+                    <i class="fas fa-align-top"></i>
+                </button>
+                <button id="align-center-v-btn" title="垂直中央揃え">
+                    <i class="fas fa-arrows-alt-v"></i>
+                </button>
+                <button id="align-bottom-btn" title="下揃え">
+                    <i class="fas fa-align-bottom"></i>
+                </button>
+                <button id="distribute-h-btn" title="水平方向へ等間隔に配置">
+                    <i class="fas fa-grip-lines"></i>
+                </button>
+                <button id="distribute-v-btn" title="垂直方向へ等間隔に配置">
+                    <i class="fas fa-grip-lines-vertical"></i>
+                </button>
+                <button id="tidy-up-btn" title="等間隔に整列">
+                    <i class="fas fa-sort-amount-down"></i>
+                </button>
             </div>
             <div class="separator"></div>
-            <button id="group-btn" title="グループ化 (Ctrl+G)"><i class="fas fa-object-group"></i></button>
-            <button id="ungroup-btn" title="グループ解除 (Ctrl+Shift+G)"><i class="fas fa-object-ungroup"></i></button>
+            <button id="group-btn" title="グループ化 (Ctrl+G)">
+                <i class="fas fa-object-group"></i>
+            </button>
+            <button id="ungroup-btn" title="グループ解除 (Ctrl+Shift+G)">
+                <i class="fas fa-object-ungroup"></i>
+            </button>
             <div class="separator"></div>
-            <button id="undo-btn" title="元に戻す (Ctrl+Z)"><i class="fas fa-undo"></i></button>
-            <button id="redo-btn" title="やり直し (Ctrl+Y)"><i class="fas fa-redo"></i></button>
+            <button id="undo-btn" title="元に戻す (Ctrl+Z)">
+                <i class="fas fa-undo"></i>
+            </button>
+            <button id="redo-btn" title="やり直し (Ctrl+Y)">
+                <i class="fas fa-redo"></i>
+            </button>
             <div class="separator"></div>
             <button id="save-btn" title="保存"><i class="fas fa-save"></i><span>保存</span></button>
             <button id="present-btn" title="プレゼンテーション開始"><i class="fas fa-play"></i><span>開始</span></button>
             <button id="export-btn" title="エクスポート"><i class="fas fa-download"></i><span>エクスポート</span></button>
             <button id="toggle-script-panel-btn" title="台本パネル表示/非表示"><i class="fas fa-book"></i><span>台本</span></button>
-            <div id="export-menu">
-            </div>
+            <div id="export-menu"></div>
         </div>
 
         <div id="app-body">
             <div id="center-content">
                 <aside id="left-sidebar">
-                    <div id="sidebar-resize-handle">
-                    </div>
+                    <div id="sidebar-resize-handle"></div>
                     <div id="sidebar-tabs">
                         <button class="sidebar-tab-button active" data-tab="elements">
                             <i class="fas fa-shapes"></i>
-                            <span>素材</span>
+                            <span>要素</span>
                         </button>
                         <button class="sidebar-tab-button" data-tab="icons">
                             <i class="fas fa-icons"></i>
@@ -73,21 +98,20 @@
                             <span>AI</span>
                         </button>
                         <button class="sidebar-tab-button" data-tab="page-settings">
-                            <i class="fas fa-file-code"></i>
-                            <span>ページCSS</span>
+                            <i class="fas fa-palette"></i>
+                            <span>ページ設定</span>
                         </button>
                         <button class="sidebar-tab-button" data-tab="settings">
                             <i class="fas fa-cog"></i>
                             <span>設定</span>
                         </button>
-
                     </div>
                     <div id="sidebar-content">
                         <div class="sidebar-tab-content active" data-tab-content="elements">
                             <div id="element-add-buttons-container">
                                 <button id="add-text-btn" class="sidebar-add-btn"><i
                                         class="fas fa-font fa-fw"></i><span>テキスト</span></button>
-                                <input type="file" id="image-upload-input" accept="image/*" class="hidden-input">
+                                <input type="file" id="image-upload-input" accept="image/*" class="hidden-input" />
                                 <button id="add-image-btn" class="sidebar-add-btn"><i
                                         class="fas fa-image fa-fw"></i><span>画像</span></button>
                                 <button id="add-image-edit-btn" class="sidebar-add-btn"><i
@@ -111,13 +135,14 @@
                                 <button id="fa-toggle-btn" class="sidebar-add-btn active"><i
                                         class="fa-brands fa-font-awesome"></i><span>Font Awesome</span></button>
                                 <button id="mi-toggle-btn" class="sidebar-add-btn"><i
-                                        class="material-icons">star</i><span>Material Icons</span></button>
+                                        class="material-icons">star</i><span>Material
+                                        Icons</span></button>
                             </div>
 
                             <!-- Font Awesome Section -->
                             <div id="font-awesome-section">
                                 <div class="icon-search-toolbar">
-                                    <input type="text" id="fa-icon-search-input" placeholder="Font Awesomeアイコン検索...">
+                                    <input type="text" id="fa-icon-search-input" placeholder="Font Awesomeアイコン検索..." />
                                 </div>
                                 <div class="icon-style-selector-container">
                                     <label>スタイル</label>
@@ -139,7 +164,7 @@
                             <!-- Material Icons Section -->
                             <div id="material-icons-section" style="display: none;">
                                 <div class="icon-search-toolbar">
-                                    <input type="text" id="mi-icon-search-input" placeholder="Material Icons検索...">
+                                    <input type="text" id="mi-icon-search-input" placeholder="Material Icons検索..." />
                                 </div>
                                 <div class="icon-style-selector-container">
                                     <label>スタイル</label>
@@ -160,15 +185,55 @@
                             </div>
                         </div>
                         <div class="sidebar-tab-content" data-tab-content="inspector">
-                            <div id="inspector"></div> <!-- 旧インスペクターのコンテナ -->
-                            <div id="no-selection-message" style="display:none;">要素が選択されていません</div>
+                            <div id="inspector"></div>
+                            <!-- 旧インスペクターのコンテナ -->
+                            <div id="no-selection-message" style="display: none;">
+                                要素が選択されていません
+                            </div>
                         </div>
                         <div class="sidebar-tab-content" data-tab-content="page-settings">
-                            <h3>ページ全体のカスタムCSS</h3>
-                            <p>ここに記述したCSSは、すべてのスライドに適用されます。</p>
-                            <div id="global-css-input">
+                            <h3>ページ設定</h3>
+                            <div class="settings-group">
+                                <h4>背景</h4>
+                                <div id="background-type-selector">
+                                    <button class="sidebar-add-btn small-btn active" data-bg-type="solid">単色</button>
+                                    <button class="sidebar-add-btn small-btn" data-bg-type="gradient">グラデーション</button>
+                                </div>
+                                <div id="solid-color-settings">
+                                    <label for="page-bg-color-input">
+                                        <div class="settings-description">
+                                            すべてのスライドの背景色を設定します。
+                                        </div>
+                                    </label>
+                                    <div id="page-bg-color-picker-container"></div>
+                                </div>
+                                <div id="gradient-settings" style="display: none;">
+                                    <div class="settings-description">
+                                        線形グラデーションを設定します。
+                                    </div>
+                                    <div class="gradient-control">
+                                        <label for="gradient-start-color">開始色</label>
+                                        <input type="color" id="gradient-start-color" value="#ffffff">
+                                    </div>
+                                    <div class="gradient-control">
+                                        <label for="gradient-end-color">終了色</label>
+                                        <input type="color" id="gradient-end-color" value="#007bff">
+                                    </div>
+                                    <div class="gradient-control">
+                                        <label for="gradient-angle">角度: <span
+                                                id="gradient-angle-value">90</span>°</label>
+                                        <input type="range" id="gradient-angle" min="0" max="360" value="90">
+                                    </div>
+                                </div>
                             </div>
-                            <button id="save-global-css-btn" class="sidebar-add-btn">ページCSSを適用</button>
+                            <div class="settings-group">
+                                <h4>ページ全体のカスタムCSS</h4>
+                                <p>ここに記述したCSSは、すべてのスライドに適用されます。</p>
+                                <div id="global-css-input"></div>
+                                <button id="save-global-css-btn" class="sidebar-add-btn">
+                                    ページCSSを適用
+                                </button>
+                            </div>
                         </div>
                         <div class="sidebar-tab-content" data-tab-content="settings">
                             <div id="settings-panel">
@@ -177,11 +242,13 @@
                                     <div class="settings-item">
                                         <label>
                                             ダークモード
-                                            <div class="settings-description">画面を暗いテーマに切り替えます</div>
+                                            <div class="settings-description">
+                                                画面を暗いテーマに切り替えます
+                                            </div>
                                         </label>
                                         <div class="settings-control">
                                             <label class="theme-toggle">
-                                                <input type="checkbox" id="theme-toggle">
+                                                <input type="checkbox" id="theme-toggle" />
                                                 <span class="theme-slider"></span>
                                             </label>
                                         </div>
@@ -189,7 +256,9 @@
                                     <div class="settings-item">
                                         <label>
                                             フォントサイズ
-                                            <div class="settings-description">UIのフォントサイズを調整します</div>
+                                            <div class="settings-description">
+                                                UIのフォントサイズを調整します
+                                            </div>
                                         </label>
                                         <div class="settings-control">
                                             <select id="font-size-setting">
@@ -206,11 +275,13 @@
                                     <div class="settings-item">
                                         <label>
                                             自動保存
-                                            <div class="settings-description">変更を自動的に保存します</div>
+                                            <div class="settings-description">
+                                                変更を自動的に保存します
+                                            </div>
                                         </label>
                                         <div class="settings-control">
                                             <label class="toggle-switch">
-                                                <input type="checkbox" id="auto-save-toggle" checked>
+                                                <input type="checkbox" id="auto-save-toggle" checked />
                                                 <span class="slider"></span>
                                             </label>
                                         </div>
@@ -218,11 +289,13 @@
                                     <div class="settings-item">
                                         <label>
                                             スナップ機能
-                                            <div class="settings-description">要素の配置時にガイドラインにスナップします</div>
+                                            <div class="settings-description">
+                                                要素の配置時にガイドラインにスナップします
+                                            </div>
                                         </label>
                                         <div class="settings-control">
                                             <label class="toggle-switch">
-                                                <input type="checkbox" id="snap-toggle" checked>
+                                                <input type="checkbox" id="snap-toggle" checked />
                                                 <span class="slider"></span>
                                             </label>
                                         </div>
@@ -230,11 +303,13 @@
                                     <div class="settings-item">
                                         <label>
                                             グリッド表示
-                                            <div class="settings-description">スライドキャンバスにグリッドを表示します</div>
+                                            <div class="settings-description">
+                                                スライドキャンバスにグリッドを表示します
+                                            </div>
                                         </label>
                                         <div class="settings-control">
                                             <label class="toggle-switch">
-                                                <input type="checkbox" id="grid-toggle">
+                                                <input type="checkbox" id="grid-toggle" />
                                                 <span class="slider"></span>
                                             </label>
                                         </div>
@@ -246,36 +321,41 @@
                                     <div class="settings-item">
                                         <label>
                                             データのエクスポート
-                                            <div class="settings-description">プレゼンテーションデータをJSONファイルとして保存</div>
+                                            <div class="settings-description">
+                                                プレゼンテーションデータをJSONファイルとして保存
+                                            </div>
                                         </label>
                                         <div class="settings-control">
-                                            <button id="export-data-btn" class="sidebar-add-btn small-btn">
-                                                <i class="fas fa-download"></i> エクスポート
-                                            </button>
+                                            <button id="export-data-btn" class="sidebar-add-btn small-btn"><i
+                                                    class="fas fa-download"></i>
+                                                エクスポート</button>
                                         </div>
                                     </div>
                                     <div class="settings-item">
                                         <label>
                                             データのインポート
-                                            <div class="settings-description">JSONファイルからプレゼンテーションデータを読み込み</div>
+                                            <div class="settings-description">
+                                                JSONファイルからプレゼンテーションデータを読み込み
+                                            </div>
                                         </label>
                                         <div class="settings-control">
                                             <input type="file" id="import-data-input" accept=".json"
-                                                class="hidden-input">
-                                            <button id="import-data-btn" class="sidebar-add-btn small-btn">
-                                                <i class="fas fa-upload"></i> インポート
-                                            </button>
+                                                class="hidden-input" />
+                                            <button id="import-data-btn" class="sidebar-add-btn small-btn"><i
+                                                    class="fas fa-upload"></i>
+                                                インポート</button>
                                         </div>
                                     </div>
                                     <div class="settings-item">
                                         <label>
                                             データの削除
-                                            <div class="settings-description">すべてのプレゼンテーションデータを削除</div>
+                                            <div class="settings-description">
+                                                すべてのプレゼンテーションデータを削除
+                                            </div>
                                         </label>
                                         <div class="settings-control">
-                                            <button id="clear-data-btn" class="sidebar-add-btn small-btn danger-btn">
-                                                <i class="fas fa-trash"></i> 全削除
-                                            </button>
+                                            <button id="clear-data-btn" class="sidebar-add-btn small-btn danger-btn"><i
+                                                    class="fas fa-trash"></i> 全削除</button>
                                         </div>
                                     </div>
                                 </div>
@@ -299,15 +379,12 @@
                                         </button>
                                     </div>
                                     <div class="chat-reset-container">
-                                        <button id="reset-chat-btn" class="sidebar-add-btn" title="チャット履歴をリセットします">
-                                            <i class="fas fa-sync-alt"></i> チャットをリセット
-                                        </button>
+                                        <button id="reset-chat-btn" class="sidebar-add-btn" title="チャット履歴をリセットします"><i
+                                                class="fas fa-sync-alt"></i> チャットをリセット</button>
                                     </div>
                                     <div id="ai-control-buttons">
                                         <button id="pause-ai-btn" class="sidebar-add-btn warning-btn"
-                                            title="AIの自動実行を一時停止します">
-                                            <i class="fas fa-pause"></i> 一時停止
-                                        </button>
+                                            title="AIの自動実行を一時停止します"><i class="fas fa-pause"></i> 一時停止</button>
                                         <button id="resume-ai-btn" class="sidebar-add-btn success-btn"
                                             title="AIの自動実行を再開します" style="display: none;">
                                             <i class="fas fa-play"></i> 再開
@@ -318,7 +395,7 @@
                                             <i class="fas fa-robot"></i>
                                             <span>自律モード</span>
                                             <div class="toggle-switch">
-                                                <input type="checkbox" id="autonomous-mode-toggle">
+                                                <input type="checkbox" id="autonomous-mode-toggle" />
                                                 <span class="slider"></span>
                                             </div>
                                         </label>
@@ -326,7 +403,7 @@
                                             <i class="fas fa-bolt"></i>
                                             <span>自動実行</span>
                                             <div class="toggle-switch">
-                                                <input type="checkbox" id="auto-execute-toggle">
+                                                <input type="checkbox" id="auto-execute-toggle" />
                                                 <span class="slider"></span>
                                             </div>
                                         </label>
@@ -334,13 +411,14 @@
                                 </div>
                                 <!-- 自律モード用UI -->
                                 <div id="autonomous-goal-container">
-                                    <input type="text" id="autonomous-goal-input" placeholder="最終目標を入力...">
-                                    <button id="start-autonomous-btn" class="sidebar-add-btn">開始</button>
+                                    <input type="text" id="autonomous-goal-input" placeholder="最終目標を入力..." />
+                                    <button id="start-autonomous-btn" class="sidebar-add-btn">
+                                        開始
+                                    </button>
                                 </div>
-                                <div id="chat-messages">
-                                </div>
+                                <div id="chat-messages"></div>
                                 <div id="chat-input-container">
-                                    <input type="text" id="chat-input" placeholder="AIにスライドの変更を指示...">
+                                    <input type="text" id="chat-input" placeholder="AIにスライドの変更を指示..." />
                                     <button id="send-chat-btn">送信</button>
                                 </div>
                             </div>
@@ -348,24 +426,22 @@
                     </div>
                 </aside>
                 <div id="main-canvas-area">
-                    <div id="slide-wrapper"> <!-- slide-wrapperのスタイルは既存のmain-pane内のものとほぼ同じはず -->
+                    <div id="slide-wrapper">
+                        <!-- slide-wrapperのスタイルは既存のmain-pane内のものとほぼ同じはず -->
                         <div id="slide-canvas"></div>
                     </div>
                 </div>
                 <aside id="right-sidebar">
-                    <div id="right-sidebar-resize-handle">
-                    </div>
+                    <div id="right-sidebar-resize-handle"></div>
                     <div id="script-panel">
                         <h3>台本</h3>
-                        <div id="script-display" contenteditable="false">
-                        </div>
+                        <div id="script-display" contenteditable="false"></div>
                     </div>
                 </aside>
             </div>
             <div id="bottom-pane">
                 <div id="slide-list-container">
-                    <ul id="slide-list">
-                    </ul>
+                    <ul id="slide-list"></ul>
                 </div>
             </div>
         </div>
@@ -379,7 +455,9 @@
     <div class="modal micromodal-slide" id="qr-modal" aria-hidden="true">
         <div class="modal__overlay" tabindex="-1" data-micromodal-close>
             <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title">
-                <button class="modal__close" aria-label="Close modal" data-micromodal-close>&times;</button>
+                <button class="modal__close" aria-label="Close modal" data-micromodal-close>
+                    &times;
+                </button>
                 <main class="modal__content" id="qr-modal-content">
                     <div class="qr-grid">
                         <!-- 左側：設定パネル -->
@@ -391,11 +469,13 @@
                                     <div class="qr-input-grid">
                                         <div>
                                             <label class="qr-label">QRコード内容</label>
-                                            <input type="text" id="qr-text" value="" required placeholder="URLやテキストを入力">
+                                            <input type="text" id="qr-text" value="" required
+                                                placeholder="URLやテキストを入力" />
                                         </div>
                                         <div>
                                             <label class="qr-label">サイズ: <span id="qr-size-value">256</span>px</label>
-                                            <input type="range" id="qr-size" value="256" min="128" max="512" step="16">
+                                            <input type="range" id="qr-size" value="256" min="128" max="512"
+                                                step="16" />
                                         </div>
                                     </div>
                                 </div>
@@ -408,14 +488,14 @@
                                             <label class="qr-label">QRコード色</label>
                                             <div class="qr-color-input-wrapper">
                                                 <input type="color" id="qr-color" value="#000000"
-                                                    class="qr-color-input">
+                                                    class="qr-color-input" />
                                             </div>
                                         </div>
                                         <div class="qr-color-picker-wrapper">
                                             <label class="qr-label">背景色</label>
                                             <div class="qr-color-input-wrapper">
                                                 <input type="color" id="qr-bg-color" value="#ffffff"
-                                                    class="qr-color-input">
+                                                    class="qr-color-input" />
                                             </div>
                                         </div>
                                     </div>
@@ -429,34 +509,45 @@
                                             <label class="qr-label">ドット形状</label>
                                             <div class="qr-style-options">
                                                 <button type="button" class="qr-style-btn" data-style="square"
-                                                    title="四角"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                    title="四角">
+                                                    <svg width="24" height="24" viewBox="0 0 24 24">
                                                         <path d="M0 0h24v24H0z" fill="currentColor" />
-                                                    </svg></button>
-                                                <button type="button" class="qr-style-btn" data-style="dots"
-                                                    title="丸"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                    </svg>
+                                                </button>
+                                                <button type="button" class="qr-style-btn" data-style="dots" title="丸">
+                                                    <svg width="24" height="24" viewBox="0 0 24 24">
                                                         <circle cx="12" cy="12" r="12" fill="currentColor" />
-                                                    </svg></button>
+                                                    </svg>
+                                                </button>
                                                 <button type="button" class="qr-style-btn" data-style="rounded"
-                                                    title="角丸"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                    title="角丸">
+                                                    <svg width="24" height="24" viewBox="0 0 24 24">
                                                         <rect width="24" height="24" rx="6" fill="currentColor" />
-                                                    </svg></button>
+                                                    </svg>
+                                                </button>
                                                 <button type="button" class="qr-style-btn" data-style="classy"
-                                                    title="クラッシー"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                    title="クラッシー">
+                                                    <svg width="24" height="24" viewBox="0 0 24 24">
                                                         <path
                                                             d="M0 12C0 5.373 5.373 0 12 0h12v12C24 18.627 18.627 24 12 24S0 18.627 0 12z"
                                                             fill="currentColor" />
-                                                    </svg></button>
+                                                    </svg>
+                                                </button>
                                                 <button type="button" class="qr-style-btn" data-style="classy-rounded"
-                                                    title="クラッシー丸"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                    title="クラッシー丸">
+                                                    <svg width="24" height="24" viewBox="0 0 24 24">
                                                         <path
                                                             d="M0 12C0 5.373 5.373 0 12 0h12v12C24 18.627 18.627 24 12 24S0 18.627 0 12z"
                                                             clip-rule="evenodd" fill-rule="evenodd"
                                                             fill="currentColor" />
-                                                    </svg></button>
+                                                    </svg>
+                                                </button>
                                                 <button type="button" class="qr-style-btn" data-style="extra-rounded"
-                                                    title="超丸"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                    title="超丸">
+                                                    <svg width="24" height="24" viewBox="0 0 24 24">
                                                         <rect width="24" height="24" rx="12" fill="currentColor" />
-                                                    </svg></button>
+                                                    </svg>
+                                                </button>
                                             </div>
                                         </div>
 
@@ -464,32 +555,35 @@
                                             <label class="qr-label">枠線形状</label>
                                             <div class="qr-style-options">
                                                 <button type="button" class="qr-corner-btn" data-corner="square"
-                                                    title="四角"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                    title="四角">
+                                                    <svg width="24" height="24" viewBox="0 0 24 24">
                                                         <rect width="16" height="16" x="4" y="4" stroke="currentColor"
                                                             stroke-width="4" fill="transparent" />
-                                                    </svg></button>
-                                                <button type="button" class="qr-corner-btn" data-corner="dot"
-                                                    title="丸"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                    </svg>
+                                                </button>
+                                                <button type="button" class="qr-corner-btn" data-corner="dot" title="丸">
+                                                    <svg width="24" height="24" viewBox="0 0 24 24">
                                                         <circle cx="12" cy="12" r="8" stroke="currentColor"
                                                             stroke-width="4" fill="transparent" />
-                                                    </svg></button>
+                                                    </svg>
+                                                </button>
                                                 <button type="button" class="qr-corner-btn" data-corner="extra-rounded"
-                                                    title="超丸"><svg width="24" height="24" viewBox="0 0 24 24">
+                                                    title="超丸">
+                                                    <svg width="24" height="24" viewBox="0 0 24 24">
                                                         <rect width="16" height="16" x="4" y="4" rx="6"
                                                             stroke="currentColor" stroke-width="4" fill="transparent" />
-                                                    </svg></button>
+                                                    </svg>
+                                                </button>
                                             </div>
                                         </div>
 
                                         <div>
                                             <label class="qr-label">ロゴ画像（任意）</label>
-                                            <input type="file" id="qr-logo-upload" accept="image/*">
+                                            <input type="file" id="qr-logo-upload" accept="image/*" />
                                         </div>
                                     </div>
                                 </div>
-                                <button type="submit" class="qr-submit-btn">
-                                    <i class="fas fa-plus"></i>スライドに追加
-                                </button>
+                                <button type="submit" class="qr-submit-btn"><i class="fas fa-plus"></i>スライドに追加</button>
                             </form>
                         </div>
 
@@ -497,9 +591,7 @@
                         <div class="qr-preview-panel">
                             <h3>プレビュー</h3>
                             <div class="qr-preview-container">
-                                <div id="qr-preview">
-                                    QRコード内容を入力してください
-                                </div>
+                                <div id="qr-preview">QRコード内容を入力してください</div>
                             </div>
                             <div id="qr-warning"></div>
                         </div>
@@ -513,7 +605,9 @@
     <div class="modal micromodal-slide" id="chart-modal" aria-hidden="true">
         <div class="modal__overlay" tabindex="-1" data-micromodal-close>
             <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="chart-modal-title">
-                <button class="modal__close" aria-label="Close modal" data-micromodal-close>&times;</button>
+                <button class="modal__close" aria-label="Close modal" data-micromodal-close>
+                    &times;
+                </button>
                 <main class="modal__content" id="chart-modal-content">
                     <div class="chart-grid">
                         <!-- 左側：設定パネル -->
@@ -553,12 +647,12 @@
                                         <div>
                                             <label class="chart-label">タイトル</label>
                                             <input type="text" id="chart-title" placeholder="グラフタイトル"
-                                                class="chart-input">
+                                                class="chart-input" />
                                         </div>
                                         <div>
                                             <label class="chart-label">データセット名</label>
                                             <input type="text" id="chart-dataset-label" value="Dataset" required
-                                                class="chart-input">
+                                                class="chart-input" />
                                         </div>
                                         <!-- 新しいスプレッドシートUI -->
                                         <div id="chart-data-spreadsheet">
@@ -576,10 +670,12 @@
                                             </table>
                                         </div>
                                         <div class="chart-data-actions">
-                                            <button type="button" id="add-chart-row-btn"
-                                                class="sidebar-add-btn">行を追加</button>
-                                            <button type="button" id="paste-csv-btn"
-                                                class="sidebar-add-btn">CSV/TSVを貼り付け</button>
+                                            <button type="button" id="add-chart-row-btn" class="sidebar-add-btn">
+                                                行を追加
+                                            </button>
+                                            <button type="button" id="paste-csv-btn" class="sidebar-add-btn">
+                                                CSV/TSVを貼り付け
+                                            </button>
                                         </div>
                                         <textarea id="csv-paste-area" class="chart-csv-paste"
                                             placeholder="ここにCSV/TSVデータを貼り付け"></textarea>
@@ -601,32 +697,31 @@
                                                     data-colors="#8e44ad,#9b59b6,#e67e22,#d35400,#c0392b"></button>
                                             </div>
                                             <input type="text" id="chart-colors" placeholder="カスタム色（カンマ区切り）"
-                                                class="chart-input-small">
+                                                class="chart-input-small" />
                                         </div>
 
                                         <div>
                                             <label class="chart-label">線の太さ: <span
                                                     id="line-width-value">2</span>px</label>
                                             <input type="range" id="chart-line-width" min="1" max="10" value="2"
-                                                class="chart-range-slider">
+                                                class="chart-range-slider" />
                                         </div>
 
                                         <div class="chart-checkbox-grid">
                                             <label class="chart-checkbox-label">
-                                                <input type="checkbox" id="chart-show-legend" checked>
+                                                <input type="checkbox" id="chart-show-legend" checked />
                                                 凡例を表示
                                             </label>
                                             <label class="chart-checkbox-label">
-                                                <input type="checkbox" id="chart-show-grid" checked>
+                                                <input type="checkbox" id="chart-show-grid" checked />
                                                 グリッド線を表示
                                             </label>
                                         </div>
                                     </div>
                                 </div>
 
-                                <button type="submit" class="chart-submit-btn">
-                                    <i class="fas fa-plus"></i>グラフを作成
-                                </button>
+                                <button type="submit" class="chart-submit-btn"><i
+                                        class="fas fa-plus"></i>グラフを作成</button>
                             </form>
                         </div>
 
@@ -647,7 +742,9 @@
     <div class="modal micromodal-slide" id="shape-modal" aria-hidden="true">
         <div class="modal__overlay" tabindex="-1" data-micromodal-close>
             <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="shape-modal-title">
-                <button class="modal__close" aria-label="Close modal" data-micromodal-close>&times;</button>
+                <button class="modal__close" aria-label="Close modal" data-micromodal-close>
+                    &times;
+                </button>
                 <header class="modal__header">
                     <h2 class="modal__title" id="shape-modal-title">図形を選択</h2>
                 </header>
@@ -686,7 +783,8 @@
                                     </marker>
                                 </defs>
                                 <line x1="10" y1="50" x2="80" y2="50" stroke="#ccc" stroke-width="5"
-                                    marker-end="url(#arrowhead)"></line>
+                                    marker-end="url(#arrowhead)">
+                                </line>
                             </svg>
                             <span>矢印</span>
                         </button>
@@ -700,7 +798,8 @@
                         <button class="shape-select-btn" data-shape="speech-bubble">
                             <svg viewBox="0 0 100 100">
                                 <path d="M10 10 H 90 V 70 H 60 L 50 90 L 40 70 H 10 Z" fill="#ccc" stroke="#ccc"
-                                    stroke-width="2"></path>
+                                    stroke-width="2">
+                                </path>
                             </svg>
                             <span>吹き出し</span>
                         </button>
@@ -714,7 +813,9 @@
     <div class="modal micromodal-slide" id="imgedit-modal" aria-hidden="true">
         <div class="modal__overlay" tabindex="-1" data-micromodal-close>
             <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="imgedit-modal-title">
-                <button class="modal__close" aria-label="Close modal" data-micromodal-close>&times;</button>
+                <button class="modal__close" aria-label="Close modal" data-micromodal-close>
+                    &times;
+                </button>
                 <header class="imgedit-header">
                     <h1>高機能 画像編集アプリ</h1>
                     <p>背景削除、フィルター、切り抜きなどの編集ができます。</p>
@@ -725,12 +826,15 @@
                     <aside class="imgedit-controls-panel">
                         <div class="imgedit-file-loader">
                             <label for="imgedit-file-input" class="imgedit-file-label">ファイルを選択</label>
-                            <input type="file" id="imgedit-file-input" accept="image/*">
+                            <input type="file" id="imgedit-file-input" accept="image/*" />
                         </div>
 
                         <div id="imgedit-drop-zone-container">
                             <div id="imgedit-drop-zone">
-                                <p>画像をここにドラッグ＆ドロップ<br>または上のボタンから選択</p>
+                                <p>
+                                    画像をここにドラッグ＆ドロップ<br />
+                                    または上のボタンから選択
+                                </p>
                             </div>
                         </div>
 
@@ -747,41 +851,57 @@
                             <!-- フィルター -->
                             <div class="imgedit-control-group">
                                 <h2>フィルター</h2>
-                                <div class="imgedit-slider-group"><label for="imgedit-brightness">明るさ</label><input
-                                        type="range" id="imgedit-brightness" min="0" max="200" value="100"
-                                        class="filter-slider" data-unit="%"><output>100%</output>
+                                <div class="imgedit-slider-group">
+                                    <label for="imgedit-brightness">明るさ</label><input type="range"
+                                        id="imgedit-brightness" min="0" max="200" value="100" class="filter-slider"
+                                        data-unit="%" />
+                                    <output>100%</output>
                                 </div>
-                                <div class="imgedit-slider-group"><label for="imgedit-contrast">コントラスト</label><input
-                                        type="range" id="imgedit-contrast" min="0" max="200" value="100"
-                                        class="filter-slider" data-unit="%"><output>100%</output>
+                                <div class="imgedit-slider-group">
+                                    <label for="imgedit-contrast">コントラスト</label><input type="range"
+                                        id="imgedit-contrast" min="0" max="200" value="100" class="filter-slider"
+                                        data-unit="%" />
+                                    <output>100%</output>
                                 </div>
-                                <div class="imgedit-slider-group"><label for="imgedit-saturate">彩度</label><input
-                                        type="range" id="imgedit-saturate" min="0" max="200" value="100"
-                                        class="filter-slider" data-unit="%"><output>100%</output>
+                                <div class="imgedit-slider-group">
+                                    <label for="imgedit-saturate">彩度</label><input type="range" id="imgedit-saturate"
+                                        min="0" max="200" value="100" class="filter-slider" data-unit="%" />
+                                    <output>100%</output>
                                 </div>
-                                <div class="imgedit-slider-group"><label for="imgedit-grayscale">グレースケール</label><input
-                                        type="range" id="imgedit-grayscale" min="0" max="100" value="0"
-                                        class="filter-slider" data-unit="%"><output>0%</output></div>
-                                <div class="imgedit-slider-group"><label for="imgedit-sepia">セピア</label><input
-                                        type="range" id="imgedit-sepia" min="0" max="100" value="0"
-                                        class="filter-slider" data-unit="%"><output>0%</output></div>
-                                <div class="imgedit-slider-group"><label for="imgedit-blur">ぼかし</label><input
-                                        type="range" id="imgedit-blur" min="0" max="10" value="0" step="0.1"
-                                        class="filter-slider" data-unit="px"><output>0px</output>
+                                <div class="imgedit-slider-group">
+                                    <label for="imgedit-grayscale">グレースケール</label>
+                                    <input type="range" id="imgedit-grayscale" min="0" max="100" value="0"
+                                        class="filter-slider" data-unit="%" /><output>0%</output>
                                 </div>
-                                <div class="imgedit-slider-group"><label for="imgedit-hue-rotate">色相回転</label><input
-                                        type="range" id="imgedit-hue-rotate" min="0" max="360" value="0"
-                                        class="filter-slider" data-unit="deg"><output>0deg</output></div>
-                                <div class="imgedit-slider-group"><label for="imgedit-invert">階調反転</label><input
-                                        type="range" id="imgedit-invert" min="0" max="100" value="0"
-                                        class="filter-slider" data-unit="%"><output>0%</output>
+                                <div class="imgedit-slider-group">
+                                    <label for="imgedit-sepia">セピア</label><input type="range" id="imgedit-sepia" min="0"
+                                        max="100" value="0" class="filter-slider" data-unit="%" />
+                                    <output>0%</output>
+                                </div>
+                                <div class="imgedit-slider-group">
+                                    <label for="imgedit-blur">ぼかし</label><input type="range" id="imgedit-blur" min="0"
+                                        max="10" value="0" step="0.1" class="filter-slider" data-unit="px" />
+                                    <output>0px</output>
+                                </div>
+                                <div class="imgedit-slider-group">
+                                    <label for="imgedit-hue-rotate">色相回転</label><input type="range"
+                                        id="imgedit-hue-rotate" min="0" max="360" value="0" class="filter-slider"
+                                        data-unit="deg" />
+                                    <output>0deg</output>
+                                </div>
+                                <div class="imgedit-slider-group">
+                                    <label for="imgedit-invert">階調反転</label><input type="range" id="imgedit-invert"
+                                        min="0" max="100" value="0" class="filter-slider" data-unit="%" />
+                                    <output>0%</output>
                                 </div>
                             </div>
 
                             <!-- トリミングと変形 -->
                             <div class="imgedit-control-group">
                                 <h2>トリミングと変形</h2>
-                                <button id="imgedit-crop-btn" class="imgedit-secondary-btn">トリミング</button>
+                                <button id="imgedit-crop-btn" class="imgedit-secondary-btn">
+                                    トリミング
+                                </button>
                                 <div class="imgedit-button-group">
                                     <button id="imgedit-rotate-left" title="左に90度回転">
                                         <i class="fa-solid fa-rotate-left"></i>
@@ -810,7 +930,9 @@
                             <!-- ペイント -->
                             <div class="imgedit-control-group imgedit-paint-controls">
                                 <h2>描画</h2>
-                                <button id="imgedit-toggle-paint-session" class="imgedit-primary-btn">描画を開始</button>
+                                <button id="imgedit-toggle-paint-session" class="imgedit-primary-btn">
+                                    描画を開始
+                                </button>
 
                                 <div id="imgedit-paint-tools-panel" class="hidden">
                                     <div class="imgedit-paint-tool-selector">
@@ -840,31 +962,39 @@
                                         <div class="imgedit-slider-group">
                                             <label for="imgedit-brush-size">サイズ</label>
                                             <input type="range" id="imgedit-brush-size" min="1" max="100" value="10"
-                                                data-unit="px"><output>10px</output>
+                                                data-unit="px" /><output>10px</output>
                                         </div>
                                         <div class="imgedit-slider-group">
                                             <label for="imgedit-brush-color">色</label>
-                                            <input type="color" id="imgedit-brush-color" value="#FF0000">
+                                            <input type="color" id="imgedit-brush-color" value="#FF0000" />
                                         </div>
                                     </div>
                                     <div id="imgedit-eraser-settings" class="hidden">
                                         <div class="imgedit-slider-group">
                                             <label for="imgedit-eraser-size">消しゴムサイズ</label>
                                             <input type="range" id="imgedit-eraser-size" min="1" max="100" value="20"
-                                                data-unit="px"><output>20px</output>
+                                                data-unit="px" /><output>20px</output>
                                         </div>
                                     </div>
                                     <div class="imgedit-action-group">
-                                        <button id="imgedit-cancel-paint" class="imgedit-danger-btn">キャンセル</button>
-                                        <button id="imgedit-clear-paint" class="imgedit-secondary-btn">全消去</button>
+                                        <button id="imgedit-cancel-paint" class="imgedit-danger-btn">
+                                            キャンセル
+                                        </button>
+                                        <button id="imgedit-clear-paint" class="imgedit-secondary-btn">
+                                            全消去
+                                        </button>
                                     </div>
                                 </div>
                             </div>
 
                             <!-- アクション -->
                             <div class="imgedit-control-group imgedit-action-group">
-                                <button id="imgedit-reset-btn" class="imgedit-secondary-btn">リセット</button>
-                                <button id="imgedit-download-btn" class="imgedit-primary-btn">スライドで使用</button>
+                                <button id="imgedit-reset-btn" class="imgedit-secondary-btn">
+                                    リセット
+                                </button>
+                                <button id="imgedit-download-btn" class="imgedit-primary-btn">
+                                    スライドで使用
+                                </button>
                             </div>
                         </div>
                     </aside>
@@ -872,7 +1002,7 @@
                     <!-- 画像表示エリア -->
                     <div class="imgedit-image-area">
                         <div id="imgedit-image-workspace" class="hidden">
-                            <img id="imgedit-image-to-edit">
+                            <img id="imgedit-image-to-edit" />
                             <canvas id="imgedit-paint-canvas" class="hidden"></canvas>
                         </div>
                     </div>
@@ -899,13 +1029,39 @@
         </div>
     </div>
 
+    <nav id="mobile-nav-bar">
+        <button class="mobile-nav-item active" data-tab="inspector">
+            <i class="fas fa-sliders-h"></i>
+            <span>デザイン</span>
+        </button>
+        <button class="mobile-nav-item" data-tab="elements">
+            <i class="fas fa-shapes"></i>
+            <span>素材</span>
+        </button>
+        <button class="mobile-nav-item" data-tab="icons">
+            <i class="fas fa-icons"></i>
+            <span>アイコン</span>
+        </button>
+        <button class="mobile-nav-item" data-tab="chat">
+            <i class="fas fa-robot"></i>
+            <span>AI</span>
+        </button>
+        <button class="mobile-nav-item" data-tab="page-settings">
+            <i class="fas fa-palette"></i>
+            <span>ページ設定</span>
+        </button>
+        <button class="mobile-nav-item" data-tab="settings">
+            <i class="fas fa-cog"></i>
+            <span>設定</span>
+        </button>
+    </nav>
 
     <!-- Styles -->
-    <link rel="stylesheet" href="ai/ai.css">
-    <link rel="stylesheet" href="micromodal.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-    <link rel="stylesheet" href="imgedit/imgedit.css">
+    <link rel="stylesheet" href="ai/ai.css" />
+    <link rel="stylesheet" href="micromodal.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
+    <link rel="stylesheet" href="imgedit/imgedit.css" />
 
     <!-- Third-party scripts -->
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js" defer></script>
@@ -920,9 +1076,10 @@
     <script type="module" src="presentation.js"></script>
     <script type="module" src="icon.js"></script>
     <script type="module" src="inspector.js"></script>
+    <script src="imgedit/imgedit.js" defer></script>
+    <script type="module" src="ColorPicker.js" defer></script>
     <script type="module" src="slide.js"></script>
     <script type="module" src="slideScript.js"></script>
-    <script src="imgedit/imgedit.js" defer></script>
 </body>
 
 </html>

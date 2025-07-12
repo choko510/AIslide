@@ -1,4 +1,5 @@
 import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
+import { ColorPicker } from './ColorPicker.js';
 
         // =================================================================
         // 構成定数
@@ -366,7 +367,16 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
             _createInitialState() {
                 return {
                     presentation: {
-                        settings: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT, globalCss: '' },
+                        settings: {
+                            width: CANVAS_WIDTH,
+                            height: CANVAS_HEIGHT,
+                            globalCss: '',
+                            backgroundType: 'solid', // 'solid' or 'gradient'
+                            backgroundColor: '#ffffff',
+                            gradientStart: '#ffffff',
+                            gradientEnd: '#007bff',
+                            gradientAngle: 90
+                        },
                         slides: [],
                         groups: {} // { 'slideId': [{ id: 'group-xxx', elementIds: [...] }] }
                     },
@@ -931,8 +941,8 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                             const elWidthPx = window.Utils.percentToPixels(style.width, window.CANVAS_WIDTH);
                             const elHeightPx = window.Utils.percentToPixels(style.height, window.CANVAS_HEIGHT);
                             if (elWidthPx > 0 && elHeightPx > 0) {
-                                const rx = style.borderRadius; // Use borderRadius directly as an absolute length
-                                const ry = style.borderRadius; // Use borderRadius directly as an absolute length
+                                const rx = (style.borderRadius / elWidthPx) * 100;
+                                const ry = (style.borderRadius / elHeightPx) * 100;
                                 shape.setAttribute('rx', rx);
                                 shape.setAttribute('ry', ry);
                             }
@@ -1161,6 +1171,7 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
             _animationFrameId: null,
             _boundHandleMouseMove: null,
             _boundHandleMouseUp: null,
+            _sidebarCloseHandler: null,
 
             applyStyles(element, styles) {
                 StyleManager.applyStyles(element, styles);
@@ -1262,6 +1273,7 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                     toolbar: document.getElementById('toolbar'),
                     appBody: document.getElementById('app-body'),
                     leftSidebar: document.getElementById('left-sidebar'),
+                    mobileNavBar: document.getElementById('mobile-nav-bar'),
                     rightSidebar: document.getElementById('right-sidebar'),
                     mainCanvasArea: document.getElementById('main-canvas-area'),
                     
@@ -1271,6 +1283,14 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                     inspector: document.getElementById('inspector'),
                     noSelectionMessage: document.getElementById('no-selection-message'),
                     chatPanel: document.getElementById('chat-panel'),
+
+                    // モバイルナビゲーションバーのボタンをキャッシュ
+                    mobileNavInspectorBtn: document.querySelector('#mobile-nav-bar button[data-tab="inspector"]'),
+                    mobileNavElementsBtn: document.querySelector('#mobile-nav-bar button[data-tab="elements"]'),
+                    mobileNavIconsBtn: document.querySelector('#mobile-nav-bar button[data-tab="icons"]'),
+                    mobileNavChatBtn: document.querySelector('#mobile-nav-bar button[data-tab="chat"]'),
+                    mobileNavPageSettingsBtn: document.querySelector('#mobile-nav-bar button[data-tab="page-settings"]'),
+                    mobileNavSettingsBtn: document.querySelector('#mobile-nav-bar button[data-tab="settings"]'),
                     // ツールバーボタン
                     addSlideBtn: document.getElementById('add-slide-btn'),
                     deleteSlideBtn: document.getElementById('delete-slide-btn'),
@@ -1324,7 +1344,17 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                     // プレゼンテーション関連
                     presentationView: document.getElementById('presentation-view'),
                     presentationSlideContainer: document.getElementById('presentation-slide-container'),
-                    
+
+                    // ページ設定
+                    pageBgColorInput: document.getElementById('page-bg-color-input'),
+                    backgroundTypeSelector: document.getElementById('background-type-selector'),
+                    solidColorSettings: document.getElementById('solid-color-settings'),
+                    gradientSettings: document.getElementById('gradient-settings'),
+                    gradientStartColor: document.getElementById('gradient-start-color'),
+                    gradientEndColor: document.getElementById('gradient-end-color'),
+                    gradientAngle: document.getElementById('gradient-angle'),
+                    gradientAngleValue: document.getElementById('gradient-angle-value'),
+                    pageBgColorPickerContainer: document.getElementById('page-bg-color-picker-container'),
                 };
             },
 
@@ -1332,18 +1362,18 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                 try {
                     const savedData = localStorage.getItem('webSlideMakerData');
                     if (savedData) {
-                        const presentation = JSON.parse(savedData);
+                        const newPresentation = JSON.parse(savedData);
                         // 既存のデータにscriptプロパティがない場合、空文字列で初期化
-                        if (presentation.script === undefined) {
-                            presentation.script = '';
+                        if (newPresentation.script === undefined) {
+                            newPresentation.script = '';
                         }
                         // groupsプロパティがない場合、空のオブジェクトで初期化
-                        if (presentation.groups === undefined) {
-                            presentation.groups = {};
+                        if (newPresentation.groups === undefined) {
+                            newPresentation.groups = {};
                         }
                         this.stateManager.batch({
-                            'presentation': presentation,
-                            'activeSlideId': presentation.slides[0]?.id || null,
+                            'presentation': newPresentation,
+                            'activeSlideId': newPresentation.slides[0]?.id || null,
                             'selectedElementIds': []
                         }, { silent: true });
                     } else {
@@ -1356,6 +1386,25 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                         globalCssInput.value = this.state.presentation?.settings?.globalCss || '';
                     }
                     this.applyCustomCss();
+                    this.applyPageBackground();
+                    
+                    // ColorPickerの初期化
+                    if (this.elements.pageBgColorPickerContainer) {
+                        this.pageBgColorPicker = new ColorPicker(
+                            this.elements.pageBgColorPickerContainer,
+                            this.state.presentation.settings.backgroundColor,
+                            (color) => {
+                                this.updateState('presentation.settings.backgroundColor', color);
+                                this.applyPageBackground();
+                                this.saveState();
+                            },
+                            {
+                                defaultColor: '#ffffff',
+                                paletteKey: 'pageBackgroundPalette'
+                            }
+                        );
+                    }
+
                 } catch (error) {
                     ErrorHandler.handle(error, 'load_state');
                     this.createNewPresentation();
@@ -1389,7 +1438,16 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                 try {
                     const firstSlideId = this.generateId('slide');
                     const newPresentation = {
-                        settings: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT, globalCss: '' },
+                         settings: {
+                            width: CANVAS_WIDTH,
+                            height: CANVAS_HEIGHT,
+                            globalCss: '',
+                            backgroundType: 'solid',
+                            backgroundColor: '#ffffff',
+                            gradientStart: '#ffffff',
+                            gradientEnd: '#007bff',
+                            gradientAngle: 90
+                        },
                         slides: [{
                             id: firstSlideId,
                             elements: [{
@@ -1449,6 +1507,7 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                         }
                         this.updateToolbarState();
                         this.applyCustomCss();
+                        this.applyPageBackground();
                     } catch (error) {
                         ErrorHandler.handle(error, 'render');
                     }
@@ -1457,35 +1516,59 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
 
             // Helper function to switch sidebar tabs programmatically
             switchToTab(tabName) {
-                if (!this.elements.sidebarTabs || !this.elements.sidebarContent) return;
+                if (!this.elements.sidebarContent) return;
 
-                // Update tab buttons state
-                this.elements.sidebarTabs.querySelectorAll('.sidebar-tab-button').forEach(btn => {
-                    btn.classList.toggle('active', btn.dataset.tab === tabName);
-                });
+                // 既存のクローズハンドラを常に削除
+                if (this._sidebarCloseHandler) {
+                    document.removeEventListener('click', this._sidebarCloseHandler);
+                    this._sidebarCloseHandler = null;
+                }
 
-                // Update tab content visibility
-                this.elements.sidebarContent.querySelectorAll('.sidebar-tab-content').forEach(content => {
-                    content.classList.toggle('active', content.dataset.tabContent === tabName);
-                });
-
-                // Show/hide the entire content panel based on the tab
-                const isInspectorTab = tabName === 'inspector';
-                const hasSelection = this.state.selectedElementIds.length > 0;
+                const sidebarContent = this.elements.sidebarContent;
+                const targetContent = sidebarContent.querySelector(`.sidebar-tab-content[data-tab-content="${tabName}"]`);
+                const isAlreadyActive = targetContent && targetContent.classList.contains('active');
                 
-                // Show content panel if it's not the inspector tab, or if it is and there's a selection
-                const shouldShowContent = !isInspectorTab || (isInspectorTab && hasSelection);
-                this.elements.sidebarContent.style.display = shouldShowContent ? 'block' : 'none';
-                
-                // Adjust sidebar width
-                this.elements.leftSidebar.style.width = shouldShowContent ? '340px' : '60px';
+                // 一旦すべて非表示
+                sidebarContent.querySelectorAll('.sidebar-tab-content').forEach(c => c.classList.remove('active'));
+                this.elements.sidebarTabs.querySelectorAll('.sidebar-tab-button').forEach(b => b.classList.remove('active'));
+                this.elements.mobileNavBar.querySelectorAll('.mobile-nav-item').forEach(b => b.classList.remove('active'));
 
+                if (isAlreadyActive) {
+                    // 同じタブを再度クリックした場合 -> 閉じる
+                    sidebarContent.classList.remove('active');
+                } else {
+                    // 新しいタブを開く
+                    if (targetContent) {
+                        targetContent.classList.add('active');
+                        sidebarContent.classList.add('active');
+                        
+                        const desktopBtn = this.elements.sidebarTabs.querySelector(`[data-tab="${tabName}"]`);
+                        if (desktopBtn) desktopBtn.classList.add('active');
+                        
+                        const mobileBtn = this.elements.mobileNavBar.querySelector(`[data-tab="${tabName}"]`);
+                        if (mobileBtn) mobileBtn.classList.add('active');
 
-                // Initialize editors or render specific content
-                if (tabName === 'inspector') {
-                    this.renderInspector();
-                } else if (tabName === 'page-settings') {
-                    this.initGlobalCssEditor();
+                        // --- 新しいクローズハンドラを登録 ---
+                        this._sidebarCloseHandler = (e) => {
+                            // クリックがサイドバーコンテンツ、またはモバイルナビバー自身でなければ閉じる
+                            if (!sidebarContent.contains(e.target) && !this.elements.mobileNavBar.contains(e.target)) {
+                                sidebarContent.classList.remove('active');
+                                if(mobileBtn) mobileBtn.classList.remove('active');
+                                if(desktopBtn) desktopBtn.classList.remove('active');
+
+                                document.removeEventListener('click', this._sidebarCloseHandler);
+                                this._sidebarCloseHandler = null;
+                            }
+                        };
+                        setTimeout(() => document.addEventListener('click', this._sidebarCloseHandler), 0);
+                        
+                        // --- コンテンツの初期化 ---
+                        if (tabName === 'inspector') {
+                            this.renderInspector();
+                        } else if (tabName === 'page-settings') {
+                            this.initGlobalCssEditor();
+                        }
+                    }
                 }
             },
 
@@ -1955,6 +2038,16 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                         }
                     });
                 }
+                // モバイルナビゲーションバーのタブ切り替え
+                if (this.elements.mobileNavBar) {
+                    this.elements.mobileNavBar.addEventListener('click', e => {
+                        const button = e.target.closest('.mobile-nav-item');
+                        if (button) {
+                            const tabName = button.dataset.tab;
+                            this.switchToTab(tabName);
+                        }
+                    });
+                }
 
                 // 右サイドバーリサイズ
                 this._bindRightSidebarResize();
@@ -1966,6 +2059,40 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                         this._handleGlobalCssSave();
                     });
                 }
+                
+                // 背景タイプセレクタ
+                if (this.elements.backgroundTypeSelector) {
+                    this.elements.backgroundTypeSelector.addEventListener('click', (e) => {
+                        const btn = e.target.closest('button');
+                        if (btn) {
+                            const type = btn.dataset.bgType;
+                            this.updateState('presentation.settings.backgroundType', type);
+                            this.applyPageBackground();
+                            this.saveState();
+                            // 単色モードに切り替わったらカラーピッカーの値を更新
+                            if (type === 'solid' && this.pageBgColorPicker) {
+                                this.pageBgColorPicker.setColor(this.state.presentation.settings.backgroundColor);
+                            }
+                        }
+                    });
+                }
+                
+                // グラデーション設定
+                const gradientControls = [this.elements.gradientStartColor, this.elements.gradientEndColor, this.elements.gradientAngle];
+                gradientControls.forEach(control => {
+                    if (control) {
+                        control.addEventListener('input', Utils.debounce(() => {
+                            const updates = {
+                                'presentation.settings.gradientStart': this.elements.gradientStartColor.value,
+                                'presentation.settings.gradientEnd': this.elements.gradientEndColor.value,
+                                'presentation.settings.gradientAngle': parseInt(this.elements.gradientAngle.value)
+                            };
+                            this.batchUpdateState(updates);
+                            this.applyPageBackground();
+                            this.saveState();
+                        }, 150));
+                    }
+                });
             },
 
             _bindIconEvents() {
@@ -2116,7 +2243,7 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                     let newWidth = startWidth - (e.clientX - startX);
                     newWidth = Math.max(200, Math.min(newWidth, 600)); // 最小・最大幅
                     sidebar.style.width = `${newWidth}px`;
-                    this.state.ui.rightSidebarWidth = newWidth;
+                    this.updateState('ui.rightSidebarWidth', newWidth, { skipHistory: true });
                 });
 
                 document.addEventListener('mouseup', () => {
@@ -2152,7 +2279,7 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                     if (!textarea) return;
                     const css = textarea.value;
 
-                    this.state.presentation.settings.globalCss = css;
+                    this.updateState('presentation.settings.globalCss', css);
                     this.applyCustomCss();
                     this.saveState();
                     alert('ページ全体のCSSを適用しました。');
@@ -2212,7 +2339,8 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                     }
                 }, { passive: false });
                 this.elements.slideCanvas.addEventListener('touchmove', (e) => {
-                    if (e.touches.length === 2 && this.state.canvasPan && this.state.canvasPan.dragging) {
+                    const panState = this.getState('canvas.pan');
+                    if (e.touches.length === 2 && panState && panState.dragging) {
                         e.preventDefault();
                         const t1 = e.touches[0], t2 = e.touches[1];
                         const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
@@ -2230,11 +2358,10 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                         }
                         // 2本指パン
                         if (lastTouchCenter) {
-                            const pan = this.getState('canvas.pan') || { x: 0, y: 0, dragging: false, startX: 0, startY: 0, originX: 0, originY: 0 };
-                            const dx = center.x - pan.startX;
-                            const dy = center.y - pan.startY;
-                            this.updateState('canvas.pan.x', pan.originX + dx);
-                            this.updateState('canvas.pan.y', pan.originY + dy);
+                            const dx = center.x - panState.startX;
+                            const dy = center.y - panState.startY;
+                            this.updateState('canvas.pan.x', panState.originX + dx);
+                            this.updateState('canvas.pan.y', panState.originY + dy);
                         }
                         lastTouchDist = dist;
                         lastTouchCenter = center;
@@ -2852,9 +2979,7 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                 if (editableEl && save) {
                     const elData = this.getSelectedElement();
                     if (elData && elData.content !== editableEl.innerText) {
-                        this.stateManager._saveToHistory();
-                        elData.content = editableEl.innerText;
-                        this.saveState();
+                        this.updateState(`presentation.slides.${this.getActiveSlideIndex()}.elements.${this.getElementIndex(elData.id)}.content`, editableEl.innerText);
                     }
                 }
                 this.updateState('isEditingText', false);
@@ -3013,6 +3138,7 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                         return;
                     }
                     newEl.content = content; // content is the Base64 dataURL
+                    newEl.style.width = 30; // QRコードは正方形なのでwidthも設定
                     newEl.style.height = 30; // Default height, user can resize
                 } else if (type === 'video') {
                     const url = content || prompt('動画のURLを入力してください:', 'https://www.w3schools.com/html/mov_bbb.mp4');
@@ -3131,84 +3257,77 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
             },
 
             distributeElements(direction) {
-                const elementsData = this.getSelectedElementsData(); if (elementsData.length < 3) return;
-                this.stateManager._saveToHistory();
-                const pixelElements = this.getElementsWithPixelRects(elementsData); const canvasRect = this.getState('canvas.rect');
-                let guidePositions = [];
+                const elementsData = this.getSelectedElementsData();
+                if (elementsData.length < 3) return;
+                
+                const activeSlideIndex = this.getActiveSlideIndex();
+                if (activeSlideIndex === -1) return;
+
+                const pixelElements = this.getElementsWithPixelRects(elementsData);
+                const updates = {};
+                
                 if (direction === 'horizontal') {
-                    pixelElements.sort((a, b) => a.rect.left - b.rect.left); const bounds = this.calculatePixelBounds(pixelElements);
-                    const totalWidth = pixelElements.reduce((sum, el) => sum + el.rect.width, 0); const gap = (bounds.width - totalWidth) / (pixelElements.length - 1);
+                    pixelElements.sort((a, b) => a.rect.left - b.rect.left);
+                    const bounds = this.calculatePixelBounds(pixelElements);
+                    const totalWidth = pixelElements.reduce((sum, el) => sum + el.rect.width, 0);
+                    const gap = (bounds.width - totalWidth) / (pixelElements.length - 1);
                     let currentX = bounds.minX;
                     const currentActualScale = this.getState('canvas.actualScale') || 1;
-                    pixelElements.forEach((el, idx) => {
-                        el.data.style.left = (currentX / currentActualScale) / CANVAS_WIDTH * 100;
-                        // ガイド線位置（左端以外）
-                        if (idx > 0 && idx < pixelElements.length) {
-                            guidePositions.push(currentX);
-                        }
+                    
+                    pixelElements.forEach(el => {
+                        const newLeftPercent = (currentX / currentActualScale) / CANVAS_WIDTH * 100;
+                        updates[`presentation.slides.${activeSlideIndex}.elements.${this.getElementIndex(el.data.id)}.style.left`] = newLeftPercent;
                         currentX += el.rect.width + gap;
                     });
-                    // 最後のガイド線
-                    guidePositions.push(bounds.maxX);
                 } else {
-                    pixelElements.sort((a, b) => a.rect.top - b.rect.top); const bounds = this.calculatePixelBounds(pixelElements);
-                    const totalHeight = pixelElements.reduce((sum, el) => sum + el.rect.height, 0); const gap = (bounds.height - totalHeight) / (pixelElements.length - 1);
+                    pixelElements.sort((a, b) => a.rect.top - b.rect.top);
+                    const bounds = this.calculatePixelBounds(pixelElements);
+                    const totalHeight = pixelElements.reduce((sum, el) => sum + el.rect.height, 0);
+                    const gap = (bounds.height - totalHeight) / (pixelElements.length - 1);
                     let currentY = bounds.minY;
                     const currentActualScale = this.getState('canvas.actualScale') || 1;
-                    pixelElements.forEach((el, idx) => {
-                        el.data.style.top = (currentY / currentActualScale) / CANVAS_HEIGHT * 100;
-                        if (idx > 0 && idx < pixelElements.length) {
-                            guidePositions.push(currentY);
-                        }
+                    
+                    pixelElements.forEach(el => {
+                        const newTopPercent = (currentY / currentActualScale) / CANVAS_HEIGHT * 100;
+                        updates[`presentation.slides.${activeSlideIndex}.elements.${this.getElementIndex(el.data.id)}.style.top`] = newTopPercent;
                         currentY += el.rect.height + gap;
                     });
-                    guidePositions.push(bounds.maxY);
                 }
+
+                this.batchUpdateState(updates);
                 this.render();
-                // 等間隔ガイド線の描画
-                setTimeout(() => {
-                    this.guideLineManager.clear();
-                    guidePositions.forEach(pos => {
-                        if (direction === 'horizontal') {
-                            this.guideLineManager.addGuide('vertical', pos);
-                        } else {
-                            this.guideLineManager.addGuide('horizontal', pos);
-                        }
-                    });
-                    // ガイド線は2秒後に自動消去
-                    setTimeout(() => this.guideLineManager.clear(), 2000);
-                }, 50);
-                this.saveState(); this.applyCustomCss();
+                this.saveState();
             },
 
             tidyUpElements() {
                 const elementsData = this.getSelectedElementsData();
                 if (elementsData.length < 2) return;
 
-                this.stateManager._saveToHistory();
+                const activeSlideIndex = this.getActiveSlideIndex();
+                if (activeSlideIndex === -1) return;
 
                 const pixelElements = this.getElementsWithPixelRects(elementsData);
-                
-                // 水平方向にソート
                 pixelElements.sort((a, b) => a.rect.left - b.rect.left);
                 
-                // ユーザーにギャップを入力させるモーダルを表示しても良いが、まずは固定値で実装
                 const gap = 20; // 20pxのギャップで固定
-
+                const updates = {};
                 let currentX = pixelElements[0].rect.left; // 最初の要素の位置はそのまま
-                const canvasRect = this.getState('canvas.rect');
+                const currentActualScale = this.getState('canvas.actualScale') || 1;
 
                 for (let i = 1; i < pixelElements.length; i++) {
                     const prevElement = pixelElements[i - 1];
                     const currentElement = pixelElements[i];
                     
                     currentX += prevElement.rect.width + gap;
-                    const currentActualScale = this.getState('canvas.actualScale') || 1;
-                    currentElement.data.style.left = Utils.pixelsToPercent(currentX / currentActualScale, CANVAS_WIDTH);
+                    const newLeftPercent = Utils.pixelsToPercent(currentX / currentActualScale, CANVAS_WIDTH);
+                    updates[`presentation.slides.${activeSlideIndex}.elements.${this.getElementIndex(currentElement.data.id)}.style.left`] = newLeftPercent;
                 }
 
-                this.render();
-                this.saveState();
+                if (Object.keys(updates).length > 0) {
+                    this.batchUpdateState(updates);
+                    this.render();
+                    this.saveState();
+                }
             },
 
             // --- 範囲選択用 ---
@@ -3536,6 +3655,13 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                 const slideContainer = document.createElement('div');
                 slideContainer.style.width = `${settings.width}px`;
                 slideContainer.style.height = `${settings.height}px`;
+                
+                if (settings.backgroundType === 'gradient') {
+                    slideContainer.style.background = `linear-gradient(${settings.gradientAngle}deg, ${settings.gradientStart}, ${settings.gradientEnd})`;
+                } else {
+                    slideContainer.style.backgroundColor = settings.backgroundColor || '#ffffff';
+                }
+    
                 slide.elements.forEach(elData => {
                     const el = this.createElementDOM(elData);
                     slideContainer.appendChild(el);
@@ -3573,8 +3699,65 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                 this.render();
                 this.saveState();
             },
-            showContextMenu(e, id, content, handlers) { const oldMenu = document.getElementById(id); if (oldMenu) oldMenu.remove(); const menu = document.createElement('div'); menu.id = id; menu.className = 'context-menu'; Object.assign(menu.style, { left: e.clientX + 'px', top: e.clientY + 'px' }); if (window.DOMPurify) { menu.innerHTML = DOMPurify.sanitize(content); } else { menu.innerHTML = content; } document.body.appendChild(menu); Object.entries(handlers).forEach(([btnId, handler]) => { const btn = document.getElementById(btnId); if(btn) btn.onclick = () => { handler(); menu.remove(); }; }); setTimeout(() => document.addEventListener('click', function h(ev) { if (!menu.contains(ev.target) && !App.elements.exportBtn.contains(ev.target)) { menu.style.display = 'none'; document.removeEventListener('click', h); } }, { once: true }), 10); },
-            showSlideContextMenu(e, slideId) { this.showContextMenu(e, 'slide-context-menu', `<div style="padding:8px 12px;cursor:pointer;" id="slide-duplicate-btn">複製</div><div style="padding:8px 12px;cursor:pointer;color:var(--danger-color);" id="slide-delete-btn">削除</div>`, { 'slide-duplicate-btn': () => this.duplicateSlide(slideId), 'slide-delete-btn': () => { this.state.activeSlideId = slideId; this.deleteSlide(); } }); },
+            showContextMenu(e, id, content, handlers) {
+                const oldMenu = document.getElementById(id);
+                if (oldMenu) oldMenu.remove();
+                
+                const menu = document.createElement('div');
+                menu.id = id;
+                menu.className = 'context-menu';
+                
+                if (window.DOMPurify) {
+                    menu.innerHTML = DOMPurify.sanitize(content);
+                } else {
+                    menu.innerHTML = content;
+                }
+                document.body.appendChild(menu);
+
+                // メニューのサイズを取得 (DOMに追加されてからでないと正確なサイズが取れない)
+                const menuWidth = menu.offsetWidth;
+                const menuHeight = menu.offsetHeight;
+
+                // 画面のサイズを取得
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+
+                let newX = e.clientX;
+                let newY = e.clientY;
+
+                // 右端が画面外に出る場合
+                if (newX + menuWidth > viewportWidth) {
+                    newX = viewportWidth - menuWidth - 10; // 10pxの余白
+                }
+                // 左端が画面外に出る場合 (通常は発生しないが念のため)
+                if (newX < 0) {
+                    newX = 10; // 10pxの余白
+                }
+
+                // 下端が画面外に出る場合
+                if (newY + menuHeight > viewportHeight) {
+                    newY = viewportHeight - menuHeight - 10; // 10pxの余白
+                }
+                // 上端が画面外に出る場合 (通常は発生しないが念のため)
+                if (newY < 0) {
+                    newY = 10; // 10pxの余白
+                }
+
+                Object.assign(menu.style, { left: `${newX}px`, top: `${newY}px` });
+                
+                Object.entries(handlers).forEach(([btnId, handler]) => {
+                    const btn = document.getElementById(btnId);
+                    if(btn) btn.onclick = () => { handler(); menu.remove(); };
+                });
+                
+                setTimeout(() => document.addEventListener('click', function h(ev) {
+                    if (!menu.contains(ev.target) && !App.elements.exportBtn.contains(ev.target)) {
+                        menu.style.display = 'none';
+                        document.removeEventListener('click', h);
+                    }
+                }, { once: true }), 10);
+            },
+            showSlideContextMenu(e, slideId) { this.showContextMenu(e, 'slide-context-menu', `<div style="padding:8px 12px;cursor:pointer;" id="slide-duplicate-btn">複製</div><div style="padding:8px 12px;cursor:pointer;color:var(--danger-color);" id="slide-delete-btn">削除</div>`, { 'slide-duplicate-btn': () => this.duplicateSlide(slideId), 'slide-delete-btn': () => { this.deleteSlide(slideId); } }); },
             showPasteContextMenu(e) {
                 this.showContextMenu(
                     e,
@@ -3897,16 +4080,19 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
             },
             // Inspectorでアイコンのスタイルを変更する関数
             updateIconStyle(element, newStylePrefix) {
-                this.stateManager._saveToHistory();
+                const slideIndex = this.getActiveSlideIndex();
+                const elementIndex = this.getElementIndex(element.id);
+                if (slideIndex === -1 || elementIndex === -1) return;
+
+                let newContent;
                 if (element.iconType === 'fa') {
-                    // Font Awesomeの場合、クラス名を更新
-                    element.content = element.content.replace(/^(fas|far|fal|fat)\s/, newStylePrefix + ' ');
+                    newContent = element.content.replace(/^(fas|far|fal|fat)\s/, newStylePrefix + ' ');
                 } else if (element.iconType === 'mi') {
-                    // Material Iconsの場合、クラス名を更新 (miContentはそのまま)
-                    element.content = newStylePrefix;
+                    newContent = newStylePrefix;
+                } else {
+                    return;
                 }
-                App.saveState();
-                App.render();
+                this.updateState(`presentation.slides.${slideIndex}.elements.${elementIndex}.content`, newContent);
             },
 
         // 要素を最前面へ (配列の末尾に移動)
@@ -4006,9 +4192,7 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
         
         initGlobalCssEditor() {
             this._initCssEditor('global-css-input', this.state.presentation.settings.globalCss || '', (css) => {
-                this.state.presentation.settings.globalCss = css;
-                this.applyCustomCss();
-                this.saveState();
+                this.updateState('presentation.settings.globalCss', css);
             });
         },
 
@@ -4296,9 +4480,11 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                     
                     if (data.presentation) {
                         if (confirm('データをインポートしますか？現在のデータは上書きされます。')) {
-                            this.state.presentation = data.presentation;
-                            this.state.activeSlideId = data.presentation.slides[0]?.id || null;
-                            this.state.selectedElementIds = [];
+                            this.batchUpdateState({
+                                'presentation': data.presentation,
+                                'activeSlideId': data.presentation.slides[0]?.id || null,
+                                'selectedElementIds': []
+                            });
                             
                             // 設定の復元
                             if (data.settings) {
@@ -4666,8 +4852,41 @@ import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
                 ErrorHandler.handle(error, 'css_properties_load');
                 this.cssProperties = {};
             }
+        },
+
+        applyPageBackground() {
+            const settings = this.getState('presentation.settings');
+            const { backgroundType, backgroundColor, gradientStart, gradientEnd, gradientAngle } = settings;
+            
+            // Update UI controls
+            // pageBgColorInput は ColorPicker に置き換えられたため削除
+            if (this.elements.gradientStartColor) this.elements.gradientStartColor.value = gradientStart;
+            if (this.elements.gradientEndColor) this.elements.gradientEndColor.value = gradientEnd;
+            if (this.elements.gradientAngle) this.elements.gradientAngle.value = gradientAngle;
+            if (this.elements.gradientAngleValue) this.elements.gradientAngleValue.textContent = gradientAngle;
+
+            if (this.elements.backgroundTypeSelector) {
+                 this.elements.backgroundTypeSelector.querySelectorAll('button').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.bgType === backgroundType);
+                });
+            }
+            if (this.elements.solidColorSettings) {
+                this.elements.solidColorSettings.style.display = backgroundType === 'solid' ? 'block' : 'none';
+            }
+            if (this.elements.gradientSettings) {
+                this.elements.gradientSettings.style.display = backgroundType === 'gradient' ? 'block' : 'none';
+            }
+
+            // Apply style to canvas
+            if (this.elements.slideCanvas) {
+                if (backgroundType === 'gradient') {
+                    this.elements.slideCanvas.style.background = `linear-gradient(${gradientAngle}deg, ${gradientStart}, ${gradientEnd})`;
+                } else {
+                    this.elements.slideCanvas.style.background = backgroundColor;
+                }
+            }
         }
-        };
+    };
 
         // 画像編集モーダルを開く関数
         App.openImageEditor = function(imageDataURL, callback) {
@@ -4720,10 +4939,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     let qrStylingInstance = null;
     const qrTextInput = document.getElementById('qr-text');
     const qrSizeInput = document.getElementById('qr-size');
-    const qrColorInput = document.getElementById('qr-color');
-    const qrBgColorInput = document.getElementById('qr-bg-color');
     const qrLogoUpload = document.getElementById('qr-logo-upload');
     let qrLogoDataUrl = null;
+
+    let qrColorPicker;
+    let qrBgColorPicker;
 
     // QRコードスタイル変数
     let selectedDotStyle = 'square';
@@ -4732,8 +4952,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     function updateQRPreview() {
         const text = qrTextInput.value;
         const size = parseInt(qrSizeInput.value) || 256;
-        const color = qrColorInput.value;
-        const bgColor = qrBgColorInput.value;
+        const color = qrColorPicker ? qrColorPicker.currentColorString : '#000000FF';
+        const bgColor = qrBgColorPicker ? qrBgColorPicker.currentColorString : '#FFFFFFFF';
         const preview = document.getElementById('qr-preview');
         const warning = document.getElementById('qr-warning');
         
@@ -4830,9 +5050,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    [qrTextInput, qrColorInput, qrBgColorInput].forEach(input => {
+    [qrTextInput].forEach(input => {
         if (input) input.addEventListener('input', updateQRPreview);
     });
+
+    // QRコードカラーピッカーの初期化
+    const qrColorContainer = document.querySelector('.qr-color-picker-wrapper #qr-color');
+    if (qrColorContainer) {
+        qrColorContainer.innerHTML = ''; // 既存のinputをクリア
+        qrColorPicker = new ColorPicker(qrColorContainer, '#000000FF', (color) => {
+            updateQRPreview();
+        }, { paletteKey: 'qrColorPalette' });
+    }
+
+    const qrBgColorContainer = document.querySelector('.qr-color-picker-wrapper #qr-bg-color');
+    if (qrBgColorContainer) {
+        qrBgColorContainer.innerHTML = ''; // 既存のinputをクリア
+        qrBgColorPicker = new ColorPicker(qrBgColorContainer, '#FFFFFFFF', (color) => {
+            updateQRPreview();
+        }, { paletteKey: 'qrBgColorPalette' });
+    }
 
     const qrForm = document.getElementById('qr-create-form');
     if (qrForm) {
@@ -4856,7 +5093,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     let chartInstance = null;
 
     function generateChartColors(count, existingColors = []) {
-        const defaultColors = ['#007bff', '#28a745', '#dc3545', '#ffc107', '#6f42c1', '#e83e8c', '#20c997', '#fd7e14', '#6c757d', '#0dcaf0'];
+        // デフォルトカラーをRGBA形式で定義
+        const defaultColors = [
+            'rgba(0, 123, 255, 1)', 'rgba(40, 167, 69, 1)', 'rgba(220, 53, 69, 1)',
+            'rgba(255, 193, 7, 1)', 'rgba(111, 66, 193, 1)', 'rgba(232, 62, 140, 1)',
+            'rgba(32, 201, 151, 1)', 'rgba(253, 126, 20, 1)', 'rgba(108, 117, 125, 1)',
+            'rgba(13, 202, 240, 1)'
+        ];
         let colors = existingColors.filter(Boolean);
         if (colors.length < count) {
             colors = colors.concat(defaultColors.slice(0, count - colors.length));
@@ -4888,8 +5131,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 datasets: [{
                     label: datasetLabel,
                     data: dataValues,
-                    backgroundColor: ['pie', 'doughnut'].includes(chartType) ? colors : colors[0],
-                    borderColor: ['pie', 'doughnut'].includes(chartType) ? colors : colors[0],
+                    backgroundColor: ['pie', 'doughnut'].includes(chartType) ? colors : colors[0], // RGBA対応
+                    borderColor: ['pie', 'doughnut'].includes(chartType) ? colors : colors[0], // RGBA対応
                     borderWidth: ['line', 'radar'].includes(chartType) ? lineWidth : 1,
                     pointBackgroundColor: chartType === 'radar' ? colors : undefined
                 }]
@@ -4912,7 +5155,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         chartInstance = new Chart(ctx, chartConfig);
     }
 
-    const chartInputs = ['chart-type', 'chart-dataset-label', 'chart-colors', 'chart-line-width', 'chart-show-legend', 'chart-title', 'chart-show-grid'];
+    // チャートカラーピッカーの初期化
+    const chartColorsContainer = document.getElementById('chart-colors');
+    let chartColorsPicker;
+    if (chartColorsContainer) {
+        chartColorsContainer.style.display = 'none'; // 既存のinputを非表示
+        const newDiv = document.createElement('div');
+        chartColorsContainer.parentNode.insertBefore(newDiv, chartColorsContainer.nextSibling);
+        chartColorsPicker = new ColorPicker(newDiv, '#007bff', (color) => {
+            // カスタムカラー入力フィールドに値を反映
+            chartColorsContainer.value = color;
+            updateChartPreview();
+        }, { paletteKey: 'chartColorPalette' });
+    }
+
+    const chartInputs = ['chart-type', 'chart-dataset-label', 'chart-line-width', 'chart-show-legend', 'chart-title', 'chart-show-grid'];
     chartInputs.forEach(id => {
         const input = document.getElementById(id);
         if (input) {
@@ -4964,36 +5221,39 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
     }
 
-    // 2. サイドバーリサイズハンドラの初期化
-    const sidebar = document.getElementById('left-sidebar');
-    const handle = document.getElementById('sidebar-resize-handle');
-    let isResizing = false;
-    let startX = 0;
-    let startWidth = 0;
-    const iconTabWidth = 60;
+    // 2. サイドバーリサイズハンドラの初期化 (デスクトップのみ有効)
+    // モバイルではleft-sidebarがdisplay:noneなので不要
+    if (window.innerWidth > 768) { // デスクトップ幅の場合のみ有効
+        const sidebar = document.getElementById('left-sidebar');
+        const handle = document.getElementById('sidebar-resize-handle');
+        let isResizing = false;
+        let startX = 0;
+        let startWidth = 0;
+        const iconTabWidth = 60;
 
-    if (handle) {
-        handle.addEventListener('mousedown', function(e) {
-            if (sidebar.querySelector('#sidebar-content').style.display === 'none') return;
-            isResizing = true;
-            startX = e.clientX;
-            startWidth = sidebar.offsetWidth;
-            document.body.style.cursor = 'ew-resize';
-            e.preventDefault();
+        if (handle) {
+            handle.addEventListener('mousedown', function(e) {
+                if (sidebar.querySelector('#sidebar-content').style.display === 'none') return;
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = sidebar.offsetWidth;
+                document.body.style.cursor = 'ew-resize';
+                e.preventDefault();
+            });
+        }
+        document.addEventListener('mousemove', function(e) {
+            if (!isResizing) return;
+            let newWidth = startWidth + (e.clientX - startX);
+            newWidth = Math.max(iconTabWidth + 180, Math.min(newWidth, 600));
+            sidebar.style.width = newWidth + 'px';
+        });
+        document.addEventListener('mouseup', function() {
+            if (isResizing) {
+                isResizing = false;
+                document.body.style.cursor = '';
+            }
         });
     }
-    document.addEventListener('mousemove', function(e) {
-        if (!isResizing) return;
-        let newWidth = startWidth + (e.clientX - startX);
-        newWidth = Math.max(iconTabWidth + 180, Math.min(newWidth, 600));
-        sidebar.style.width = newWidth + 'px';
-    });
-    document.addEventListener('mouseup', function() {
-        if (isResizing) {
-            isResizing = false;
-            document.body.style.cursor = '';
-        }
-    });
 
     // 3. カスタムCSS適用用のstyleタグをheadに準備
     document.head.appendChild(Object.assign(document.createElement('style'), { id: 'global-custom-styles' }));

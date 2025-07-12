@@ -1,6 +1,9 @@
+import { ColorPicker } from './ColorPicker.js';
+
 class InspectorManager {
     constructor(app) {
         this.app = app;
+        this.colorPickers = {}; // カラーピッカーインスタンスを管理するオブジェクト
     }
 
     render() {
@@ -151,7 +154,7 @@ class InspectorManager {
                 </div>
                 <div class="inspector-group">
                     <label>色</label>
-                    <input type="color" data-prop="shadowColor" value="${shadowValues.color}">
+                    <div id="color-picker-shadow-color"></div>
                 </div>
             </div>
         `;
@@ -214,11 +217,11 @@ class InspectorManager {
             </div>
             <div class="inspector-group">
                 <label>文字色</label>
-                <input type="color" data-prop="color" value="${s.color || '#212529'}">
+                <div id="color-picker-text-color"></div>
             </div>
             <div class="inspector-group">
                 <label>背景の塗りつぶし</label>
-                <input type="color" data-prop="backgroundColor" value="${s.backgroundColor || '#ffffff'}">
+                <div id="color-picker-text-background-color"></div>
             </div>
             <div class="inspector-group">
                 <label>枠線</label>
@@ -440,11 +443,11 @@ class InspectorManager {
         const content = `
             <div class="inspector-group">
                 <label>塗りつぶし色</label>
-                <input type="color" data-prop="fill" value="${s.fill || '#cccccc'}" ${isLine ? 'disabled' : ''}>
+                <div id="color-picker-shape-fill" data-disabled="${isLine}"></div>
             </div>
             <div class="inspector-group">
                 <label>線の色</label>
-                <input type="color" data-prop="stroke" value="${s.stroke || '#000000'}">
+                <div id="color-picker-shape-stroke"></div>
             </div>
             <div class="inspector-group">
                 <label>線の太さ (px)</label>
@@ -473,10 +476,103 @@ class InspectorManager {
     _initializeInspectorComponents(selectedElement) {
         const customCss = selectedElement.style.customCss || '';
         this.app.initElementCssEditor(customCss);
-        
+
+        const colorConfigs = {
+            'color-picker-text-color': {
+                title: '文字色',
+                initialColor: selectedElement.style.color || '#212529FF',
+                callback: (color) => this._updateElementStyle(selectedElement, 'color', color),
+                paletteKey: 'textColorPalette'
+            },
+            'color-picker-text-background-color': {
+                title: '背景色',
+                initialColor: selectedElement.style.backgroundColor || '#FFFFFFFF',
+                callback: (color) => this._updateElementStyle(selectedElement, 'backgroundColor', color),
+                paletteKey: 'textBgColorPalette'
+            },
+            'color-picker-shape-fill': {
+                title: '塗りつぶし色',
+                initialColor: selectedElement.style.fill || '#CCCCCCFF',
+                callback: (color) => this._updateElementStyle(selectedElement, 'fill', color),
+                paletteKey: 'shapeFillPalette',
+                disabled: selectedElement.content.shapeType === 'line'
+            },
+            'color-picker-shape-stroke': {
+                title: '線の色',
+                initialColor: selectedElement.style.stroke || '#000000FF',
+                callback: (color) => this._updateElementStyle(selectedElement, 'stroke', color),
+                paletteKey: 'shapeStrokePalette'
+            },
+            'color-picker-icon-color': {
+                title: 'アイコンの色',
+                initialColor: selectedElement.style.color || '#212529FF',
+                callback: (color) => this._updateElementStyle(selectedElement, 'color', color),
+                paletteKey: 'iconColorPalette'
+            },
+            'color-picker-shadow-color': {
+                title: '影の色',
+                initialColor: this._getShadowValues(selectedElement.style.boxShadow).color || '#969696FF',
+                callback: (color) => this._updateBoxShadow(selectedElement, undefined, color),
+                paletteKey: 'shadowColorPalette'
+            }
+        };
+
+        for (const id in colorConfigs) {
+            this._setupColorPickerTrigger(id, colorConfigs[id]);
+        }
+
         this._bindBasicInspectorEvents(selectedElement);
         this._bindAccordionEvents();
         this._bindTypeSpecificEvents(selectedElement);
+    }
+
+    _setupColorPickerTrigger(containerId, config) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        // 見た目をカラーボックスのようにする
+        container.classList.add('color-picker-trigger');
+        const colorDisplay = document.createElement('div');
+        // initialColorがグラデーション文字列の場合も考慮
+        colorDisplay.style.background = config.initialColor;
+        container.innerHTML = ''; // 中身をクリア
+        container.appendChild(colorDisplay);
+
+        if (config.disabled) {
+            container.style.pointerEvents = 'none';
+            container.style.opacity = '0.5';
+            return;
+        }
+
+        container.onclick = (e) => {
+            const pickerId = `color-picker-window-${containerId}`;
+            let picker = this.colorPickers[pickerId];
+
+            if (!picker) {
+                 picker = new ColorPicker(pickerId, config.initialColor, config.callback, {
+                    paletteKey: config.paletteKey,
+                    title: config.title,
+                    showEyedropper: true,
+                    showReset: true,
+                    defaultColor: config.initialColor
+                });
+                this.colorPickers[pickerId] = picker;
+            } else {
+                picker.setColor(config.initialColor);
+                picker.onChangeCallback = config.callback; // コールバックを最新に更新
+            }
+            
+            picker.show(e.clientX, e.clientY);
+        };
+    }
+
+    _updateElementStyle(selectedElement, prop, value) {
+        const slideIndex = this.app.getActiveSlideIndex();
+        const elementIndex = this.app.getElementIndex(selectedElement.id);
+        const stylePath = `presentation.slides.${slideIndex}.elements.${elementIndex}.style.${prop}`;
+        this.app.updateState(stylePath, value);
+        this.app.saveState();
+        this.app.render(); // 変更を即座に反映
     }
 
     _bindBasicInspectorEvents(selectedElement) {
@@ -715,7 +811,7 @@ class InspectorManager {
             </div>
             <div class="inspector-group">
                 <label>色</label>
-                <input type="color" data-prop="color" value="${s.color || '#212529'}">
+                <div id="color-picker-icon-color"></div>
             </div>
             ${styleOptions}
         `;
@@ -860,12 +956,7 @@ class InspectorManager {
         if (!el) return;
 
         const prop = e.target.dataset.prop;
-        if (!prop || prop === 'customCss') return;
-
-        if (prop.startsWith('shadow')) {
-            this._handleShadowInput(el, prop, e);
-            return;
-        }
+        if (!prop || prop === 'customCss' || prop === 'color' || prop === 'backgroundColor' || prop === 'fill' || prop === 'stroke' || prop.startsWith('shadow')) return;
 
         if (!this._inspectorInputTimeout) {
             this.app.stateManager._saveToHistory();
@@ -907,12 +998,7 @@ class InspectorManager {
             if (updatedElData.type === 'shape') {
                 const shapeSvg = domEl.querySelector('svg > *:not(defs)');
                 if (shapeSvg) {
-                    if (prop === 'fill') shapeSvg.setAttribute('fill', value);
-                    if (prop === 'stroke') {
-                        shapeSvg.setAttribute('stroke', value);
-                        const arrowhead = domEl.querySelector('marker polygon');
-                        if (arrowhead) arrowhead.setAttribute('fill', value);
-                    }
+                    // fillとstrokeはColorPickerのコールバックで処理されるため、ここではborderRadiusとstrokeWidthのみ
                     if (prop === 'strokeWidth') shapeSvg.setAttribute('stroke-width', value);
                     if (prop === 'borderRadius') {
                         const elWidthPx = window.Utils.percentToPixels(updatedElData.style.width, window.CANVAS_WIDTH);
@@ -926,8 +1012,7 @@ class InspectorManager {
                     }
                 }
             } else if (updatedElData.type === 'icon' && prop === 'color') {
-                const iconEl = domEl.querySelector('i, span');
-                if (iconEl) iconEl.style.color = value;
+                // ColorPickerのコールバックで処理されるため、ここでは何もしない
             }
         }
 
@@ -969,6 +1054,7 @@ class InspectorManager {
                 const display = e.target.nextElementSibling;
                 if (display) display.textContent = `${e.target.value}px`;
             }
+             if (!prop.startsWith('shadow')) return;
             this._updateBoxShadow(el);
         }
 
@@ -978,14 +1064,16 @@ class InspectorManager {
         }, 300);
     }
 
-    _updateBoxShadow(el, value) {
+    _updateBoxShadow(el, value, colorFromPicker = null) {
         let boxShadowValue = value;
 
         if (boxShadowValue === undefined) {
              const x = document.querySelector('[data-prop="shadowX"]').value;
              const y = document.querySelector('[data-prop="shadowY"]').value;
              const blur = document.querySelector('[data-prop="shadowBlur"]').value;
-             const color = document.querySelector('[data-prop="shadowColor"]').value;
+             const pickerId = 'color-picker-window-color-picker-shadow-color';
+             const existingColor = this.colorPickers[pickerId] ? this.colorPickers[pickerId].currentColor : this._getShadowValues(el.style.boxShadow).color;
+             const color = colorFromPicker || this._toRgbaString(this._parseColor(existingColor));
              boxShadowValue = `${x}px ${y}px ${blur}px ${color}`;
         }
 

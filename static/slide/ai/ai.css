@@ -83,16 +83,13 @@
 .checkpoint-msg::before {
     background-color: #ffc107;
 }
-
 .checkpoint-msg .msg-header i {
     color: #ffc107;
 }
-
 .checkpoint-msg.disabled {
     opacity: 0.6;
     background-color: var(--bg-light);
 }
-
 .restore-checkpoint-btn-inline {
     background-color: #ffc107;
     color: #212529;
@@ -103,19 +100,16 @@
     transition: var(--transition);
     font-weight: 600;
 }
-
 .restore-checkpoint-btn-inline:hover:not(:disabled) {
     background-color: #e0a800;
     border-color: #d39e00;
 }
-
 .restore-checkpoint-btn-inline:disabled {
     background-color: var(--text-secondary);
     border-color: var(--text-secondary);
     color: var(--bg-white);
     cursor: not-allowed;
 }
-
 .restore-checkpoint-btn-inline i {
     margin-right: 6px;
 }
@@ -372,7 +366,6 @@
 [data-theme="dark"] .complete-msg-container i {
     color: #3ddc84;
 }
-
 .msg-actions {
     margin-top: 12px;
     padding-top: 12px;
@@ -426,11 +419,10 @@
 }
 
 .ai-toggle-label .toggle-switch {
-    margin-left: auto;
-    /* トグルスイッチを右端に寄せる */
+    margin-left: auto; /* トグルスイッチを右端に寄せる */
 }
 
-
+/* slide.cssから移動したAI関連スタイル */
 #ai-controls {
     margin-bottom: 10px;
     display: flex;
@@ -463,8 +455,7 @@
     margin-bottom: 10px;
 }
 
-#pause-ai-btn,
-#resume-ai-btn {
+#pause-ai-btn, #resume-ai-btn {
     flex-grow: 1;
     justify-content: center;
 }
@@ -502,7 +493,7 @@
 }
 
 #chat-messages {
-    height: 55vh;
+    height: 60vh;
     max-height: 700px;
     overflow-y: auto;
     border: 1px solid var(--border-color);

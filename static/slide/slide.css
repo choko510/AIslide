@@ -127,6 +127,587 @@ body {
     flex-shrink: 0;
 }
 
+/* ==========================================================================
+   8. Custom Color Picker Styles
+   ========================================================================== */
+.color-picker-window {
+    position: fixed;
+    z-index: 1050; /* 他のUIより手前に表示 */
+    background-color: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-md);
+    width: 280px;
+    display: none; /* 初期状態は非表示 */
+    font-family: 'Noto Sans JP', sans-serif;
+}
+
+.color-picker-header {
+    background-color: var(--bg-light);
+    padding: 8px 12px;
+    cursor: move;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.color-picker-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.color-picker-close-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.color-picker-content {
+    padding: 15px;
+}
+
+.color-picker-display {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    background-color: var(--bg-white);
+    height: 38px;
+    margin-bottom: 15px;
+}
+
+.color-picker-display .color-box {
+    width: 38px;
+    height: 100%;
+    border-right: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.color-picker-display .color-hex-input {
+    flex-grow: 1;
+    border: none;
+    padding: 0 8px;
+    font-size: 14px;
+    color: var(--text-primary);
+    background-color: transparent;
+    outline: none;
+}
+
+.color-map-container {
+    width: 100%;
+    padding-bottom: 75%; /* 4:3 Aspect Ratio */
+    position: relative;
+    margin-bottom: 15px;
+}
+
+.color-map {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsla(0, 100%, 50%, 0));
+    cursor: crosshair;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.color-map-overlay-saturation {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to right, #fff, hsla(0, 100%, 50%, 0));
+}
+
+.color-map-overlay-brightness {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to top, #000, transparent);
+}
+
+.color-map-handle {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+.color-sliders {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    margin-bottom: 15px;
+}
+
+.hue-slider-container, .alpha-slider-container {
+    flex-grow: 1;
+    height: 15px;
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.hue-slider {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+    cursor: pointer;
+}
+
+.alpha-slider {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to right, rgba(0,0,0,0), rgba(0,0,0,1)); /* This will be updated by JS */
+    cursor: pointer;
+    /* 透明度スライダーの背景にチェックボードパターンを追加 */
+    background-image: linear-gradient(45deg, #ccc 25%, transparent 25%),
+                      linear-gradient(-45deg, #ccc 25%, transparent 25%),
+                      linear-gradient(45deg, transparent 75%, #ccc 75%),
+                      linear-gradient(-45deg, transparent 75%, #ccc 75%);
+    background-size: 10px 10px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+}
+
+.slider-handle {
+    position: absolute;
+    width: 15px;
+    height: 15px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+.hue-slider .slider-handle {
+    transform: translateY(-50%);
+}
+
+.color-inputs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.color-inputs input {
+    flex-grow: 1;
+    flex-basis: 0; /* 追加 */
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 13px;
+    background-color: var(--bg-light);
+    color: var(--text-primary);
+}
+
+.color-palette-section {
+    margin-bottom: 15px;
+}
+
+.palette-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+    max-height: 100px;
+    overflow-y: auto;
+    padding-right: 5px; /* Scrollbar space */
+}
+
+.palette-color-item {
+    position: relative;
+    width: 30px;
+    height: 30px;
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+}
+
+.palette-color-box {
+    width: 100%;
+    height: 100%;
+    /* 透明度のある色のためにチェックボードパターンを追加 */
+    background-image: linear-gradient(45deg, #ccc 25%, transparent 25%),
+                      linear-gradient(-45deg, #ccc 25%, transparent 25%),
+                      linear-gradient(45deg, transparent 75%, #ccc 75%),
+                      linear-gradient(-45deg, transparent 75%, #ccc 75%);
+    background-size: 10px 10px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+}
+
+.palette-color-item .delete-palette-color {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    border-radius: 0 0 0 4px;
+    padding: 2px 4px;
+    font-size: 10px;
+    cursor: pointer;
+    display: none; /* Hidden by default */
+}
+
+.palette-color-item:hover .delete-palette-color {
+    display: block;
+}
+
+.add-to-palette-btn {
+    width: 100%;
+    padding: 8px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.add-to-palette-btn:hover {
+    background-color: var(--primary-color-hover);
+}
+
+.color-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.color-actions button {
+    flex-grow: 1;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--bg-light);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.color-actions button:hover {
+    background-color: var(--border-color);
+}
+
+/* Gradient-specific styles */
+.color-picker-tabs {
+    display: flex;
+    margin-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.color-picker-tab {
+    flex: 1;
+    padding: 10px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text-secondary);
+    border-bottom: 2px solid transparent;
+}
+
+.color-picker-tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--primary-color);
+}
+
+.gradient-preview {
+    width: 100%;
+    height: 30px;
+    border-radius: var(--border-radius);
+    margin-bottom: 15px;
+    border: 1px solid var(--border-color);
+}
+
+.gradient-stops-container {
+    width: 100%;
+    height: 20px;
+    background-color: var(--bg-light);
+    border-radius: 10px;
+    position: relative;
+    margin-bottom: 15px;
+    cursor: pointer;
+}
+
+.gradient-stop {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--bg-white);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 0 1px var(--border-color);
+}
+
+.gradient-stop.active {
+    box-shadow: 0 0 0 2px var(--primary-color);
+}
+
+.gradient-controls {
+    margin-bottom: 15px;
+}
+.gradient-controls label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Dark mode adjustments for color picker */
+[data-theme="dark"] .color-picker-display {
+    background-color: var(--bg-white);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .color-picker-display .color-box {
+    border-right-color: var(--border-color);
+}
+
+[data-theme="dark"] .color-picker-display .color-hex-input {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .color-picker-window {
+    background-color: var(--bg-white);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .color-picker-header {
+    background-color: var(--bg-light);
+    border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .color-picker-title {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .color-picker-close-btn {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .color-inputs input {
+    background-color: var(--bg-light);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .palette-color-box {
+    background-image: linear-gradient(45deg, #555 25%, transparent 25%),
+                      linear-gradient(-45deg, #555 25%, transparent 25%),
+                      linear-gradient(45deg, transparent 75%, #555 75%),
+                      linear-gradient(-45deg, transparent 75%, #555 75%);
+}
+
+[data-theme="dark"] .color-actions button {
+    background-color: var(--bg-light);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .color-actions button:hover {
+    background-color: var(--border-color);
+}
+
+/* ==========================================================================
+   7. Mobile Specific Styles
+   ========================================================================== */
+@media (max-width: 768px) {
+    body {
+        /* interactive-widget=resizes-content をサポートするビューポート設定 */
+        padding-bottom: env(safe-area-inset-bottom); /* iPhone X/XR/XS Max/11/12/13/14/15 の下部のセーフエリアを考慮 */
+    }
+
+    #app-container {
+        flex-direction: column;
+        height: 100dvh; /* モバイルでの高さ調整 */
+        padding-bottom: 70px; /* mobile-nav-barの高さ分確保 */
+    }
+
+    /* #toolbar はモバイルでは表示しないが、デスクトップのスタイルで制御 */
+    /* モバイルでの非表示は、デフォルトの #toolbar スタイルを上書きしない */
+
+    #left-sidebar {
+        width: 0;
+        border: none;
+    }
+
+    #right-sidebar {
+        display: none !important;
+    }
+
+    /* モバイルでのサイドバーコンテンツのオーバーレイ表示 */
+    #sidebar-content {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: calc(100% - 70px); /* ナビゲーションバーの高さ分を引く */
+        background-color: var(--bg-white);
+        box-shadow: var(--shadow-md);
+        transform: translateY(100%); /* 画面外に隠す */
+        transition: transform 0.3s ease-out;
+        z-index: 999; /* モバイルナビゲーションバーより上 */
+        display: block !important; /* デスクトップのdisplay:noneを上書き */
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    #sidebar-content.active {
+        transform: translateY(0%); /* 表示 */
+    }
+
+    #sidebar-tabs {
+        display: none; /* モバイルではサイドバータブ自体は非表示 */
+    }
+
+    #app-body {
+        flex-direction: column; /* 要素を縦に並べる */
+        flex-grow: 1;
+        overflow: hidden;
+    }
+
+    #center-content {
+        flex-direction: column; /* メインコンテンツも縦に並べる */
+        flex-grow: 1;
+        overflow-y: auto; /* スクロール可能にする */
+        padding: 0; /* パディングをリセット */
+    }
+
+    #main-canvas-area {
+        flex-grow: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 16px 0; /* モバイルでのパディング調整 */
+        min-width: unset; /* 最小幅を解除 */
+        min-height: unset; /* 最小高さを解除 */
+        background-color: var(--bg-light);
+        width: 100%; /* 幅を100%に */
+        height: auto; /* 高さを自動に */
+    }
+
+    #slide-wrapper {
+        width: 95vw; /* モバイルでのスライド幅調整 */
+        max-width: 95vw;
+        height: auto;
+        aspect-ratio: 16 / 9;
+    }
+
+    #slide-canvas {
+        width: 100%; /* スライドキャンバスの幅を100%に */
+        height: 100%; /* スライドキャンバスの高さを100%に */
+        box-shadow: var(--shadow-md);
+        border-radius: var(--border-radius);
+    }
+
+    #bottom-pane {
+        height: 80px; /* 高さを調整 */
+        padding: 8px;
+        border-bottom: 1px solid var(--border-color); /* 下部に移動したのでborder-topからborder-bottomに */
+        border-top: none; /* 元のborder-topを解除 */
+        overflow-x: auto; /* 横スクロール可能に */
+        overflow-y: hidden;
+        white-space: nowrap; /* スライドサムネイルを1行に */
+        -webkit-overflow-scrolling: touch; /* スムーズなスクロール */
+        display: flex;
+        align-items: center;
+        background-color: var(--bg-white);
+    }
+
+    #slide-list-container {
+        height: 100%; /* bottom-paneの高さに合わせる */
+    }
+
+    #slide-list {
+        display: flex;
+        flex-direction: row; /* スライドを横に並べる */
+        align-items: center;
+        height: 100%;
+        gap: 8px; /* サムネイル間のスペース */
+        padding: 0 8px; /* 左右のパディング */
+    }
+
+    .slide-thumbnail {
+        width: 120px; /* モバイルでのサムネイル幅 */
+        height: auto;
+        flex-shrink: 0;
+        margin-right: 0; /* 元のマージンをリセット */
+    }
+
+    .slide-thumbnail-wrapper {
+        height: 100%;
+    }
+
+    .thumbnail-index {
+        font-size: 10px;
+        width: 18px;
+        height: 18px;
+        line-height: 18px;
+    }
+
+    #mobile-nav-bar {
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        width: 100%;
+        padding: 8px 0;
+        background-color: var(--bg-white);
+        border-top: 1px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
+        flex-shrink: 0; /* 縮小させない */
+        position: fixed; /* 下部に固定 */
+        bottom: 0;
+        z-index: 100;
+        height: 70px; /* ナビゲーションバーの高さ */
+    }
+
+    .mobile-nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex: 1; /* 等間隔に配置 */
+        padding: 4px;
+        border: none;
+        background: none;
+        color: var(--text-secondary);
+        font-size: 12px;
+        cursor: pointer;
+        transition: color 0.2s;
+    }
+
+    .mobile-nav-item i {
+        font-size: 20px;
+        margin-bottom: 4px;
+    }
+
+    .mobile-nav-item.active {
+        color: var(--primary-color);
+    }
+
+    .mobile-nav-item:hover {
+        color: var(--primary-color);
+    }
+}
+
 #toolbar button {
     display: flex;
     align-items: center;
@@ -253,6 +834,13 @@ body {
     align-items: center;
 }
 
+#slide-list-container {
+    width: 100%;
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
 #bottom-pane #slide-list {
     list-style: none;
     padding: 0;
@@ -260,7 +848,6 @@ body {
     display: flex;
     flex-direction: row;
     align-items: center;
-    width: 100%;
     height: 100%;
 }
 
@@ -948,10 +1535,52 @@ body {
 }
 
 /* Page Settings & Global CSS Editor */
-#page-settings p {
-    font-size: 12px;
-    color: #6c757d;
-    margin-bottom: 8px;
+#page-settings p,
+#page-settings .settings-description {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+#page-bg-color-input,
+#gradient-start-color,
+#gradient-end-color {
+  width: 100%;
+  height: 38px;
+  padding: 4px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  background-color: var(--bg-white);
+}
+
+#background-type-selector {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+#background-type-selector .sidebar-add-btn {
+  flex-grow: 1;
+}
+
+#background-type-selector .sidebar-add-btn:not(.active) {
+  background-color: transparent;
+}
+
+.gradient-control {
+  margin-top: 12px;
+}
+
+.gradient-control label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+#gradient-angle {
+  width: 100%;
 }
 
 #global-css-input {
@@ -1907,6 +2536,35 @@ body.presentation-mode {
     stroke: currentColor;
     stroke-width: 0.5;
     fill: currentColor;
+}
+
+.color-picker-trigger {
+    width: 100%;
+    height: 30px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    padding: 4px;
+}
+
+.color-picker-trigger > div {
+    width: 100%;
+    height: 100%;
+    border-radius: 4px;
+    /* 透明度のある色のためにチェックボードパターンを追加 */
+    background-image: linear-gradient(45deg, #ccc 25%, transparent 25%),
+                      linear-gradient(-45deg, #ccc 25%, transparent 25%),
+                      linear-gradient(45deg, transparent 75%, #ccc 75%),
+                      linear-gradient(-45deg, transparent 75%, #ccc 75%);
+    background-size: 10px 10px;
+    background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
+}
+
+[data-theme="dark"] .color-picker-trigger > div {
+    background-image: linear-gradient(45deg, #555 25%, transparent 25%),
+                      linear-gradient(-45deg, #555 25%, transparent 25%),
+                      linear-gradient(45deg, transparent 75%, #555 75%),
+                      linear-gradient(-45deg, transparent 75%, #555 75%);
 }
 
 #delete-element-btn {

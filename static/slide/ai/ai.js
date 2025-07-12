@@ -7,11 +7,12 @@ class AIHandler {
      */
     constructor(app) {
         this.app = app;
-        this.state = app.state;
         // autonomousModeが未定義の場合に備えて初期化
-        this.state.autonomousMode = this.state.autonomousMode || {};
+        if (!this.app.getState('autonomousMode')) {
+            this.app.updateState('autonomousMode', {}, { skipHistory: true });
+        }
         this.elements = app.elements;
-        this.apiEndpoint = '/api/ask-ai';
+        this.apiEndpoint = 'http://localhost:3000/ask-ai'; // AIサーバーのエンドポイント
         this.aiMode = 'design'; // 'design', 'plan', 'ask'
         
         /** @type {Array<{role: 'user' | 'assistant', content: string}>} */
@@ -28,6 +29,14 @@ class AIHandler {
         this.popoverAbortController = null; // 提案ポップオーバーのイベントリスナー管理用
 
         this.init();
+    }
+
+    /**
+     * Appの最新のstateオブジェクトへのゲッター。
+     * StateManagerがstateをイミュータブルに更新するため、常にこのゲッター経由でアクセスする必要がある。
+     */
+    get state() {
+        return this.app.state;
     }
     
     // --- 初期化とイベント関連 ---
@@ -122,7 +131,7 @@ class AIHandler {
                 edit_element: `<edit_element element_id="..." slide_id="...">\n  <content>...</content>\n  <style ... />\n  <customCss>...</customCss>\n</edit_element>: 要素を編集する（カスタムCSSも編集可）`,
                 view_slide: '<view_slide slide_id="..." />: スライドを閲覧する',
                 switch_ai_mode: '<switch_ai_mode mode="design|plan|ask" />: AIのモードを指定されたモードに切り替える',
-                add_element: `<add_element type="text|image|video|table|icon|iframe|qrcode" [slide_id="..."]>\\n  <content><![CDATA[...]]></content>\\n  <style top, left, width, heightは0-100の%指定。fontSizeは数値(px)のみ。 top="..." left="..." width="..." height="..." zIndex="..." color="..." fontSize="..." fontFamily="..." rotation="..." animation="アニメーション名 継続時間 タイミング関数 遅延時間 イテレーション回数 方向 フィルモード (例: fadeIn 1s ease-out 0.5s forwards)" opacity="0.0-1.0" borderRadius="px" boxShadow="2px 2px 5px rgba(0,0,0,0.3)" />\\n  <customCss>...</customCss>\\n</add_element>: アクティブまたは指定スライドに要素を追加。HTMLを含む場合はcontentを子要素としCDATAで囲む。`,
+                add_element: `<add_element type="text|image|video|table|icon|iframe|qrcode" [slide_id="..."]>\\n  <content>...</content>\\n  <style top, left, width, heightは0-100の%指定。fontSizeは数値(px)のみ。 top="..." left="..." width="..." height="..." zIndex="..." color="..." fontSize="..." fontFamily="..." rotation="..." animation="アニメーション名 継続時間 タイミング関数 遅延時間 イテレーション回数 方向 フィルモード (例: fadeIn 1s ease-out 0.5s forwards)" opacity="0.0-1.0" borderRadius="px" boxShadow="2px 2px 5px rgba(0,0,0,0.3)" />\\n  <customCss>...</customCss>\\n</add_element>: アクティブまたは指定スライドに要素を追加。HTMLを含む場合はcontentを子要素とする。`,
                 add_shape: `<add_shape type="rectangle|circle|triangle|line|arrow|star|speech-bubble" [slide_id="..."]>\n  <style fill="#cccccc" stroke="transparent" strokeWidth="2" borderRadius="px" boxShadow="2px 2px 5px rgba(0,0,0,0.3)" ... />\n  <customCss>...</customCss>\n</add_shape>: 図形要素を追加（カスタムCSSも指定可）`,
                 add_chart: `<add_chart type="bar|line|pie|doughnut|radar" [slide_id="..."]>\n  <title>グラフのタイトル</title>\n  <labels>ラベル1,ラベル2,ラベル3</labels>\n  <datasets>\n    <dataset label="データセット1" data="10,20,30" [color="#ff0000"] />\n    <dataset label="データセット2" data="15,25,35" [color="rgba(0,0,255,0.5)"] />\n  </datasets>\n  <options showLegend="true" showGrid="true" />\n  <style ... />\n</add_chart>: グラフ要素を追加。複数のデータセットも可。色は単色(#RRGGBB)またはカンマ区切りの複数色で指定。`,
                 add_icon: `<add_icon iconType="fa|mi" iconClass="..." [slide_id="..."]>\n  <style ... />\n  <customCss>...</customCss>\n</add_icon>: アイコン要素を追加（カスタムCSSも指定可）`,
@@ -130,127 +139,128 @@ class AIHandler {
                 question: `<question type="free_text|multiple_choice">...</question>: 計画立案に必要な情報をユーザーに質問する`,
                 view_slide_as_image: `<view_slide_as_image slide_id="..." />: 指定されたスライドを画像として認識する。これにより、AIはスライドの視覚的なレイアウトを理解できる。`,
                 reorder_slides: `<reorder_slides order="slide_id_1,slide_id_2,slide_id_3" />: スライドの表示順序を変更する。カンマ区切りのスライドIDで新しい順序を指定する。`,
+                align_to_slide: '<align_to_slide element_id="..." direction="horizontal|vertical|both" />: 指定された要素をスライドに対して中央揃えする。',
+                set_background: '<set_background type="solid|gradient" color="#ffffff" gradient_start_color="#ffffff" gradient_end_color="#000000" angle="90" />: ページ全体の背景を設定する。',
                 complete: '<complete>完了報告</complete>: 全てのタスクが完了したことを報告する'
             },
             
             modeCommands: {
-                design: ['sequence', 'create_slide', 'delete_slide', 'edit_element', 'view_slide', 'add_element', 'add_shape', 'add_chart', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'view_slide_as_image', 'reorder_slides', 'complete', 'question'],
+                design: ['sequence', 'create_slide', 'delete_slide', 'edit_element', 'view_slide', 'add_element', 'add_shape', 'add_chart', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'view_slide_as_image', 'reorder_slides', 'align_to_slide', 'set_background', 'complete', 'question'],
                 plan: ['sequence', 'view_slide', 'switch_ai_mode', 'question', 'view_slide_as_image', 'complete'],
                 ask: ['sequence', 'view_slide', 'view_slide_as_image']
             },
 
             usageExample: `
-### 使用例
-<add_element type="text" content="タイトル">
-    <style top="10" left="10" fontSize="40" />
-</add_element>
-<add_element type="text" content="アニメーションするテキスト">
-    <style top="50" left="50" fontSize="30" animation="fadeIn 1s ease-out" />
-</add_element>
-<add_element type="image" content="https://example.com/animated.gif">
-    <style top="60" left="60" width="30" height="30" animation="bounce 2s infinite" />
-</add_element>
-<add_element type="image" content="https://example.com/image.png">
-    <customCss>border-radius:16px; border:2px solid #333;</customCss>
-</add_element>
-<edit_element element_id="el-xxx">
-    <customCss>background:linear-gradient(90deg,#f00,#00f);</customCss>
-</edit_element>
-<add_icon iconType="fa" iconClass="fas fa-star">
-    <style top="5" left="5" width="10" height="10" />
-    <customCss>color:gold; font-size:64px;</customCss>
-</add_icon>
-<add_qrcode text="https://example.com" size="256" color="#000" bgColor="#fff">
-    <customCss>box-shadow:0 0 8px #0003;</customCss>
-</add_qrcode>
-<add_shape type="rectangle">
-    <style top="25" left="25" width="50" height="50" fill="blue" />
-</add_shape>
-<switch_ai_mode mode="design" />
+            ### 使用例
+            <add_element type="text" content="タイトル">
+                <style top="10" left="10" fontSize="40"/>
+            </add_element>
+            <add_element type="text" content="アニメーションするテキスト">
+                <style top="50" left="50" fontSize="30" animation="fadeIn 1s ease-out"/>
+            </add_element>
+            <add_element type="image" content="https://example.com/animated.gif">
+                <style top="60" left="60" width="30" height="30" animation="bounce 2s infinite"/>
+            </add_element>
+            <add_element type="image" content="https://example.com/image.png">
+                <customCss>border-radius:16px; border:2px solid #333;</customCss>
+            </add_element>
+            <edit_element element_id="el-xxx">
+                <customCss>background:linear-gradient(90deg,#f00,#00f);</customCss>
+            </edit_element>
+            <add_icon iconType="fa" iconClass="fas fa-star">
+                <style top="5" left="5" width="10" height="10"/>
+                <customCss>color:gold; font-size:64px;</customCss>
+            </add_icon>
+            <add_qrcode text="https://example.com" size="256" color="#000" bgColor="#fff">
+                <customCss>box-shadow:0 0 8px #0003;</customCss>
+            </add_qrcode>
+            <add_shape type="rectangle">
+                <style top="25" left="25" width="50" height="50" fill="blue"/>
+            </add_shape>
+            <switch_ai_mode mode="design"/>
 `
         };
 
         this.systemPromptTemplates = {
             design: `あなたは世界クラスのプレゼンテーションデザイナーです。ユーザーの指示を解釈し、以下の思考プロセス、対話戦略、デザイン原則、レイアウトルールに基づいて、プロフェッショナルで説得力のあるスライドを作成してください。
 
-### 思考プロセス
-1.  **目的の理解**: このスライドの目的は何か？（情報提供、説得、意思決定など）
-2.  **ターゲットの想定**: 誰に向けたスライドか？（専門家、初心者、経営層など）
-3.  **文脈の把握**: ユーザーの指示、過去の対話、そして提供されたスライド画像（view_slide_as_image）から、デザインのトーン＆マナー（フォーマル、クリエイティブなど）や一貫性を読み取る。
+        ### 思考プロセス
+        1.  **目的の理解**: このスライドの目的は何か？（情報提供、説得、意思決定など）
+        2.  **ターゲットの想定**: 誰に向けたスライドか？（専門家、初心者、経営層など）
+        3.  **文脈の把握**: ユーザーの指示、過去の対話、そして提供されたスライド画像（view_slide_as_image）から、デザインのトーン＆マナー（フォーマル、クリエイティブなど）や一貫性を読み取る。
 
-### 対話戦略
-- **曖昧さの解消**: ユーザーの指示が曖昧な場合（例：「いい感じにして」）、具体的なデザインの方向性を確認するために、\`<question>\`コマンドを使って質問してください。
-- **積極的な提案**: 指示がなくても、より良いデザインになるような提案（例：アイコンの追加、グラフの視覚化）をXMLコメントとして常に含めてください。提案は \`<!-- 提案: ... -->\` の形式で記述してください。
+        ### 対話戦略
+        - **曖昧さの解消**: ユーザーの指示が曖昧な場合（例：「いい感じにして」）、具体的なデザインの方向性を確認するために、\`<question>\`コマンドを使って質問してください。
+        - **積極的な提案**: 指示がなくても、より良いデザインになるような提案（例：アイコンの追加、グラフの視覚化）をXMLコメントとして常に含めてください。提案は \`<!-- 提案: ... -->\` の形式で記述してください。
 
-### 基本デザイン原則
-- **1スライド・1メッセージ**: 伝えたいことを一つに絞り、情報を詰め込みすぎない。
-- **情報の階層化**: メッセージの重要度に応じて、見た目に明確な差をつける。例: タイトルは \`fontSize: 48\` で太字、サブタイトルは \`fontSize: 24\`、本文は \`fontSize: 18\` のように、サイズと太さでメリハリをつける。
-- **近接**: アイコンと関連テキスト、見出しと本文など、関連する要素は近くに配置し、1つの視覚ユニットとして認識させる。
-- **コントラスト**: 背景色と文字色には十分なコントラストを確保し、可読性を最優先する。
-- **一貫性**: 複数のスライド画像が提供された場合は、それらを参考にフォントファミリー、カラースキーム、レイアウトスタイルを統一します。例えば、スライド1のカラースキームとスライド2のレイアウトを組み合わせるなど、複数の視覚的コンテキストを統合して新しいデザインを提案してください。
+        ### 基本デザイン原則
+        - **1スライド・1メッセージ**: 伝えたいことを一つに絞り、情報を詰め込みすぎない。
+        - **情報の階層化**: メッセージの重要度に応じて、見た目に明確な差をつける。例: タイトルは \`fontSize: 48\` で太字、サブタイトルは \`fontSize: 24\`、本文は \`fontSize: 18\` のように、サイズと太さでメリハリをつける。
+        - **近接**: アイコンと関連テキスト、見出しと本文など、関連する要素は近くに配置し、1つの視覚ユニットとして認識させる。
+        - **コントラスト**: 背景色と文字色には十分なコントラストを確保し、可読性を最優先する。
+        - **一貫性**: 複数のスライド画像が提供された場合は、それらを参考にフォントファミリー、カラースキーム、レイアウトスタイルを統一します。例えば、スライド1のカラースキームとスライド2のレイアウトを組み合わせるなど、複数の視覚的コンテキストを統合して新しいデザインを提案してください。
 
-### 超重要レイアウトルール
-- **グリッドシステム**: スライドを仮想の12x12グリッドで考える。要素の配置(top, left)やサイズ(width, height)は、このグリッド線に沿わせることで、整然としたレイアウトを実現する。
-- **レイアウトの多様性**: 常に中央揃えにするのではなく、Zパターン（視線を左上→右上→左下→右下と誘導）や、左右非対称のレイアウトを効果的に使い、視覚的なリズムを生み出す。
-- **衝突回避**: 要素同士は絶対に重ねてはならない。各要素の周囲には最低でも5%の「マージン」を確保する。
-- **余白の戦略的活用**: スライドの端から最低でも5%の余白（セーフエリア）を設ける。要素を端ギリギリに配置しない。
-- **整列**: 複数の要素を配置する場合、左揃え、中央揃え、右揃えのいずれかで整列させ、視覚的な安定感を生み出す。
+        ### 超重要レイアウトルール
+        - **グリッドシステム**: スライドを仮想の12x12グリッドで考える。要素の配置(top, left)やサイズ(width, height)は、このグリッド線に沿わせることで、整然としたレイアウトを実現する。
+        - **レイアウトの多様性**: 常に中央揃えにするのではなく、Zパターン（視線を左上→右上→左下→右下と誘導）や、左右非対称のレイアウトを効果的に使い、視覚的なリズムを生み出す。
+        - **衝突回避**: 要素同士は絶対に重ねてはならない。各要素の周囲には最低でも5%の「マージン」を確保する。
+        - **余白の戦略的活用**: スライドの端から最低でも5%の余白（セーフエリア）を設ける。要素を端ギリギリに配置しない。
+        - **整列**: 複数の要素を配置する場合、左揃え、中央揃え、右揃えのいずれかで整列させ、視覚的な安定感を生み出す。
 
-### アニメーション活用原則
-- **実装方法**: アニメーションは、animate.cssを用いて実装されています。
-- **目的**: アニメーションは情報の強調、注意の喚起、状態変化の明示など、明確な目的を持って使用する。過度なアニメーションは避ける。
-- **一貫性**: 同じ種類の要素や目的には、一貫したアニメーションスタイルを適用する。
-- **一般的なアニメーションの一部の例**:
-    - \`fadeIn\`: 要素がフェードインして表示される。
-    - \`slideInUp\`: 要素が下からスライドインして表示される。
-    - \`bounce\`: 要素が跳ねるように表示される。
-    - \`rotateIn\`: 要素が回転しながら表示される。
+        ### アニメーション活用原則
+        - **実装方法**: アニメーションは、animate.cssを用いて実装されています。
+        - **目的**: アニメーションは情報の強調、注意の喚起、状態変化の明示など、明確な目的を持って使用する。過度なアニメーションは避ける。
+        - **一貫性**: 同じ種類の要素や目的には、一貫したアニメーションスタイルを適用する。
+        - **一般的なアニメーションの一部の例**:
+            - \`fadeIn\`: 要素がフェードインして表示される。
+            - \`slideInUp\`: 要素が下からスライドインして表示される。
+            - \`bounce\`: 要素が跳ねるように表示される。
+            - \`rotateIn\`: 要素が回転しながら表示される。
 
-### 重要ルール
-- **思考プロセスの可視化**: なぜそのデザインにしたのか、その根拠や意図をXMLコメント(\`<!-- ... -->\`)で必ず具体的に説明してください。例: \`<!-- Zパターンレイアウトを適用し、ユーザーの視線を自然に誘導します。 -->\` \`<!-- メインメッセージを強調するため、中央に大きく配置しました。 -->\`
-- **フィードバックへの対応**: ユーザーからの修正依頼（「もっとこうしてほしい」など）があった場合は、チャット履歴を注意深く参照し、意図を汲み取って柔軟に提案を修正してください。
-- **厳格なXML出力**: あなたの応答は、必ずルート要素を1つだけ持つ有効なXMLでなければなりません。XMLタグの外側には、いかなるテキスト、コメント、空白、改行も含めないでください。
-- **CDATAの使用**: contentにHTMLタグ(\`<p>\`, \`<h3>\`など)や特殊文字を含める場合は、必ず \`<![CDATA[...]]>\` で囲んでください。これはXMLパースエラーを防ぐために非常に重要です。
-- **改行の制御**: キャッチコピーや短い見出しのようなテキストを生成する際は、意図しない\`<br>\`タグなどの改行を含めないでください。
-- **単一コマンドの原則**: 一度の応答には、'<sequence>'や'<create_slide>'などのコマンドを一つだけ含めてください。'<sequence>'と'<complete>'を同時に返すようなことは絶対にしないでください。
-- 全ての要素は必ずキャンバス内(top, left, width, heightが0-100の範囲)に収まるように配置してください。
-- **スライド1枚毎の出力**: 原則として、1枚のスライドに関する全てのコマンド（例: <create_slide>とその内部の<add_element>など）を1つの<sequence>ブロックにまとめて出力してください。
-- **完了報告**: ユーザーから与えられたタスクが完了したと判断した場合のみ、**必ず** '<complete>完了した報告の文章</complete>' という形式で報告してください。例えば「スライドを3枚作って」という指示であれば、3枚作り終えたら、それ以上は何もせずに\`<complete>\`タグで報告します。不必要にスライドを追加し続けるなどの無限ループは絶対に避けてください。それ以外の途中経過の報告は一切不要です。
-- **エラーからの自己修正**: もしあなたの生成したコマンドがエラーになった場合は、エラーメッセージを分析し、**どこが間違っていたのか**をXMLコメントで説明した上で、修正したコマンドを再生成してください。
-`,
-            plan: `あなたは優秀なプロジェクトプランナーです。ユーザーの最終目標に基づき、具体的で実行可能な行動計画を立案する役割を担います。
+        ### 重要ルール
+        - **思考プロセスの可視化**: なぜそのデザインにしたのか、その根拠や意図をXMLコメント(\`<!-- ... -->\`)で必ず具体的に説明してください。例: \`<!-- Zパターンレイアウトを適用し、ユーザーの視線を自然に誘導します。 -->\` \`<!-- メインメッセージを強調するため、中央に大きく配置しました。 -->\`
+        - **フィードバックへの対応**: ユーザーからの修正依頼（「もっとこうしてほしい」など）があった場合は、チャット履歴を注意深く参照し、意図を汲み取って柔軟に提案を修正してください。
+        - **厳格なXML出力**: あなたの応答は、必ずルート要素を1つだけ持つ有効なXMLでなければなりません。XMLタグの外側には、いかなるテキスト、コメント、空白、改行も含めないでください。
+        - **改行の制御**: キャッチコピーや短い見出しのようなテキストを生成する際は、意図しない\`<br>\`タグなどの改行を含めないでください。
+        - **単一コマンドの原則**: 一度の応答には、'<sequence>'や'<create_slide>'などのコマンドを一つだけ含めてください。'<sequence>'と'<complete>'を同時に返すようなことは絶対にしないでください。
+        - 全ての要素は必ずキャンバス内(top, left, width, heightが0-100の範囲)に収まるように配置してください。
+        - **スライド1枚毎の出力**: 原則として、1枚のスライドに関する全てのコマンド（例: <create_slide>とその内部の<add_element>など）を1つの<sequence>ブロックにまとめて出力してください。
+        - **完了報告**: ユーザーから与えられたタスクが完了したと判断した場合のみ、**必ず** '<complete>完了した報告の文章</complete>' という形式で報告してください。例えば「スライドを3枚作って」という指示であれば、3枚作り終えたら、それ以上は何もせずに\`<complete>\`タグで報告します。不必要にスライドを追加し続けるなどの無限ループは絶対に避けてください。それ以外の途中経過の報告は一切不要です。
+        - **エラーからの自己修正**: もしあなたの生成したコマンドがエラーになった場合は、エラーメッセージを分析し、**どこが間違っていたのか**をXMLコメントで説明した上で、修正したコマンドを再生成してください。
+        `,
+                    plan: `あなたは優秀なプロジェクトプランナーです。ユーザーの最終目標に基づき、具体的で実行可能な行動計画を立案する役割を担います。
 
-### 計画立案の原則
-- **目標の分解**: 最終目標を、具体的なスライド作成のステップに分解します。
-- **情報の網羅性**: 各スライドで「何を」「どのように」伝えるかを明確に記述します。
-- **確認ステップ**: 重要な意思決定（デザインの方向性、コンテンツの骨子など）が必要な場合は、計画の途中でユーザーに確認するステップを設けてください。
-- **成果物の明確化**: 最終的にどのようなプレゼンテーションが完成するのか、全体像がわかるように計画を立ててください。
+        ### 計画立案の原則
+        - **目標の分解**: 最終目標を、具体的なスライド作成のステップに分解します。
+        - **情報の網羅性**: 各スライドで「何を」「どのように」伝えるかを明確に記述します。
+        - **確認ステップ**: 重要な意思決定（デザインの方向性、コンテンツの骨子など）が必要な場合は、計画の途中でユーザーに確認するステップを設けてください。
+        - **成果物の明確化**: 最終的にどのようなプレゼンテーションが完成するのか、全体像がわかるように計画を立ててください。
 
-計画はステップバイステップで考え、それをXMLの<sequence>タグ内にXMLコメントとして記述して提案してください。
+        計画はステップバイステップで考え、それをXMLの<sequence>タグ内にXMLコメントとして記述して提案してください。
 
-### 質問機能
-計画に必要な情報が不足している場合は、ユーザーに質問してください。質問は<question>タグを使用します。
-**重要: ユーザーの手間を省くため、可能な限り選択肢形式('multiple_choice')を使用してください。** 自由回答('free_text')は、選択肢を提示することが困難な場合にのみ使用してください。
+        ### 質問機能
+        計画に必要な情報が不足している場合は、ユーザーに質問してください。質問は<question>タグを使用します。
+        **重要: ユーザーの手間を省くため、可能な限り選択肢形式('multiple_choice')を使用してください。** 自由回答('free_text')は、選択肢を提示することが困難な場合にのみ使用してください。
 
-- **選択式 (推奨)**: <question type="multiple_choice"><text>質問文</text><option>選択肢A</option><option>選択肢B</option><option>その他</option></question>
-- **自由回答**: <question type="free_text">質問文</question>
+        - **選択式 (推奨)**: <question type="multiple_choice"><text>質問文</text><option>選択肢A</option><option>選択肢B</option><option>その他</option></question>
+        - **自由回答**: <question type="free_text">質問文</question>
 
-例:
-<sequence>
-  <!-- 1. プレゼンテーションの基本方針を決定する -->
-  <!-- 2. タイトルスライドを作成する。タイトルは「〇〇」、サブタイトルは「△△」とする -->
-  <!-- 3. 会社概要スライドを作成する。内容は～とする -->
-</sequence>
-<question type="multiple_choice">
-  <text>このプレゼンの主な目的は何ですか？</text>
-  <option>製品やサービスを紹介する</option>
-  <option>研究成果を報告する</option>
-  <option>社内向けの情報を共有する</option>
-</question>
+        例:
+        <sequence>
+        <!-- 1. プレゼンテーションの基本方針を決定する -->
+        <!-- 2. タイトルスライドを作成する。タイトルは「〇〇」、サブタイトルは「△△」とする -->
+        <!-- 3. 会社概要スライドを作成する。内容は～とする -->
+        </sequence>
+        <question type="multiple_choice">
+        <text>このプレゼンの主な目的は何ですか？</text>
+        <option>製品やサービスを紹介する</option>
+        <option>研究成果を報告する</option>
+        <option>社内向けの情報を共有する</option>
+        </question>
 
-重要: このモードでは、スライドを直接編集するコマンドは絶対に使用できません。使用可能なコマンドは上記「コマンド定義」に記載されているもののみです。
-ユーザーが計画に同意したら、次の応答で<switch_ai_mode mode="design" />コマンドを生成し、デザインモードに移行してください。一度の応答で計画とモードスイッチを両方含めないでください。XML以外の説明やテキストは絶対に含めないでください。
-`,
+        重要: このモードでは、スライドを直接編集するコマンドは絶対に使用できません。使用可能なコマンドは上記「コマンド定義」に記載されているもののみです。
+        ユーザーが計画に同意したら、次の応答で<switch_ai_mode mode="design" />コマンドを生成し、デザインモードに移行してください。一度の応答で計画とモードスイッチを両方含めないでください。XML以外の説明やテキストは絶対に含めないでください。
+        `,
             ask: `あなたはスライドエディタに関する質問に答えたり、簡単な操作を支援したりするAIアシスタントです。ユーザーの質問に対して、現在の状態を参考にし、必要であればコマンドを使用して回答や操作を行ってください。基本的には自然言語で分かりやすく回答しますが、操作を実行する場合はXMLコマンドを生成してください。
 `
         };
@@ -364,7 +374,7 @@ class AIHandler {
         if (executionResult && executionResult.success && !command.includes('<complete>') && !command.includes('<question>')) {
             const nextPrompt = executionResult.imageDataProcessed
                 ? "このスライドの画像を認識しました。これを基に、次に行うべきことを提案・実行してください。"
-                : "次のスライドを作成してください。もしタスクが完了していれば<complete>タグで報告してください。";
+                : "タスクの続きを実行してください。もしタスクが完了していれば<complete>タグで報告してください。";
             
             const nextAction = () => this.handleSendMessage(nextPrompt);
 
@@ -459,14 +469,10 @@ class AIHandler {
                     const feedback = `
 <error_feedback>
   <failed_command>
-    <![CDATA[
 ${commandText}
-    ]]>
   </failed_command>
   <error_message>
-    <![CDATA[
 ${result.message}
-    ]]>
   </error_message>
   <instruction>
     このエラーを分析し、原因を特定してください。そして、問題を修正した完全なXMLコマンドを再生成してください。修正のポイントはXMLコメントで説明してください。
@@ -822,8 +828,13 @@ ${result.message}
                 const content = data.choices?.[0]?.message?.content;
                 if (!content) throw new Error('APIからの応答形式が不正です。');
                 
-                if (messagesOverride) return content;
-
+                // If messagesOverride is true, the caller expects raw content, not necessarily XML.
+                // So, we return it as a 'text' type.
+                if (messagesOverride) {
+                    return { type: 'text', content: content };
+                }
+    
+                // Otherwise, we expect XML and validate it.
                 return this._extractAndValidateCommand(content);
 
             } catch (error) {
@@ -841,7 +852,7 @@ ${result.message}
         // 質問タグを優先的にチェック
         const questionMatch = rawResponse.match(/<question[\s\S]*?<\/question>/s);
         if (questionMatch) {
-            return questionMatch[0];
+            return { type: 'xml', content: questionMatch[0] };
         }
 
         // 応答からXMLコメントや前後のテキストを除いた、最初のXML要素を抽出する
@@ -859,7 +870,8 @@ ${result.message}
         }
 
         if (startIndex === -1) {
-            throw new Error(`AIからの応答に有効なXMLコマンドが含まれていませんでした。\nAIの応答:\n${rawResponse}`);
+            // No XML tag found at all, treat as plain text
+            return { type: 'text', content: rawResponse.trim() };
         }
 
         const potentialXml = rawResponse.substring(startIndex);
@@ -867,6 +879,7 @@ ${result.message}
         const xmlMatch = potentialXml.match(/<(\w+)(?:[\s\S]*?)>[\s\S]*?<\/\1>|<(\w+)(?:[\s\S]*?)\/>/s);
 
         if (!xmlMatch) {
+            // Found a '<' but it's not a valid XML root element. This is a malformed XML command.
             throw new Error(`AIからの応答に有効なXMLコマンドが含まれていませんでした。\n抽出試行ブロック:\n${potentialXml}\n\n元のAIの応答:\n${rawResponse}`);
         }
         
@@ -890,7 +903,35 @@ ${result.message}
             throw new Error(`生成されたコマンドの検証に失敗しました: ${validation.error}\n抽出されたコマンド:\n${xmlCommand}\n\n元のAIの応答:\n${rawResponse}`);
         }
         
-        return xmlCommand;
+        return { type: 'xml', content: xmlCommand };
+    }
+
+    /**
+     * AIからの応答を処理し、表示と実行を行う
+     * @param {object} aiResponseObj - AIからの応答オブジェクト ({ type: 'xml' | 'text', content: string })
+     * @private
+     */
+    async _processAIResponse(aiResponseObj) {
+        this._addHistory('assistant', aiResponseObj.content); // Store the content string
+
+        // If type is 'xml', proceed as before
+        const aiResponseElements = this.displayAIResponse(aiResponseObj.content); // Pass the XML string
+        if (aiResponseElements.executeBtn) {
+            // autoExecuteToggleが有効な場合のみ自動実行
+            if (this.elements.autoExecuteToggle?.checked) {
+                await this._executeAndFollowUp(aiResponseObj.content, aiResponseElements); // Pass the XML string
+            } else {
+                // 自動実行がオフの場合は、ここで応答終了とみなす
+                this.isAIResponding = false;
+                this.updateAIControlButtons();
+                this._updateChatUIState(false);
+            }
+        } else {
+            // 実行ボタンがない場合（質問や完了メッセージ）も応答終了
+            this.isAIResponding = false;
+            this.updateAIControlButtons();
+            this._updateChatUIState(false);
+        }
     }
 
     generateCommandSystemPrompt() {
@@ -902,12 +943,12 @@ ${result.message}
         const inheritedPlan = this.getInheritedPlan();
 
         const dynamicPrompt = `### 現在の状態
-- スライドのサイズ: width=${presentation.settings.width}, height=${presentation.settings.height}
-- アクティブなスライドID: ${this.state.activeSlideId || 'なし'}
-- スライド一覧 (IDと要素数):
-${presentation.slides.length > 0 ? presentation.slides.map(s => `  - Slide(id=${s.id}): ${s.elements.length} elements`).join('\n') : 'スライドはありません'}
-${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
-`;
+        - スライドのサイズ: width=${presentation.settings.width}, height=${presentation.settings.height}
+        - アクティブなスライドID: ${this.state.activeSlideId || 'なし'}
+        - スライド一覧 (IDと要素数):
+        ${presentation.slides.length > 0 ? presentation.slides.map(s => `  - Slide(id=${s.id}): ${s.elements.length} elements`).join('\n') : 'スライドはありません'}
+        ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
+        `;
 
         const { allCommandDefinitions, modeCommands, usageExample } = this.basePromptContent;
         const availableCommandKeys = modeCommands[this.aiMode] || [];
@@ -943,7 +984,7 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
         const knownCommands = [
             'create_slide', 'delete_slide', 'edit_element', 'view_slide', 'sequence',
             'add_element', 'add_shape', 'add_chart', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'question',
-            'view_slide_as_image', 'reorder_slides', 'complete'
+            'view_slide_as_image', 'reorder_slides', 'align_to_slide', 'set_background', 'complete'
         ];
         if (!knownCommands.includes(commandName)) {
             return { isValid: false, error: `不明なコマンド'${commandName}'です。` };
@@ -1008,6 +1049,8 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
             case 'question': return { success: true, message: '質問はUIで処理されるため、実行はスキップされました。' };
             case 'view_slide_as_image': return this.handleViewSlideAsImage(commandNode);
             case 'reorder_slides': return this.handleReorderSlides(commandNode);
+            case 'align_to_slide': return await this.handleAlignToSlide(commandNode);
+            case 'set_background': return this.handleSetBackground(commandNode);
             case 'complete': return { success: true, message: commandNode.textContent.trim() || 'タスクが完了しました。' };
             default: throw new Error(`不明なコマンド: ${commandName}`);
         }
@@ -1021,6 +1064,88 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
         const slideIds = orderAttr.split(',').map(id => id.trim());
         this.app.reorderSlides(slideIds);
         return { success: true, message: `スライドの順序を${orderAttr}に並べ替えました。` };
+    }
+
+    async handleAlignToSlide(commandNode) {
+        const elementId = commandNode.getAttribute('element_id');
+        const direction = commandNode.getAttribute('direction') || 'both'; // both, horizontal, vertical
+        if (!elementId) throw new Error('element_id is required for align_to_slide.');
+    
+        const slide = this.app.getActiveSlide();
+        if (!slide) throw new Error('No active slide found.');
+    
+        const element = slide.elements.find(el => el.id === elementId);
+        if (!element) throw new Error(`Element with id ${elementId} not found.`);
+    
+        const updates = {};
+        if (direction === 'horizontal' || direction === 'both') {
+            if (element.style.width) {
+                updates.left = 50 - element.style.width / 2;
+            }
+        }
+        if (direction === 'vertical' || direction === 'both') {
+            let domElement = this.app.domElementCache.get(elementId)?.dom;
+            // DOM要素がキャッシュにないか、高さが0の場合は、一度レンダリングを待つ
+            if (!domElement || domElement.offsetHeight === 0) {
+                await new Promise(resolve => {
+                    this.app.render();
+                    requestAnimationFrame(() => resolve());
+                });
+                domElement = this.app.domElementCache.get(elementId)?.dom;
+            }
+            if (domElement) {
+                const heightInPercent = (domElement.offsetHeight / this.app.elements.slideCanvas.offsetHeight) * 100;
+                if (heightInPercent > 0) {
+                    updates.top = 50 - heightInPercent / 2;
+                }
+            }
+        }
+    
+        if (Object.keys(updates).length > 0) {
+            const slideIndex = this.app.getActiveSlideIndex();
+            const elementIndex = this.app.getElementIndex(elementId);
+            const batchUpdates = {};
+            for (const [key, value] of Object.entries(updates)) {
+                batchUpdates[`presentation.slides.${slideIndex}.elements.${elementIndex}.style.${key}`] = value;
+            }
+            this.app.batchUpdateState(batchUpdates);
+            this.app.render();
+            this.app.saveState();
+        }
+        
+        return { success: true, message: `要素 ${elementId} をスライドに中央揃えしました。` };
+    }
+
+    handleSetBackground(commandNode) {
+        const type = commandNode.getAttribute('type');
+        if (!type) throw new Error('type属性(solidまたはgradient)が必要です。');
+
+        const updates = {
+            'presentation.settings.backgroundType': type
+        };
+
+        if (type === 'solid') {
+            const color = commandNode.getAttribute('color');
+            if (!color) throw new Error('単色背景にはcolor属性が必要です。');
+            updates['presentation.settings.backgroundColor'] = color;
+        } else if (type === 'gradient') {
+            const startColor = commandNode.getAttribute('start_color');
+            const endColor = commandNode.getAttribute('end_color');
+            const angle = commandNode.getAttribute('angle');
+            if (!startColor || !endColor) throw new Error('グラデーション背景にはstart_colorとend_color属性が必要です。');
+
+            updates['presentation.settings.gradientStart'] = startColor;
+            updates['presentation.settings.gradientEnd'] = endColor;
+            if (angle) {
+                updates['presentation.settings.gradientAngle'] = parseInt(angle, 10);
+            }
+        } else {
+            throw new Error(`不明な背景タイプです: ${type}`);
+        }
+
+        this.app.batchUpdateState(updates);
+        this.app.applyPageBackground(); // UIに即時反映
+        return { success: true, message: `背景を${type}に変更しました。` };
     }
 
     async handleViewSlideAsImage(commandNode) {
@@ -1092,12 +1217,12 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
                     comments.push(walker.currentNode.nodeValue.trim());
                 }
                 if (comments.length > 0) {
-                    this.state.inheritedPlan = comments.map(c => `- ${c}`).join('\n');
+                    this.app.updateState('inheritedPlan', comments.map(c => `- ${c}`).join('\n'));
                 }
             }
         } else if (mode !== 'plan') {
             // planモード以外に切り替わったら計画をリセット
-            this.state.inheritedPlan = null;
+            this.app.updateState('inheritedPlan', null);
         }
 
         this.setAIMode(mode);
@@ -1105,14 +1230,42 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
     }
     
     async handleCreateSlide(commandNode) {
-        const newSlideId = this.app.addSlide(true);
+        const newSlideId = await this.app.addSlide(true);
+        
+        // 新しいスライドがstateに確実に存在することを確認する
+        let slideExists = false;
+        let attempts = 0;
+        const maxAttempts = 20; // 試行回数を増やす
+        const delay = 100;      // 遅延を増やす
+
+        while (!slideExists && attempts < maxAttempts) {
+            const slide = this.state.presentation.slides.find(s => s.id === newSlideId);
+            if (slide) {
+                slideExists = true;
+            } else {
+                await new Promise(resolve => setTimeout(resolve, delay));
+                attempts++;
+            }
+        }
+
+        if (!slideExists) {
+            // デバッグ用に現在のスライドIDリストをログに出力
+            console.error(`新しいスライド(ID: ${newSlideId})がstateに登録されませんでした。現在のスライドIDリスト:`, this.state.presentation.slides.map(s => s.id));
+            throw new Error(`新しいスライド(ID: ${newSlideId})がstateに登録されませんでした。`);
+        }
+
+        // スライドの存在を確認してから、関連処理を実行
+        this.app.render();
+        this.app.saveState();
+        this.app.setActiveSlide(newSlideId);
+
         let elementCount = 0;
 
         // 互換性のために古い<elements>タグもサポート
         const legacyElementsNode = commandNode.querySelector('elements');
         if (legacyElementsNode) {
             const elementNodes = Array.from(legacyElementsNode.querySelectorAll('element'));
-             for (const elNode of elementNodes) {
+            for (const elNode of elementNodes) {
                 await this._addElementFromNode(elNode, newSlideId);
                 elementCount++;
             }
@@ -1128,7 +1281,6 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
             elementCount++;
         }
         
-        this.app.setActiveSlide(newSlideId);
         return { success: true, message: `新しいスライド(ID: ${newSlideId})を作成し、${elementCount}個の要素を追加しました。` };
     }
 
@@ -1166,7 +1318,7 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
                 this.handleAddChart(node);
                 break;
             case 'add_icon':
-                 this.handleAddIcon(node);
+                this.handleAddIcon(node);
                 break;
             case 'add_qrcode':
                 await this.handleAddQrcode(node);
@@ -1220,7 +1372,9 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
     handleAddElement(commandNode) {
         const type = commandNode.getAttribute('type');
         const content = commandNode.querySelector('content')?.textContent || commandNode.getAttribute('content') || '';
-        const slideId = commandNode.getAttribute('slide_id') || this.state.activeSlideId;
+        const slideId = commandNode.getAttribute('slide_id'); // slide_idを直接取得
+        const targetSlideId = slideId || this.state.activeSlideId; // 優先順位を明確に
+
         const styleNode = commandNode.querySelector('style');
         const style = {};
         if (styleNode) {
@@ -1229,12 +1383,16 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
             }
         }
         const customCssNode = commandNode.querySelector('customCss');
+        if (customCssNode) {
+            style.customCss = customCssNode.textContent;
+        }
+
         const slides = (this.state.presentation && Array.isArray(this.state.presentation.slides)) ? this.state.presentation.slides : [];
-        const slide = slides.find(s => s.id === slideId);
-        if (!slide) throw new Error(`Slide ${slideId} not found.`);
-        const newEl = this.app.addElementToSlide(slideId, type, content, style);
+        const slide = slides.find(s => s.id === targetSlideId); // targetSlideIdを使用
+        if (!slide) throw new Error(`Slide ${targetSlideId} not found.`);
+        const newEl = this.app.addElementToSlide(targetSlideId, type, content, style); // targetSlideIdを使用
         if (!newEl) throw new Error('要素の追加に失敗しました');
-        if (customCssNode) newEl.style.customCss = customCssNode.textContent;
+        
         return { success: true, message: `要素(type=${type})を追加しました。`, element: newEl };
     }
     handleAddShape(commandNode) {
@@ -1256,7 +1414,11 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
         // slide_idとstyle, customCssをコピー
         if (commandNode.hasAttribute('slide_id')) {
             addElementNode.setAttribute('slide_id', commandNode.getAttribute('slide_id'));
+        } else {
+            // commandNodeにslide_idがない場合、activeSlideIdをaddElementNodeに設定
+            addElementNode.setAttribute('slide_id', this.state.activeSlideId);
         }
+
         const styleNode = commandNode.querySelector('style');
         if (styleNode) {
             addElementNode.appendChild(styleNode.cloneNode(true));
@@ -1271,7 +1433,9 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
     handleAddIcon(commandNode) {
         const iconType = commandNode.getAttribute('iconType');
         const iconClass = commandNode.getAttribute('iconClass');
-        const slideId = commandNode.getAttribute('slide_id') || this.state.activeSlideId;
+        const slideId = commandNode.getAttribute('slide_id'); // slide_idを直接取得
+        const targetSlideId = slideId || this.state.activeSlideId; // 優先順位を明確に
+
         const styleNode = commandNode.querySelector('style');
         const style = {};
         if (styleNode) {
@@ -1280,21 +1444,19 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
             }
         }
         const customCssNode = commandNode.querySelector('customCss');
+        if (customCssNode) {
+            style.customCss = customCssNode.textContent;
+        }
         const slides = (this.state.presentation && Array.isArray(this.state.presentation.slides)) ? this.state.presentation.slides : [];
-        const slide = slides.find(s => s.id === slideId);
-        if (!slide) throw new Error(`Slide ${slideId} not found.`);
+        const slide = slides.find(s => s.id === targetSlideId); // targetSlideIdを使用
+        if (!slide) throw new Error(`Slide ${targetSlideId} not found.`);
         // slide.jsのaddIconElementを使う
         if (iconType === 'fa' || iconType === 'mi') {
             // addIconElementはアクティブスライドのみ対応なので、slideIdが違う場合は一時的にactiveSlideIdを変更
             const prevActive = this.state.activeSlideId;
-            this.app.setActiveSlide(slideId);
+            this.app.setActiveSlide(targetSlideId); // targetSlideIdを使用
             this.app.addIconElement(iconType, iconClass, style); // styleオブジェクトを渡す
-            // 直近で追加された要素にカスタムCSSを反映
-            if (customCssNode) {
-                const lastEl = slide.elements[slide.elements.length - 1];
-                if (lastEl) lastEl.style.customCss = customCssNode.textContent;
-            }
-            if (prevActive !== slideId) this.app.setActiveSlide(prevActive);
+            if (prevActive !== targetSlideId) this.app.setActiveSlide(prevActive); // targetSlideIdを使用
             return { success: true, message: `アイコン(${iconType}:${iconClass})を追加しました。` };
         }
         throw new Error('iconTypeはfaまたはmiのみ対応');
@@ -1304,7 +1466,8 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
         const size = parseInt(commandNode.getAttribute('size')) || 256;
         const color = commandNode.getAttribute('color') || '#000';
         const bgColor = commandNode.getAttribute('bgColor') || '#fff';
-        const slideId = commandNode.getAttribute('slide_id') || this.state.activeSlideId;
+        const slideId = commandNode.getAttribute('slide_id'); // slide_idを直接取得
+        const targetSlideId = slideId || this.state.activeSlideId; // 優先順位を明確に
         
         const styleNode = commandNode.querySelector('style');
         const style = {};
@@ -1317,6 +1480,9 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
         const finalStyle = { width: 20, height: null, ...style };
 
         const customCssNode = commandNode.querySelector('customCss');
+        if (customCssNode) {
+            finalStyle.customCss = customCssNode.textContent;
+        }
         // QRコード生成はslide.jsのQRコード生成ロジックを流用
         // ここではwindow.QRCodeStylingが必要
         if (!window.QRCodeStyling) throw new Error('QRCodeStylingライブラリがロードされていません');
@@ -1333,10 +1499,9 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
                 reader.onload = () => {
                     const imgUrl = reader.result;
                     const slides = (this.state.presentation && Array.isArray(this.state.presentation.slides)) ? this.state.presentation.slides : [];
-                    const slide = slides.find(s => s.id === slideId);
-                    if (!slide) return reject(new Error(`Slide ${slideId} not found.`));
-                    const newEl = this.app.addElementToSlide(slideId, 'image', imgUrl, finalStyle);
-                    if (customCssNode && newEl) newEl.style.customCss = customCssNode.textContent;
+                    const slide = slides.find(s => s.id === targetSlideId); // targetSlideIdを使用
+                    if (!slide) return reject(new Error(`Slide ${targetSlideId} not found.`));
+                    const newEl = this.app.addElementToSlide(targetSlideId, 'image', imgUrl, finalStyle); // targetSlideIdを使用
                     resolve({ success: true, message: `QRコードを追加しました。`, element: newEl });
                 };
                 reader.readAsDataURL(blob);
@@ -1345,9 +1510,10 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
     }
 
     handleAddChart(commandNode) {
-        const slideId = commandNode.getAttribute('slide_id') || this.state.activeSlideId;
-        const slide = this.state.presentation.slides.find(s => s.id === slideId);
-        if (!slide) throw new Error(`Slide ${slideId} not found.`);
+        const slideId = commandNode.getAttribute('slide_id'); // slide_idを直接取得
+        const targetSlideId = slideId || this.state.activeSlideId; // 優先順位を明確に
+        const slide = this.state.presentation.slides.find(s => s.id === targetSlideId); // targetSlideIdを使用
+        if (!slide) throw new Error(`Slide ${targetSlideId} not found.`);
 
         const chartType = commandNode.getAttribute('type');
         const title = commandNode.querySelector('title')?.textContent || '';
@@ -1432,11 +1598,11 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
 
     createAICheckpoint() {
         const checkpointId = `cp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        const pres = this.state.presentation || {};
-        if (!this.state.aiCheckpoints) {
-            this.state.aiCheckpoints = {};
+        const pres = this.app.getState('presentation') || {};
+        if (!this.app.getState('aiCheckpoints')) {
+            this.app.updateState('aiCheckpoints', {}, { skipHistory: true });
         }
-        this.state.aiCheckpoints[checkpointId] = structuredClone(pres);
+        this.app.updateState(`aiCheckpoints.${checkpointId}`, structuredClone(pres), { skipHistory: true });
 
         const checkpointMsgContent = `
             <div class="checkpoint-controls">
@@ -1450,24 +1616,31 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
     }
 
     restoreAICheckpoint(checkpointId) {
-        if (!this.state.aiCheckpoints || !this.state.aiCheckpoints[checkpointId]) {
+        const checkpoints = this.app.getState('aiCheckpoints');
+        if (!checkpoints || !checkpoints[checkpointId]) {
             alert('復元ポイントが見つかりません。');
             return;
         }
 
         if (confirm('このチェックポイントの状態に復元しますか？\nこれ以降のチェックポイントは無効になります。')) {
-            this.state.presentation = structuredClone(this.state.aiCheckpoints[checkpointId]);
+            const presentation = structuredClone(checkpoints[checkpointId]);
+            let newActiveSlideId = this.app.getState('activeSlideId');
             
-            // 復元後のアクティブスライドIDを安全に設定
-            if (this.state.presentation.slides && this.state.presentation.slides.length > 0) {
-                const activeSlideExists = this.state.presentation.slides.some(s => s.id === this.state.activeSlideId);
+            if (presentation.slides && presentation.slides.length > 0) {
+                const activeSlideExists = presentation.slides.some(s => s.id === newActiveSlideId);
                 if (!activeSlideExists) {
-                    this.state.activeSlideId = this.state.presentation.slides[0].id;
+                    newActiveSlideId = presentation.slides[0].id;
                 }
             } else {
-                this.state.activeSlideId = null;
+                newActiveSlideId = null;
             }
 
+            this.app.batchUpdateState({
+                'presentation': presentation,
+                'activeSlideId': newActiveSlideId,
+                'selectedElementIds': []
+            });
+            
             this.app.render();
             this.app.saveState();
             this.displayMessage(`チェックポイントに復元しました。`, 'system', 'システム');
@@ -1496,7 +1669,7 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
     }
     
     toggleAutonomousModeUI(isActive) {
-        this.state.autonomousMode.isActive = isActive;
+        this.app.updateState('autonomousMode.isActive', isActive, { skipHistory: true });
         if (isActive) {
             document.getElementById('chat-input-container').style.display = 'none';
             this.elements.autonomousGoalContainer.style.display = 'flex';
@@ -1623,7 +1796,7 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
             return;
         }
 
-        this.displayMessage(`${processType} を実行中...`, 'loading');
+        const loadingMsgDiv = this.displayMessage(`${processType} を実行中...`, 'loading');
 
         const prompts = {
             catchphrase: `以下のテキストの魅力を引き出す、スライドに適したクリエイティブなキャッチコピーを3つ提案してください。結果は、他のいかなるテキストやマークダウン（例: \`\`\`json）も含めず、純粋なJSON配列形式（例: ["案1", "案2", "案3"]）の文字列のみで返してください。\n\nテキスト:\n「${text}」`,
@@ -1638,19 +1811,21 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
         }
 
         try {
+            // ブラウザがDOMの変更をレンダリングするのを待つ
+            await new Promise(resolve => requestAnimationFrame(resolve));
+
             // テキスト処理専用のAPIリクエスト
             const messages = [{ role: 'user', content: prompt }];
-            const aiResponse = await this._requestToAI(messages, 0); // リトライなし
+            const aiResponseObj = await this._requestToAI(loadingMsgDiv, messages, 0); // リトライなし
 
             // ローディングメッセージを消す
-            const loadingMsg = document.querySelector('.loading-msg');
-            if (loadingMsg) loadingMsg.remove();
+            if (loadingMsgDiv) loadingMsgDiv.remove();
 
-            this.showSuggestionPopover(processType, aiResponse, elementId);
+            // aiResponseObj.content を渡す
+            this.showSuggestionPopover(processType, aiResponseObj.content, elementId);
 
         } catch (error) {
-            const loadingMsg = document.querySelector('.loading-msg');
-            if (loadingMsg) loadingMsg.remove();
+            if (loadingMsgDiv) loadingMsgDiv.remove();
             this.displayMessage(`エラー: ${error.message}`, 'error');
             console.error('AIテキスト処理エラー:', error);
         }
@@ -1720,9 +1895,11 @@ ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
             if (selectedSuggestion) {
                 const element = this.app.getActiveSlide()?.elements.find(el => el.id === elementId);
                 if (element) {
-                    element.content = selectedSuggestion;
-                    this.app.render();
-                    this.app.saveState();
+                    const slideIndex = this.app.getActiveSlideIndex();
+                    const elementIndex = this.app.getElementIndex(elementId);
+                    if (slideIndex > -1 && elementIndex > -1) {
+                        this.app.updateState(`presentation.slides.${slideIndex}.elements.${elementIndex}.content`, selectedSuggestion);
+                    }
                 }
             }
             popover.style.display = 'none';
@@ -1808,7 +1985,8 @@ class AutonomousAgent {
         const messages = [{ role: 'user', content: `最終目標: ${this.goal}\n現在のスライドの状態: ${this.state.presentation.slides.length}枚のスライドがあります。` }];
         
         // 自律モードの計画フェーズでは、システムプロンプトを直接渡す
-        const planText = await this.handler._requestToAI(messages, 1);
+        const planResponse = await this.handler._requestToAI(null, messages, 1); // loadingMsgDivは不要
+        const planText = planResponse.content;
         
         this.plan = planText.split('\n').filter(line => line.match(/^\d+\.\s/)).map(line => line.replace(/^\d+\.\s/, ''));
         
@@ -1854,9 +2032,13 @@ class AutonomousAgent {
         ];
         
         // 自律モード用の履歴は、通常のチャット履歴とは独立させる
-        const rawResponse = await this.handler._requestToAI(messages);
+        const aiResponseObj = await this.handler._requestToAI(null, messages); // loadingMsgDivは不要
         // 自律モードではコマンドの検証が必須
-        return this.handler._extractAndValidateCommand(rawResponse);
+        if (aiResponseObj.type === 'xml') {
+            return aiResponseObj.content;
+        } else {
+            throw new Error('AIがXMLコマンドを生成しませんでした。');
+        }
     }
 }
 

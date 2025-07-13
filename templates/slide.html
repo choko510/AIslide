@@ -10,6 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://site-assets.fontawesome.com" />
     <!-- Preload critical CSS -->
+    <link rel="preload" as="style" href="base.css?1" onload="this.rel='stylesheet'" />
     <link rel="preload" as="style" href="slide.css?1" onload="this.rel='stylesheet'" />
     <link rel="preload" as="style" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/all.css"
         onload="this.rel='stylesheet'" />
@@ -899,7 +900,7 @@
                             <!-- トリミングと変形 -->
                             <div class="imgedit-control-group">
                                 <h2>トリミングと変形</h2>
-                                <button id="imgedit-crop-btn" class="imgedit-secondary-btn">
+                                <button id="imgedit-crop-btn" class="btn btn-secondary btn-block">
                                     トリミング
                                 </button>
                                 <div class="imgedit-button-group">
@@ -921,7 +922,7 @@
                             <!-- 元に戻す -->
                             <div class="imgedit-control-group">
                                 <h2>操作履歴</h2>
-                                <button id="imgedit-undo-btn" class="imgedit-secondary-btn">
+                                <button id="imgedit-undo-btn" class="btn btn-secondary btn-block">
                                     <i class="fa-solid fa-undo"></i>
                                     <span>元に戻す</span>
                                 </button>
@@ -930,7 +931,7 @@
                             <!-- ペイント -->
                             <div class="imgedit-control-group imgedit-paint-controls">
                                 <h2>描画</h2>
-                                <button id="imgedit-toggle-paint-session" class="imgedit-primary-btn">
+                                <button id="imgedit-toggle-paint-session" class="btn btn-primary btn-block">
                                     描画を開始
                                 </button>
 
@@ -977,10 +978,10 @@
                                         </div>
                                     </div>
                                     <div class="imgedit-action-group">
-                                        <button id="imgedit-cancel-paint" class="imgedit-danger-btn">
+                                        <button id="imgedit-cancel-paint" class="btn btn-danger">
                                             キャンセル
                                         </button>
-                                        <button id="imgedit-clear-paint" class="imgedit-secondary-btn">
+                                        <button id="imgedit-clear-paint" class="btn btn-secondary">
                                             全消去
                                         </button>
                                     </div>
@@ -989,10 +990,10 @@
 
                             <!-- アクション -->
                             <div class="imgedit-control-group imgedit-action-group">
-                                <button id="imgedit-reset-btn" class="imgedit-secondary-btn">
+                                <button id="imgedit-reset-btn" class="btn btn-secondary">
                                     リセット
                                 </button>
-                                <button id="imgedit-download-btn" class="imgedit-primary-btn">
+                                <button id="imgedit-download-btn" class="btn btn-primary">
                                     スライドで使用
                                 </button>
                             </div>
@@ -1057,11 +1058,12 @@
     </nav>
 
     <!-- Styles -->
-    <link rel="stylesheet" href="ai/ai.css" />
+    <link rel="stylesheet" href="base.css" />
     <link rel="stylesheet" href="micromodal.css" />
+    <link rel="stylesheet" href="ai/ai.css" />
+    <link rel="stylesheet" href="imgedit/imgedit.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
-    <link rel="stylesheet" href="imgedit/imgedit.css" />
 
     <!-- Third-party scripts -->
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js" defer></script>

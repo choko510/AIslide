@@ -23,7 +23,7 @@ cancelPaintBtn = document.getElementById('imgedit-cancel-paint');
 // Constants
 const CONSTANTS = {
     TOOLS: { BRUSH: 'brush', ERASER: 'eraser', LINE: 'line', FILL: 'fill' },
-    CSS_CLASSES: { HIDDEN: 'hidden', ACTIVE: 'active', DRAG_OVER: 'drag-over', PRIMARY_BTN: 'imgedit-primary-btn', SECONDARY_BTN: 'imgedit-secondary-btn', SUCCESS_BTN: 'imgedit-success-btn' }
+    CSS_CLASSES: { HIDDEN: 'hidden', ACTIVE: 'active', DRAG_OVER: 'drag-over', PRIMARY_BTN: 'btn btn-primary', SECONDARY_BTN: 'btn btn-secondary', SUCCESS_BTN: 'btn btn-success', DANGER_BTN: 'btn btn-danger' }
 };
 
 // State Management

@@ -670,7 +670,7 @@ ${result.message}
 
             if (!xmlCommand.startsWith('<error>')) {
                 executeBtn = document.createElement('button');
-                executeBtn.className = 'execute-btn';
+                executeBtn.className = 'btn btn-success btn-sm execute-btn';
                 executeBtn.textContent = 'コマンドを実行';
                 executeBtn.dataset.command = xmlCommand;
                 contentDiv.appendChild(executeBtn);
@@ -706,7 +706,7 @@ ${result.message}
 
             const submitBtn = document.createElement('button');
             submitBtn.textContent = '送信';
-            submitBtn.className = 'question-submit-btn';
+            submitBtn.className = 'btn btn-primary question-submit-btn';
 
             questionDiv.appendChild(input);
             questionDiv.appendChild(submitBtn);
@@ -742,7 +742,7 @@ ${result.message}
             options.forEach(optionText => {
                 const optionBtn = document.createElement('button');
                 optionBtn.textContent = optionText;
-                optionBtn.className = 'question-option-btn';
+                optionBtn.className = 'btn btn-secondary question-option-btn';
                 optionBtn.addEventListener('click', () => {
                     optionsContainer.querySelectorAll('button').forEach(btn => btn.disabled = true);
                     this.handleQuestionResponse(questionText, optionText);
@@ -1606,7 +1606,7 @@ ${result.message}
 
         const checkpointMsgContent = `
             <div class="checkpoint-controls">
-                <button class="restore-checkpoint-btn-inline" data-checkpoint-id="${checkpointId}">
+                <button class="btn btn-warning btn-sm restore-checkpoint-btn-inline" data-checkpoint-id="${checkpointId}">
                     <i class="fas fa-undo"></i> この時点に戻す
                 </button>
             </div>

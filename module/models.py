@@ -11,6 +11,12 @@ class User(Base):
     files = relationship("UploadedFile", back_populates="owner")
     slides = relationship("Slide", back_populates="owner")
 
+    def set_hashed_password(self, password_hash: str):
+        self.hashed_password = password_hash
+
+    def set_username(self, new_username: str):
+        self.username = new_username
+
 class UploadedFile(Base):
     __tablename__ = "uploaded_files"
     id = Column(Integer, primary_key=True, index=True)

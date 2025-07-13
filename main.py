@@ -18,7 +18,8 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from werkzeug.utils import secure_filename
-import google.generativeai as genai
+from google.generativeai.client import configure
+from google.generativeai.generative_models import GenerativeModel
 from PIL import Image
 
 import module.auth as auth
@@ -44,6 +45,13 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class UserUpdatePassword(BaseModel):
+    current_password: str
+    new_password: str
+
+class UserUpdateUsername(BaseModel):
+    new_username: str
 
 class FileResponse(BaseModel):
     id: int
@@ -78,13 +86,13 @@ async def read_index(request: Request):
     return templates.TemplateResponse("main.html", {"request": request, "slides": []})
 
 @app.get("/slide/", response_class=HTMLResponse)
-async def read_index(request: Request):
+async def read_slide_index(request: Request):
     return templates.TemplateResponse("slide.html", {"request": request})
 
 # --- User Account Endpoints ---
 @app.post("/auth/register", response_model=UserResponse)
 async def register_user(user: UserCreate, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.username == user.username).first()
+    db_user = db.query(User).filter_by(username=user.username).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
     hashed_password = auth.get_password_hash(user.password)
@@ -96,8 +104,8 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
 
 @app.post("/auth/login", response_model=auth.Token)
 async def login_user(form_data: UserCreate, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == form_data.username).first()
-    if not user or not auth.verify_password(form_data.password, user.hashed_password):
+    user = db.query(User).filter_by(username=form_data.username).first()
+    if not user or not auth.verify_password(form_data.password, str(user.hashed_password)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -120,7 +128,39 @@ async def read_users_me(current_user: Annotated[User, Depends(auth.get_current_u
 @app.get("/users/me/slides", response_model=list[SlideResponse])
 async def get_my_slides(*, db: Session = Depends(get_db), current_user: Annotated[User, Depends(auth.get_current_user)]) -> List[SlideResponse]:
     slides = db.query(Slide).filter(Slide.owner_id == current_user.id).all()
-    return slides
+    return [SlideResponse.model_validate(slide) for slide in slides]
+
+@app.put("/users/me/password", status_code=status.HTTP_200_OK)
+async def update_password(
+    user_update: UserUpdatePassword,
+    current_user: Annotated[User, Depends(auth.get_current_user)],
+    db: Session = Depends(get_db)
+):
+    if not auth.verify_password(user_update.current_password, str(current_user.hashed_password)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect current password")
+    
+    current_user.set_hashed_password(auth.get_password_hash(user_update.new_password))
+    # SQLAlchemyのセッションを通じて更新をコミット
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    return {"message": "Password updated successfully"}
+
+@app.put("/users/me/username", status_code=status.HTTP_200_OK)
+async def update_username(
+    user_update: UserUpdateUsername,
+    current_user: Annotated[User, Depends(auth.get_current_user)],
+    db: Session = Depends(get_db)
+):
+    if db.query(User).filter_by(username=user_update.new_username).first():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken")
+    
+    current_user.set_username(user_update.new_username)
+    # SQLAlchemyのセッションを通じて更新をコミット
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    return {"message": "Username updated successfully"}
 
 
 # --- File Upload Endpoints ---
@@ -142,7 +182,7 @@ async def save_upload_file(upload_file: UploadFile, destination_folder: str, db_
     if not max_size:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid file type: {file_type}")
     
-    if upload_file.size > max_size:
+    if upload_file.size is None or upload_file.size > max_size:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"File too large. Max size for {file_type} is {max_size // (1024*1024)}MB."
@@ -156,7 +196,7 @@ async def save_upload_file(upload_file: UploadFile, destination_folder: str, db_
     elif file_type == "video" and content_type not in ALLOWED_VIDEO_TYPES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid video type. Allowed: {ALLOWED_VIDEO_TYPES}")
 
-    original_filename = secure_filename(upload_file.filename)
+    original_filename = secure_filename(upload_file.filename or "")
     file_extension = os.path.splitext(original_filename)[1]
     unique_filename = f"{uuid.uuid4()}{file_extension}"
     file_location = os.path.join(destination_folder, unique_filename)
@@ -168,13 +208,11 @@ async def save_upload_file(upload_file: UploadFile, destination_folder: str, db_
         logger.error(f"Attempted to save file outside uploads dir: {abs_path}")
         raise HTTPException(status_code=400, detail="Invalid file path.")
 
-    db_file_entry.filename = unique_filename
 
     try:
         with open(file_location, "wb+") as file_object:
             await run_in_threadpool(shutil.copyfileobj, upload_file.file, file_object)
 
-        db_file_entry.file_path = file_location
         db.add(db_file_entry)
         db.commit()
         db.refresh(db_file_entry)
@@ -218,7 +256,8 @@ async def upload_file_unified(
     os.makedirs(destination_folder, exist_ok=True)
 
     db_file = UploadedFile(
-        filename=file.filename,
+        filename=file.filename, # ここは元のファイル名
+        file_path="", # 仮の値。save_upload_fileで設定される
         file_type=file_type,
         owner_id=current_user.id
     )
@@ -232,13 +271,13 @@ async def read_file(file_id: int, *, db: Session = Depends(get_db), current_user
         raise HTTPException(status_code=404, detail="File not found or not authorized")
     # パス検証: 許可ディレクトリ配下のみ
     uploads_root = os.path.abspath(UPLOAD_DIR)
-    abs_path = os.path.abspath(db_file.file_path)
+    abs_path = os.path.abspath(str(db_file.file_path))
     if not abs_path.startswith(uploads_root):
         logger.error(f"Attempted to access file outside uploads dir: {abs_path}")
         raise HTTPException(status_code=400, detail="Invalid file path.")
-    if not os.path.exists(db_file.file_path):
+    if not os.path.exists(str(db_file.file_path)):
         raise HTTPException(status_code=404, detail="File not found on server")
-    return FastAPIFileResponse(path=db_file.file_path, filename=db_file.filename)
+    return FastAPIFileResponse(path=str(db_file.file_path), filename=str(db_file.filename))
 
 @app.delete("/files/{file_id}", response_model=FileResponse)
 async def delete_file_endpoint(file_id: int, *, db: Session = Depends(get_db), current_user: Annotated[User, Depends(auth.get_current_user)]):
@@ -251,7 +290,7 @@ async def delete_file_endpoint(file_id: int, *, db: Session = Depends(get_db), c
 
     # パス検証: 許可ディレクトリ配下のみ削除
     uploads_root = os.path.abspath(UPLOAD_DIR)
-    abs_path = os.path.abspath(file_path_to_delete)
+    abs_path = os.path.abspath(str(file_path_to_delete))
     if not abs_path.startswith(uploads_root):
         logger.error(f"Attempted to delete file outside uploads dir: {abs_path}")
         raise HTTPException(status_code=400, detail="Invalid file path.")
@@ -259,8 +298,8 @@ async def delete_file_endpoint(file_id: int, *, db: Session = Depends(get_db), c
     try:
         db.delete(db_file)
         db.commit()
-        if os.path.exists(file_path_to_delete):
-            await run_in_threadpool(os.remove, file_path_to_delete)
+        if os.path.exists(str(file_path_to_delete)):
+            await run_in_threadpool(os.remove, str(file_path_to_delete))
         return deleted_file_response
     except Exception as e:
         db.rollback()
@@ -297,8 +336,8 @@ async def delete_slide_endpoint(slide_id: int, *, db: Session = Depends(get_db),
 # --- AI (Gemini) Endpoint ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel('gemini-pro')
+    configure(api_key=GEMINI_API_KEY)
+    gemini_model = GenerativeModel('gemini-pro')
 else:
     logger.warning("GEMINI_API_KEY not found. AI endpoint is disabled.")
     gemini_model = None
@@ -324,15 +363,17 @@ async def ai_ask(
                     img_path = tmp.name
                 img_obj = Image.open(img_path)
                 # Geminiに画像とテキストを渡す
-                for chunk in gemini_model.generate_content_stream([prompt, img_obj]):
-                    if hasattr(chunk, "text") and chunk.text:
-                        yield chunk.text
-                    await asyncio.sleep(0)
+                if gemini_model:
+                    for chunk in getattr(gemini_model, 'generate_content_stream')([prompt, img_obj]):
+                        if hasattr(chunk, "text") and chunk.text:
+                            yield chunk.text
+                        await asyncio.sleep(0)
             else:
-                for chunk in gemini_model.generate_content_stream(prompt):
-                    if hasattr(chunk, "text") and chunk.text:
-                        yield chunk.text
-                    await asyncio.sleep(0)
+                if gemini_model:
+                    for chunk in getattr(gemini_model, 'generate_content_stream')(prompt):
+                        if hasattr(chunk, "text") and chunk.text:
+                            yield chunk.text
+                        await asyncio.sleep(0)
 
         return StreamingResponse(gemini_stream(), media_type="text/plain")
     except Exception as e:

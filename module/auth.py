@@ -55,14 +55,14 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: Se
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
+        username: Optional[str] = payload.get("sub")
         if username is None:
             raise credentials_exception
         token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
 
-    user = await get_user(db, username=token_data.username)
+    user = await get_user(db, username=token_data.username) if token_data.username else None
     if user is None:
         raise credentials_exception
     return user
@@ -74,7 +74,7 @@ async def _decode_token_and_get_user(token: str, db: Session) -> Optional[User]:
     """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
+        username: Optional[str] = payload.get("sub")
         if username is None:
             return None
         return await get_user(db, username=username)

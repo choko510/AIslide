@@ -1,4 +1,19 @@
-/* bodyスタイルはslide.cssで定義されているため、ここではapp-container以降のスタイルのみを記述します */
+/**
+ * @file imgedit.css
+ * @brief 画像編集モーダル専用のスタイルシート。
+ *
+ * このファイルは、背景削除、フィルター、切り抜き、描画機能など、
+ * 高機能画像編集モーダルのレイアウトとコンポーネントのスタイルを定義します。
+ * slide.cssで定義されたCSS変数（--primary-colorなど）に依存しています。
+ * クラス名は、他のスタイルとの衝突を避けるため`imgedit-`プレフィックスで統一されています。
+ *
+ * @version 1.0.0
+ * @date 2024-07-28
+ */
+
+/* ==========================================================================
+   1. メインレイアウト
+   ========================================================================== */
 .imgedit-app-container {
     /* 名前をapp-containerからimgedit-app-containerに変更 */
     width: 100%;
@@ -110,7 +125,7 @@
 }
 
 .imgedit-file-label:hover {
-    background-color: #0056b3;
+    background-color: var(--primary-color-hover);
 }
 
 input[type="file"] {
@@ -118,8 +133,10 @@ input[type="file"] {
 }
 
 .imgedit-control-group {
-    /* 名前をcontrol-groupからimgedit-control-groupに変更 */
+    /* .panelを部分的に継承するが、paddingやbox-shadowは不要なため独自スタイルを維持 */
     margin-bottom: 25px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 20px;
 }
 
 .imgedit-control-group h2 {
@@ -190,50 +207,34 @@ input[type="file"] {
     gap: 10px;
 }
 
-button.imgedit-primary-btn,
-/* 名前をprimary-btnからimgedit-primary-btnに変更 */
-button.imgedit-secondary-btn,
-/* 名前をsecondary-btnからimgedit-secondary-btnに変更 */
-button.imgedit-special-btn {
-    /* 名前をspecial-btnからimgedit-special-btnに変更 */
+/* .btn, .btn-primary, .btn-secondary, .btn-danger を継承 */
+.imgedit-action-group .btn {
     width: 100%;
-    padding: 12px;
-    border-radius: 6px;
-    border: none;
+}
+
+button.imgedit-special-btn {
+    background-color: var(--special-color);
     color: white;
+}
+button.imgedit-special-btn:hover {
+    opacity: 0.85;
+}
+
+/* imgedit-button-group内のボタンのスタイルをslide.cssの.btnに寄せる */
+.imgedit-button-group button {
+    padding: 10px;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
     cursor: pointer;
-    font-weight: 500;
-    transition: opacity 0.3s, background-color 0.3s;
+    transition: var(--transition);
     display: flex;
-    align-items: center;
     justify-content: center;
+    align-items: center;
     gap: 8px;
 }
 
-button.imgedit-primary-btn {
-    background-color: var(--primary-color); /* ダークモード対応 */
-}
-
-button.imgedit-secondary-btn {
-    background-color: var(--bg-light); /* ダークモード対応 */
-    color: var(--text-primary); /* ダークモード対応 */
-}
-
-button.imgedit-danger-btn {
-    /* 名前をdanger-btnからimgedit-danger-btnに変更 */
-    background-color: var(--danger-color);
-}
-
-button.imgedit-special-btn {
-    background-color: #9c27b0; /* この色はそのまま */
-}
-
-button.imgedit-primary-btn:hover,
-button.imgedit-secondary-btn:hover,
-button.imgedit-special-btn:hover,
-button.imgedit-danger-btn:hover {
-    opacity: 0.85;
-}
+/* .btn:hover を継承するため、このルールは不要 */
 
 button:disabled {
     cursor: not-allowed;
@@ -524,11 +525,9 @@ button:disabled {
 }
 
 #imgedit-paint-tools-panel {
-    /* IDをpaint-tools-panelからimgedit-paint-tools-panelに変更 */
-    padding: 15px;
-    background-color: var(--bg-light); /* ダークモード対応 */
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
+    /* slide.cssの .panel を継承 */
+    /* 継承元とほぼ同じだが、少し明るい背景色とマージンを独自に設定 */
+    background-color: var(--bg-light);
     margin-top: 15px;
 }
 

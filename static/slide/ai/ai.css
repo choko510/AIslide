@@ -1,16 +1,22 @@
-:root {
-    --success-color: #28a745; /* AIメッセージの背景色から */
-    --warning-color: #ffc107; /* チェックポイントメッセージの背景色から */
-}
+/**
+ * @file ai.css
+ * @brief AIアシスタント機能専用のスタイルシート。
+ *
+ * このファイルは、AIチャットパネル、メッセージ、各種ボタン、
+ * AIモードセレクターなど、AI関連機能のスタイルを定義します。
+ * slide.cssで定義されたCSS変数や共通スタイル（.btn, .panelなど）に依存しています。
+ *
+ * @version 1.0.0
+ * @date 2024-07-28
+ */
 
-/* --- チャットUIスタイル --- */
+/* ==========================================================================
+   1. チャットUIスタイル
+   ========================================================================== */
 .chat-message {
-    padding: 12px 16px;
+    /* slide.cssの .panel を継承 */
+    padding: 12px 16px; /* パディングは独自に設定 */
     margin-bottom: 12px;
-    border-radius: var(--border-radius);
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-white);
-    box-shadow: var(--shadow-sm);
     position: relative;
     overflow: hidden;
 }
@@ -63,55 +69,35 @@
 
 /* AIメッセージ */
 .ai-msg::before {
-    background-color: #28a745;
+    background-color: var(--success-color);
 }
 
 .ai-msg .msg-header i {
-    color: #28a745;
+    color: var(--success-color);
 }
 
 /* システムメッセージ */
 .system-msg::before {
-    background-color: #6c757d;
+    background-color: var(--text-secondary);
 }
 
 .system-msg .msg-header i {
-    color: #6c757d;
+    color: var(--text-secondary);
 }
 
 /* チェックポイントメッセージ */
 .checkpoint-msg::before {
-    background-color: #ffc107;
+    background-color: var(--warning-color);
 }
 .checkpoint-msg .msg-header i {
-    color: #ffc107;
+    color: var(--warning-color);
 }
 .checkpoint-msg.disabled {
     opacity: 0.6;
     background-color: var(--bg-light);
 }
 .restore-checkpoint-btn-inline {
-    background-color: #ffc107;
-    color: #212529;
-    border: 1px solid #ffc107;
-    padding: 6px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: var(--transition);
-    font-weight: 600;
-}
-.restore-checkpoint-btn-inline:hover:not(:disabled) {
-    background-color: #e0a800;
-    border-color: #d39e00;
-}
-.restore-checkpoint-btn-inline:disabled {
-    background-color: var(--text-secondary);
-    border-color: var(--text-secondary);
-    color: var(--bg-white);
-    cursor: not-allowed;
-}
-.restore-checkpoint-btn-inline i {
-    margin-right: 6px;
+    /* slide.cssの .btn, .btn-warning, .btn-sm を継承 */
 }
 
 /* エラーメッセージ */
@@ -146,23 +132,8 @@
 
 /* 実行ボタン */
 .execute-btn {
-    background-color: #28a745;
-    color: white;
-    border: none;
-    padding: 6px 12px;
+    /* slide.cssの .btn, .btn-success, .btn-sm を継承 */
     margin-top: 10px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.execute-btn:hover {
-    background-color: #218838;
-}
-
-.execute-btn:disabled {
-    background-color: #6c757d;
-    cursor: not-allowed;
 }
 
 /* 実行結果 */
@@ -196,14 +167,15 @@
 }
 
 
-/* --- AI Question UI Styles --- */
-
+/* ==========================================================================
+   2. AIへの質問UIスタイル
+   ========================================================================== */
 .question-container-wrapper {
+    /* .panelを継承 */
     padding: 15px;
-    background-color: #f7f8fa;
-    border-radius: 8px;
+    background-color: var(--bg-light);
+    border-radius: var(--border-radius);
     margin-top: 12px;
-    border: 1px solid #e0e0e0;
 }
 
 .question-container {
@@ -215,15 +187,15 @@
 .question-container p {
     margin: 0 0 5px 0;
     font-weight: 500;
-    color: #2c3e50;
+    color: var(--text-primary);
     line-height: 1.5;
 }
 
 .question-input {
     width: 100%;
     padding: 12px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
     font-size: 1rem;
     box-sizing: border-box;
     transition: border-color 0.2s, box-shadow 0.2s;
@@ -231,32 +203,14 @@
 
 .question-input:focus {
     outline: none;
-    border-color: #4a6cf7;
-    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb), 0.15);
 }
 
 .question-submit-btn {
+    /* slide.cssの .btn, .btn-primary を継承 */
     align-self: flex-end;
-    font-size: 0.9rem;
-    font-weight: 600;
-    padding: 10px 20px;
-    background-color: #4a6cf7;
-    color: #fff;
-    border-radius: 6px;
-    border: none;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.question-submit-btn:hover {
-    background-color: #3a5ce6;
-    transform: translateY(-1px);
-}
-
-.question-submit-btn:disabled {
-    background-color: #bdc3c7;
-    cursor: not-allowed;
-    transform: none;
+    /* --primary-color を使うため、独自の色指定は削除 */
 }
 
 .question-options {
@@ -267,36 +221,33 @@
 }
 
 .question-option-btn {
-    font-size: 0.9rem;
-    padding: 10px 18px;
-    background-color: #fff;
-    color: #34495e;
-    border: 1px solid #bdc3c7;
-    border-radius: 20px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-weight: 500;
+    /* slide.cssの .btn, .btn-secondary を継承 */
+    border-radius: 20px; /* 独自スタイル */
+    border-color: var(--border-color);
+    color: var(--text-primary);
 }
 
-.question-option-btn:hover {
-    background-color: #ecf0f1;
-    border-color: #4a6cf7;
-    color: #4a6cf7;
+.question-option-btn:hover:not(:disabled) {
+    background-color: var(--bg-light);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
     transform: translateY(-2px);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    box-shadow: var(--shadow-sm);
 }
 
+.question-option-btn.active,
 .question-option-btn:disabled {
-    background-color: #4a6cf7;
-    border-color: #4a6cf7;
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
     color: #fff;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
-    opacity: 0.8;
 }
 
-/* --- AIモードセレクター --- */
+/* ==========================================================================
+   3. AIモードセレクター
+   ========================================================================== */
 #ai-mode-selector {
     display: flex;
     justify-content: space-around;
@@ -340,7 +291,9 @@
     font-size: 16px;
 }
 
-/* --- AI Complete Message --- */
+/* ==========================================================================
+   4. AI完了メッセージ
+   ========================================================================== */
 .complete-msg-container {
     background-color: #e9f7ef;
     border-left: 4px solid #28a745;
@@ -422,7 +375,9 @@
     margin-left: auto; /* トグルスイッチを右端に寄せる */
 }
 
-/* slide.cssから移動したAI関連スタイル */
+/* ==========================================================================
+   5. AIコントロールパネル（サイドバー内）
+   ========================================================================== */
 #ai-controls {
     margin-bottom: 10px;
     display: flex;

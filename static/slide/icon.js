@@ -25,12 +25,12 @@ class IconManager {
             });
             // Fuse.js を使ったアイコンのあいまい検索インスタンス
             this.faIconFuse = new Fuse(this.app.config.fontAwesomeIcons, {
-                keys: ['name', 'category', 'class', 'alias'],
+                keys: ['name', 'category', 'class', 'alias', 'keywords'],
                 threshold: 0.4,
                 ignoreLocation: true
             });
             this.miIconFuse = new Fuse(this.app.config.materialIcons, {
-                keys: ['name', 'category', 'class', 'alias'],
+                keys: ['name', 'category', 'class', 'alias', 'keywords'],
                 threshold: 0.4,
                 ignoreLocation: true
             });
@@ -198,16 +198,9 @@ class IconManager {
             filteredIcons = fuseInstance.search(searchTerm).map(r => r.item);
         }
 
-        const lowerSearchTerm = searchTerm.toLowerCase();
-
+        // カテゴリフィルタリングを適用
         filteredIcons = filteredIcons.filter(icon => {
-            const inCategory = category === 'すべて' || icon.category === category;
-            const matchesSearch = !searchTerm ||
-                icon.name.toLowerCase().includes(lowerSearchTerm) ||
-                icon.category.toLowerCase().includes(lowerSearchTerm) ||
-                (icon.class && icon.class.toLowerCase().includes(lowerSearchTerm)) ||
-                (icon.alias && icon.alias.toLowerCase().includes(lowerSearchTerm));
-            return inCategory && matchesSearch;
+            return category === 'すべて' || icon.category === category;
         });
 
         filteredIcons.forEach(icon => {
@@ -283,10 +276,8 @@ class IconManager {
             }
         }
 
-        slide.elements.push(newEl);
-        this.app.updateState('selectedElementIds', [newEl.id]);
-        this.app.saveState();
-        this.app.render();
+        this.app.addIconElement(iconType, iconClass, style);
+        // App.addIconElement 内で selectedElementIds の更新、saveState、render が行われる
     }
     
     updateIconStyle(element, newStylePrefix) {

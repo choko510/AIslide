@@ -48,6 +48,7 @@
     box-shadow: var(--shadow-sm);
     z-index: 100;
     flex-shrink: 0;
+    flex-wrap: wrap;
 }
 
 /* ==========================================================================
@@ -472,101 +473,73 @@
 /* ==========================================================================
    7. Mobile Specific Styles
    ========================================================================== */
+#mobile-nav-bar {
+    display: none;
+}
+
 @media (max-width: 768px) {
-    body {
-        /* interactive-widget=resizes-content をサポートするビューポート設定 */
-        padding-bottom: env(safe-area-inset-bottom);
-        /* iPhone X/XR/XS Max/11/12/13/14/15 の下部のセーフエリアを考慮 */
+
+    /* --- Hide Desktop Elements --- */
+    #toolbar,
+    #right-sidebar,
+    #bottom-pane,
+    #sidebar-tabs {
+        display: none !important;
     }
 
-    #app-container {
-        flex-direction: column;
-        height: 100dvh;
-        /* モバイルでの高さ調整 */
-        padding-bottom: 70px;
-        /* mobile-nav-barの高さ分確保 */
-    }
-
-    /* #toolbar はモバイルでは表示しないが、デスクトップのスタイルで制御 */
-    /* モバイルでの非表示は、デフォルトの #toolbar スタイルを上書きしない */
-
+    /*
+      モバイルでは #left-sidebar 自体は不要だが、
+      その子要素である #sidebar-content (モバイル用のメニューパネル) を
+      `position: fixed` で表示する必要がある。
+      親である #left-sidebar に `display: none` を設定すると
+      #sidebar-content も消えてしまうため、
+      ここでは幅とボーダーを無くすことで、レイアウトに影響を与えずに
+      DOMツリーに残すようにする。
+    */
     #left-sidebar {
         width: 0;
         border: none;
     }
 
-    #right-sidebar {
-        display: none !important;
-    }
-
-    /* モバイルでのサイドバーコンテンツのオーバーレイ表示 */
-    #sidebar-content {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        height: calc(100% - 70px);
-        /* ナビゲーションバーの高さ分を引く */
-        background-color: var(--bg-white);
-        box-shadow: var(--shadow-md);
-        transform: translateY(100%);
-        /* 画面外に隠す */
-        transition: transform 0.3s ease-out;
-        z-index: 999;
-        /* モバイルナビゲーションバーより上 */
-        display: block !important;
-        /* デスクトップのdisplay:noneを上書き */
+    /* --- Adjust Main Layout --- */
+    body {
         padding-bottom: env(safe-area-inset-bottom);
     }
 
-    #sidebar-content.active {
-        transform: translateY(0%);
-        /* 表示 */
+    #app-container {
+        height: 100dvh;
+        padding-bottom: 70px;
+        /* Space for mobile-nav-bar */
     }
 
-    #sidebar-tabs {
-        display: none;
-        /* モバイルではサイドバータブ自体は非表示 */
-    }
-
-    #app-body {
+    #app-body,
+    #center-content {
         flex-direction: column;
-        /* 要素を縦に並べる */
         flex-grow: 1;
         overflow: hidden;
     }
 
     #center-content {
-        flex-direction: column;
-        /* メインコンテンツも縦に並べる */
-        flex-grow: 1;
         overflow-y: auto;
-        /* スクロール可能にする */
         padding: 0;
-        /* パディングをリセット */
     }
 
+    /* --- Style Main Canvas --- */
     #main-canvas-area {
         flex-grow: 1;
         display: flex;
         justify-content: center;
         align-items: center;
         padding: 16px 0;
-        /* モバイルでのパディング調整 */
-        min-width: unset;
-        /* 最小幅を解除 */
-        min-height: unset;
-        /* 最小高さを解除 */
         background-color: var(--bg-light);
         width: 100%;
-        /* 幅を100%に */
         height: auto;
-        /* 高さを自動に */
+        min-width: unset;
+        min-height: unset;
     }
 
     #slide-wrapper {
         width: 95vw;
-        /* モバイルでのスライド幅調整 */
         max-width: 95vw;
         height: auto;
         aspect-ratio: 16 / 9;
@@ -574,87 +547,26 @@
 
     #slide-canvas {
         width: 100%;
-        /* スライドキャンバスの幅を100%に */
         height: 100%;
-        /* スライドキャンバスの高さを100%に */
         box-shadow: var(--shadow-md);
         border-radius: var(--border-radius);
     }
 
-    #bottom-pane {
-        height: 80px;
-        /* 高さを調整 */
-        padding: 8px;
-        border-bottom: 1px solid var(--border-color);
-        /* 下部に移動したのでborder-topからborder-bottomに */
-        border-top: none;
-        /* 元のborder-topを解除 */
-        overflow-x: auto;
-        /* 横スクロール可能に */
-        overflow-y: hidden;
-        white-space: nowrap;
-        /* スライドサムネイルを1行に */
-        -webkit-overflow-scrolling: touch;
-        /* スムーズなスクロール */
-        display: flex;
-        align-items: center;
-        background-color: var(--bg-white);
-    }
-
-    #slide-list-container {
-        height: 100%;
-        /* bottom-paneの高さに合わせる */
-    }
-
-    #slide-list {
-        display: flex;
-        flex-direction: row;
-        /* スライドを横に並べる */
-        align-items: center;
-        height: 100%;
-        gap: 8px;
-        /* サムネイル間のスペース */
-        padding: 0 8px;
-        /* 左右のパディング */
-    }
-
-    .slide-thumbnail {
-        width: 120px;
-        /* モバイルでのサムネイル幅 */
-        height: auto;
-        flex-shrink: 0;
-        margin-right: 0;
-        /* 元のマージンをリセット */
-    }
-
-    .slide-thumbnail-wrapper {
-        height: 100%;
-    }
-
-    .thumbnail-index {
-        font-size: 10px;
-        width: 18px;
-        height: 18px;
-        line-height: 18px;
-    }
-
+    /* --- Mobile Navigation Bar --- */
     #mobile-nav-bar {
         display: flex;
         justify-content: space-around;
         align-items: center;
         width: 100%;
+        height: 70px;
         padding: 8px 0;
         background-color: var(--bg-white);
         border-top: 1px solid var(--border-color);
         box-shadow: var(--shadow-sm);
         flex-shrink: 0;
-        /* 縮小させない */
         position: fixed;
-        /* 下部に固定 */
         bottom: 0;
-        z-index: 100;
-        height: 70px;
-        /* ナビゲーションバーの高さ */
+        z-index: 1000;
     }
 
     .mobile-nav-item {
@@ -663,7 +575,6 @@
         align-items: center;
         justify-content: center;
         flex: 1;
-        /* 等間隔に配置 */
         padding: 4px;
         border: none;
         background: none;
@@ -678,12 +589,30 @@
         margin-bottom: 4px;
     }
 
-    .mobile-nav-item.active {
+    .mobile-nav-item.active,
+    .mobile-nav-item:hover {
         color: var(--primary-color);
     }
 
-    .mobile-nav-item:hover {
-        color: var(--primary-color);
+    /* --- Mobile Sidebar (Overlay) --- */
+    #sidebar-content {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: calc(100% - 70px);
+        background-color: var(--bg-white);
+        box-shadow: var(--shadow-md);
+        transform: translateY(100%);
+        transition: transform 0.3s ease-out;
+        z-index: 999;
+        display: block !important;
+        padding-bottom: env(safe-area-inset-bottom);
+        overflow-y: auto;
+    }
+
+    #sidebar-content.active {
+        transform: translateY(0%);
     }
 }
 

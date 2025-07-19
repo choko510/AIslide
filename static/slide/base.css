@@ -31,6 +31,7 @@
     --border-color: #dee2e6;
     --text-primary: #212529;
     --text-secondary: #6c757d;
+    --guide-color: #007bff; /* ガイドラインの色 */
 
     /* UI Elements */
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -49,6 +50,7 @@
     --border-color: #424242;
     --text-primary: #ffffff;
     --text-secondary: #cccccc;
+    --guide-color: #4dabf7; /* ダークモードでのガイドラインの色 */
 
     /* UI Elements */
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);

@@ -215,12 +215,12 @@ function applyFiltersToImage() { imageToEdit.style.filter = getFilterString(); }
 function toggleCropper() { if (State.cropper) stopCropper(); else startCropper(); }
 
 async function startCropper() {
-  if (State.cropper || State.isPaintSessionActive) return;
-  if (!window.Cropper) await import('https://cdn.jsdelivr.net/npm/cropperjs@2.0.0/dist/cropper.min.js');
-  State.cropper = new window.Cropper(imageToEdit, { viewMode: 1, autoCropArea: 0.9, background: false, responsive: true });
-  cropBtn.textContent = 'トリミング適用';
-  cropBtn.classList.replace(CONSTANTS.CSS_CLASSES.SECONDARY_BTN, CONSTANTS.CSS_CLASSES.PRIMARY_BTN);
-  setControlsDisabled(true, ['imgedit-crop-btn', 'imgedit-rotate-left', 'imgedit-rotate-right', 'imgedit-flip-h', 'imgedit-flip-v', 'imgedit-reset-btn', 'imgedit-download-btn']);
+    if (State.cropper || State.isPaintSessionActive) return;
+    if (!window.Cropper) await import('https://cdn.jsdelivr.net/npm/cropperjs@2.0.0/dist/cropper.min.js');
+    State.cropper = new window.Cropper(imageToEdit, { viewMode: 1, autoCropArea: 0.9, background: false, responsive: true });
+    cropBtn.textContent = 'トリミング適用';
+    cropBtn.classList.replace(CONSTANTS.CSS_CLASSES.SECONDARY_BTN, CONSTANTS.CSS_CLASSES.PRIMARY_BTN);
+    setControlsDisabled(true, ['imgedit-crop-btn', 'imgedit-rotate-left', 'imgedit-rotate-right', 'imgedit-flip-h', 'imgedit-flip-v', 'imgedit-reset-btn', 'imgedit-download-btn']);
 }
 
 function stopCropper() {

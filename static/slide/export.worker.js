@@ -69,7 +69,7 @@ self.onmessage = async (event) => {
                         const pptxShape = shapeTypeMap[element.content.shapeType];
                         
                         if (pptxShape) {
-                             Object.assign(options, {
+                            Object.assign(options, {
                                 fill: { color: cleanColor(element.style.fill), transparency: 20 },
                                 line: { color: cleanColor(element.style.stroke), width: element.style.strokeWidth || 0 },
                             });

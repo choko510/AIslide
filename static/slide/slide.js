@@ -198,8 +198,8 @@ import { ColorPicker } from './ColorPicker.js';
                     guidesToShow.forEach(gStr => {
                         const [type, orientation, pos1, pos2, gap] = gStr.split('-');
                         if (type === 'dist') {
-                             this.addGuide(orientation === 'v' ? 'vertical' : 'horizontal', parseFloat(pos1), {label: `${Math.round(gap)}px`});
-                             this.addGuide(orientation === 'v' ? 'vertical' : 'horizontal', parseFloat(pos2), {label: `${Math.round(gap)}px`});
+                            this.addGuide(orientation === 'v' ? 'vertical' : 'horizontal', parseFloat(pos1), {label: `${Math.round(gap)}px`});
+                            this.addGuide(orientation === 'v' ? 'vertical' : 'horizontal', parseFloat(pos2), {label: `${Math.round(gap)}px`});
                         }
                     });
             
@@ -259,7 +259,7 @@ import { ColorPicker } from './ColorPicker.js';
                         currentGap = staticBound.top - draggingBounds.bottom;
                         diff = targetGap - currentGap;
                         if (Math.abs(diff) < this.SNAP_THRESHOLD && Math.abs(diff) < bestSnapY.dist) {
-                             bestSnapY = { hasSnap: true, dist: Math.abs(diff), offset: currentOffset.y - diff, guides: [{pos1: draggingBounds.bottom - diff, pos2: staticBound.top, gap: targetGap}] };
+                            bestSnapY = { hasSnap: true, dist: Math.abs(diff), offset: currentOffset.y - diff, guides: [{pos1: draggingBounds.bottom - diff, pos2: staticBound.top, gap: targetGap}] };
                         }
                     }
                 }
@@ -830,10 +830,11 @@ import { ColorPicker } from './ColorPicker.js';
                 });
                 
                 video.src = content.url || '';
-                video.autoplay = !!content.autoplay;
+                video.autoplay = false; // 事前読み込みのため自動再生は無効化
                 video.loop = !!content.loop;
                 video.controls = content.controls !== false;
                 video.playsInline = true;
+                video.preload = 'auto'; // 事前読み込みを有効化
                 
                 // 動画読み込みエラーハンドリング
                 video.onerror = () => {
@@ -967,32 +968,6 @@ import { ColorPicker } from './ColorPicker.js';
                         shape.setAttribute('stroke', style.stroke || '#000000');
                         shape.setAttribute('stroke-width', style.strokeWidth || 2);
                         break;
-                    case 'arrow':
-                        svg.setAttribute('viewBox', '0 0 110 100'); // ViewBoxを広げて矢じりが見えるように
-                        const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-                        const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-                        marker.setAttribute('id', `arrowhead-${elData.id}`);
-                        marker.setAttribute('markerWidth', '10');
-                        marker.setAttribute('markerHeight', '7');
-                        marker.setAttribute('refX', '0');
-                        marker.setAttribute('refY', '3.5');
-                        marker.setAttribute('orient', 'auto');
-                        const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-                        polygon.setAttribute('points', '0 0, 10 3.5, 0 7');
-                        polygon.setAttribute('fill', style.stroke || '#000000');
-                        marker.appendChild(polygon);
-                        defs.appendChild(marker);
-                        svg.appendChild(defs);
-                        
-                        shape = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                        shape.setAttribute('x1', '0');
-                        shape.setAttribute('y1', '50');
-                        shape.setAttribute('x2', '90'); // 矢じりの分だけ短く
-                        shape.setAttribute('y2', '50');
-                        shape.setAttribute('stroke', style.stroke || '#000000');
-                        shape.setAttribute('stroke-width', style.strokeWidth || 2);
-                        shape.setAttribute('marker-end', `url(#arrowhead-${elData.id})`);
-                        break;
                     case 'star':
                         shape = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
                         shape.setAttribute('points', '50,5 61,40 98,40 68,62 79,96 50,75 21,96 32,62 2,40 39,40');
@@ -1116,7 +1091,8 @@ import { ColorPicker } from './ColorPicker.js';
                     border: styles.border || 'none',
                     opacity: styles.opacity ?? 1,
                     borderRadius: styles.borderRadius ? `${styles.borderRadius}px` : '0px',
-                    boxShadow: styles.boxShadow || 'none'
+                    boxShadow: styles.boxShadow || 'none',
+                    textAlign: styles.textAlign || 'left'
                 });
 
                 const img = element.querySelector('img');
@@ -1188,6 +1164,7 @@ import { ColorPicker } from './ColorPicker.js';
                     this.presentationManager = new PresentationManager(this); // PresentationManagerの初期化
                     this.iconManager = new IconManager(this); // IconManagerの初期化
                     this.inspectorManager = new InspectorManager(this); // InspectorManagerの初期化
+                    this.inspectorManager.render(); // 初期ロード時にインスペクターの表示状態を更新
                     await this.iconManager.loadIconData();
                     await this.loadCssProperties();
 
@@ -1232,11 +1209,6 @@ import { ColorPicker } from './ColorPicker.js';
                         
                         this.render();
                     }
-                });
-
-                // キャンバス拡大率変更時の処理
-                this.stateManager.subscribe('canvas.scale', (newScale) => {
-                    this.updateZoomDisplay();
                 });
 
                 // プレゼンテーション変更時の自動保存
@@ -1438,7 +1410,7 @@ import { ColorPicker } from './ColorPicker.js';
                 try {
                     const firstSlideId = this.generateId('slide');
                     const newPresentation = {
-                         settings: {
+                        settings: {
                             width: CANVAS_WIDTH,
                             height: CANVAS_HEIGHT,
                             globalCss: '',
@@ -1576,8 +1548,20 @@ import { ColorPicker } from './ColorPicker.js';
                 const selectedElementCount = this.state.selectedElementIds.length;
                 const selectedGroupCount = this.state.selectedGroupIds.length;
 
-                const alignButtons = [this.elements.alignLeftBtn, this.elements.alignCenterHBtn, this.elements.alignRightBtn, this.elements.alignTopBtn, this.elements.alignCenterVBtn, this.elements.alignBottomBtn];
-                alignButtons.forEach(btn => btn.disabled = selectedElementCount < 2);
+                const singleSelectedElement = selectedElementCount === 1 ? this.getSelectedElement() : null;
+                const isSingleText = singleSelectedElement && singleSelectedElement.type === 'text';
+
+                // 水平方向の整列ボタン
+                const hAlignButtons = [this.elements.alignLeftBtn, this.elements.alignCenterHBtn, this.elements.alignRightBtn];
+                hAlignButtons.forEach(btn => {
+                    btn.disabled = !(selectedElementCount >= 2 || isSingleText);
+                });
+
+                // 垂直方向の整列ボタン
+                const vAlignButtons = [this.elements.alignTopBtn, this.elements.alignCenterVBtn, this.elements.alignBottomBtn];
+                vAlignButtons.forEach(btn => {
+                    btn.disabled = selectedElementCount < 2;
+                });
                 
                 const distributeButtons = [this.elements.distributeHBtn, this.elements.distributeVBtn];
                 distributeButtons.forEach(btn => btn.disabled = selectedElementCount < 3);
@@ -2354,7 +2338,6 @@ import { ColorPicker } from './ColorPicker.js';
                             let scale = currentScale * (dist / lastTouchDist);
                             scale = Utils.clamp(scale, CONFIG.CANVAS_SCALE.min, CONFIG.CANVAS_SCALE.max);
                             this.updateState('canvas.scale', scale);
-                            this.updateZoomDisplay();
                         }
                         // 2本指パン
                         if (lastTouchCenter) {
@@ -2421,38 +2404,9 @@ import { ColorPicker } from './ColorPicker.js';
                     scale = Utils.clamp(scale, CONFIG.CANVAS_SCALE.min, CONFIG.CANVAS_SCALE.max);
                     this.updateState('canvas.scale', scale);
                     this.updateCanvasScale();
-                    this.updateZoomDisplay();
                 }, { passive: false });
                 // ズームリセットボタン
-                if (!document.getElementById('zoom-reset-btn')) {
-                    const btn = document.createElement('button');
-                    btn.id = 'zoom-reset-btn';
-                    btn.textContent = 'リセット';
-                    btn.onclick = () => {
-                        this.batchUpdateState({
-                            'canvas.scale': CONFIG.CANVAS_SCALE.default,
-                            'canvas.pan.x': 0,
-                            'canvas.pan.y': 0
-                        });
-                        this.updateCanvasScale();
-                        this.updateZoomDisplay();
-                    };
-                    this.elements.mainCanvasArea.appendChild(btn);
-                }
-                // ズーム倍率表示
-                if (!document.getElementById('zoom-display')) {
-                    const disp = document.createElement('div');
-                    disp.id = 'zoom-display';
-                    this.elements.mainCanvasArea.appendChild(disp);
-                }
-                this.updateZoomDisplay();
-            },
-            updateZoomDisplay() {
-                const disp = document.getElementById('zoom-display');
-                if (disp) {
-                    const scale = this.getState('canvas.scale') || CONFIG.CANVAS_SCALE.default;
-                    disp.textContent = `ズーム: ${(scale * 100).toFixed(0)}%`;
-                }
+            
             },
 
             handleCanvasMouseDown(e) {
@@ -2500,8 +2454,8 @@ import { ColorPicker } from './ColorPicker.js';
 
                     if (target.classList.contains('resize-handle')) {
                         this.batchUpdateState({
-                           'interaction.isResizing': true,
-                           'interaction.handle': target.dataset.handle
+                            'interaction.isResizing': true,
+                            'interaction.handle': target.dataset.handle
                         });
                     } else {
                         this.updateState('interaction.isDragging', true);
@@ -3222,7 +3176,34 @@ import { ColorPicker } from './ColorPicker.js';
             },
 
             alignElements(type) {
-                const elementsData = this.getSelectedElementsData(); if (elementsData.length < 2) return;
+                const elementsData = this.getSelectedElementsData();
+                if (elementsData.length === 0) return;
+
+                // 単一のテキスト要素が選択されている場合、テキストの配置を変更
+                if (elementsData.length === 1 && elementsData[0].type === 'text') {
+                    const elData = elementsData[0];
+                    const textAlignMap = {
+                        'left': 'left',
+                        'center-h': 'center',
+                        'right': 'right'
+                    };
+
+                    if (textAlignMap[type]) {
+                        const newAlign = textAlignMap[type];
+                        this.stateManager._saveToHistory();
+                        const activeSlideIndex = this.getActiveSlideIndex();
+                        const elementIndex = this.getElementIndex(elData.id);
+                        
+                        this.updateState(`presentation.slides.${activeSlideIndex}.elements.${elementIndex}.style.textAlign`, newAlign);
+                        this.saveState();
+                        this.render();
+                        return; // 処理を終了
+                    }
+                }
+                
+                // 複数の要素が選択されている場合、要素自体を整列
+                if (elementsData.length < 2) return;
+
                 this.stateManager._saveToHistory();
                 const activeSlideIndex = this.getActiveSlideIndex();
                 if (activeSlideIndex === -1) return;
@@ -3244,7 +3225,6 @@ import { ColorPicker } from './ColorPicker.js';
                     }
                     const currentActualScale = this.getState('canvas.actualScale') || 1;
                     if (newLeft !== undefined) {
-                        // 表示ピクセルを論理ピクセルに変換し、それを論理キャンバスサイズに対するパーセンテージに変換
                         updates[`presentation.slides.${activeSlideIndex}.elements.${this.getElementIndex(el.data.id)}.style.left`] = (newLeft / currentActualScale) / CANVAS_WIDTH * 100;
                     }
                     if (newTop !== undefined) {
@@ -3656,11 +3636,8 @@ import { ColorPicker } from './ColorPicker.js';
                 slideContainer.style.width = `${settings.width}px`;
                 slideContainer.style.height = `${settings.height}px`;
                 
-                if (settings.backgroundType === 'gradient') {
-                    slideContainer.style.background = `linear-gradient(${settings.gradientAngle}deg, ${settings.gradientStart}, ${settings.gradientEnd})`;
-                } else {
-                    slideContainer.style.backgroundColor = settings.backgroundColor || '#ffffff';
-                }
+                // App.applyPageBackground を呼び出して背景を適用
+                this.applyPageBackground(slideContainer);
     
                 slide.elements.forEach(elData => {
                     const el = this.createElementDOM(elData);
@@ -4725,8 +4702,8 @@ import { ColorPicker } from './ColorPicker.js';
             const text = textarea.value;
             const mousePos = this.getMousePositionInTextarea(e, textarea);
             if (mousePos < 0) {
-                 tooltip.style.display = 'none';
-                 return;
+                tooltip.style.display = 'none';
+                return;
             }
             
             const { word } = this.getWordAtPosition(text, mousePos);
@@ -4793,12 +4770,12 @@ import { ColorPicker } from './ColorPicker.js';
 
         getCaretCoordinates(element, position) {
             const properties = [
-              'direction', 'boxSizing', 'width', 'height', 'overflowX', 'overflowY',
-              'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderStyle',
-              'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
-              'fontStyle', 'fontVariant', 'fontWeight', 'fontStretch', 'fontSize', 'fontSizeAdjust', 'lineHeight', 'fontFamily',
-              'textAlign', 'textTransform', 'textIndent', 'textDecoration',
-              'letterSpacing', 'wordSpacing', 'tabSize', 'MozTabSize'
+                'direction', 'boxSizing', 'width', 'height', 'overflowX', 'overflowY',
+                'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderStyle',
+                'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+                'fontStyle', 'fontVariant', 'fontWeight', 'fontStretch', 'fontSize', 'fontSizeAdjust', 'lineHeight', 'fontFamily',
+                'textAlign', 'textTransform', 'textIndent', 'textDecoration',
+                'letterSpacing', 'wordSpacing', 'tabSize', 'MozTabSize'
             ];
             const isBrowser = (typeof window !== 'undefined');
             const isFirefox = (isBrowser && window.mozInnerScreenX != null);
@@ -4854,35 +4831,41 @@ import { ColorPicker } from './ColorPicker.js';
             }
         },
 
-        applyPageBackground() {
+        applyPageBackground(container = null) {
             const settings = this.getState('presentation.settings');
             const { backgroundType, backgroundColor, gradientStart, gradientEnd, gradientAngle } = settings;
             
-            // Update UI controls
-            // pageBgColorInput は ColorPicker に置き換えられたため削除
-            if (this.elements.gradientStartColor) this.elements.gradientStartColor.value = gradientStart;
-            if (this.elements.gradientEndColor) this.elements.gradientEndColor.value = gradientEnd;
-            if (this.elements.gradientAngle) this.elements.gradientAngle.value = gradientAngle;
-            if (this.elements.gradientAngleValue) this.elements.gradientAngleValue.textContent = gradientAngle;
+            // Update UI controls (only if not in presentation mode)
+            if (!container) {
+                if (this.elements.gradientStartColor) this.elements.gradientStartColor.value = gradientStart;
+                if (this.elements.gradientEndColor) this.elements.gradientEndColor.value = gradientEnd;
+                if (this.elements.gradientAngle) this.elements.gradientAngle.value = gradientAngle;
+                if (this.elements.gradientAngleValue) this.elements.gradientAngleValue.textContent = gradientAngle;
 
-            if (this.elements.backgroundTypeSelector) {
-                 this.elements.backgroundTypeSelector.querySelectorAll('button').forEach(btn => {
-                    btn.classList.toggle('active', btn.dataset.bgType === backgroundType);
-                });
-            }
-            if (this.elements.solidColorSettings) {
-                this.elements.solidColorSettings.style.display = backgroundType === 'solid' ? 'block' : 'none';
-            }
-            if (this.elements.gradientSettings) {
-                this.elements.gradientSettings.style.display = backgroundType === 'gradient' ? 'block' : 'none';
+                if (this.elements.backgroundTypeSelector) {
+                    this.elements.backgroundTypeSelector.querySelectorAll('button').forEach(btn => {
+                        btn.classList.toggle('active', btn.dataset.bgType === backgroundType);
+                    });
+                }
+                if (this.elements.solidColorSettings) {
+                    this.elements.solidColorSettings.style.display = backgroundType === 'solid' ? 'block' : 'none';
+                }
+                if (this.elements.gradientSettings) {
+                    this.elements.gradientSettings.style.display = backgroundType === 'gradient' ? 'block' : 'none';
+                }
             }
 
-            // Apply style to canvas
-            if (this.elements.slideCanvas) {
+            // Apply style to canvas or provided container
+            const targetContainer = container || this.elements.slideCanvas;
+            if (targetContainer) {
                 if (backgroundType === 'gradient') {
-                    this.elements.slideCanvas.style.background = `linear-gradient(${gradientAngle}deg, ${gradientStart}, ${gradientEnd})`;
+                    targetContainer.style.background = `linear-gradient(${gradientAngle}deg, ${gradientStart}, ${gradientEnd})`;
                 } else {
-                    this.elements.slideCanvas.style.background = backgroundColor;
+                    targetContainer.style.background = backgroundColor;
+                    // 単色モードの場合、カラーピッカーの状態を現在の色に更新する
+                    if (!container && this.pageBgColorPicker) {
+                        this.pageBgColorPicker.setColor(backgroundColor);
+                    }
                 }
             }
         }

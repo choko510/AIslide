@@ -42,7 +42,42 @@ class PresentationManager {
         let nextIdx = curIdx + dir;
         if (nextIdx >= 0 && nextIdx < slides.length) {
             this.app.setActiveSlide(slides[nextIdx].id);
+            this.preloadNextSlide(nextIdx); // 次のスライドを事前に読み込む
         }
+    }
+
+    preloadNextSlide(nextIdx) {
+        const { slides } = this.app.state.presentation;
+        const nextSlide = slides[nextIdx + 1]; // 現在のスライドの次
+        if (!nextSlide) return;
+
+        // 一時的なコンテナを作成し、そこに要素を生成
+        const tempContainer = document.createElement('div');
+        tempContainer.style.position = 'absolute';
+        tempContainer.style.left = '-9999px'; // 画面外に配置
+        document.body.appendChild(tempContainer);
+
+        nextSlide.elements.forEach(elData => {
+            // アニメーションは事前読み込み時には適用しない
+            const originalAnimation = elData.style.animation;
+            elData.style.animation = '';
+            const el = this.app.createElementDOM(elData);
+            tempContainer.appendChild(el);
+            elData.style.animation = originalAnimation; // 元に戻す
+
+            // 動画要素の場合、ロードを開始
+            if (elData.type === 'video') {
+                const videoEl = el.querySelector('video');
+                if (videoEl) {
+                    videoEl.load(); // 動画のロードを開始
+                }
+            }
+        });
+
+        // 一時的なコンテナを削除 (要素はメモリにキャッシュされる)
+        // ただし、DOM要素自体はキャッシュされないため、App.domElementCacheに依存する
+        // App.domElementCacheはrenderSlideCanvasで管理されているため、ここではDOMから削除するだけで良い
+        document.body.removeChild(tempContainer);
     }
 
     renderPresentationSlide() {
@@ -59,7 +94,8 @@ class PresentationManager {
         presentationSlideContainer.style.height = `${settings.height}px`;
         presentationSlideContainer.style.transform = `translate(-50%, -50%) scale(${scale})`;
         Object.assign(presentationSlideContainer.style, { position: 'absolute', left: '50%', top: '50%' });
-    
+        this.app.applyPageBackground(presentationSlideContainer); // 背景色を適用
+
         slide.elements.forEach(elData => {
             const el = this.app.createElementDOM(elData);
 
@@ -79,7 +115,19 @@ class PresentationManager {
                 });
             }
             presentationSlideContainer.appendChild(el);
+
+            // 動画要素の場合、再生を開始
+            if (elData.type === 'video') {
+                const videoEl = el.querySelector('video');
+                if (videoEl && elData.content.autoplay) { // autoplayがtrueの場合のみ再生
+                    videoEl.play().catch(error => {
+                        console.warn('動画の自動再生に失敗しました:', error);
+                        // ユーザー操作なしで自動再生がブロックされた場合、再生ボタンを表示するなどの代替手段を検討
+                    });
+                }
+            }
         });
     }
 }
+
 window.PresentationManager = PresentationManager;

@@ -2,8 +2,19 @@
 // カスタムカラーピッカーコンポーネント
 
 export class ColorPicker {
-    constructor(id, initialColor, onChangeCallback, options = {}) {
-        this.id = id; // ユニークなID
+    constructor(containerOrId, initialColor, onChangeCallback, options = {}) {
+        this.isInline = typeof containerOrId !== 'string';
+        
+        if (this.isInline) {
+            this.container = containerOrId;
+            // インラインモードの場合、コンテナは空にしておく
+            this.container.innerHTML = '';
+            this.id = `color-picker-${Date.now()}`;
+        } else {
+            this.container = null;
+            this.id = containerOrId;
+        }
+
         this.onChangeCallback = onChangeCallback;
         this.options = {
             showEyedropper: options.showEyedropper !== false,
@@ -38,13 +49,14 @@ export class ColorPicker {
         this.palette = this._loadPalette();
 
         // ウィンドウが既に存在するか確認
-        if (!document.getElementById(this.id)) {
+        const existingElement = document.getElementById(this.id);
+        if (!existingElement || this.isInline) {
             this._render();
             this._bindEvents();
         } else {
-            this.elements.window = document.getElementById(this.id);
-             this._queryElements(); // 既存の要素を再取得
-             this._bindEvents(); // イベントを再バインド
+            this.elements.window = existingElement;
+            this._queryElements();
+            this._bindEvents();
         }
         
         this._updateUI();
@@ -157,16 +169,21 @@ export class ColorPicker {
     }
 
     _render() {
+        const windowClass = this.isInline ? 'color-picker-inline' : 'color-picker-window';
+        const windowStyle = this.isInline ? '' : 'style="display: none;"';
+        const headerHTML = this.isInline ? '' : `
+            <div class="color-picker-header">
+                <span class="color-picker-title">${this.options.title}</span>
+                <button class="color-picker-close-btn">&times;</button>
+            </div>`;
+
         const windowHTML = `
-            <div class="color-picker-window" id="${this.id}" style="display: none;">
-                <div class="color-picker-header">
-                    <span class="color-picker-title">${this.options.title}</span>
-                    <button class="color-picker-close-btn">&times;</button>
-                </div>
+            <div class="${windowClass}" id="${this.id}" ${windowStyle}>
+                ${headerHTML}
                 <div class="color-picker-content">
                     <div class="color-picker-tabs">
                         <button class="color-picker-tab active" data-mode="solid">単色</button>
-                        <button class="color-picker-tab" data-mode="gradient">グラデーション</button>
+                        <button class="color-picker-tab" data-mode="gradient" style="display:none;">グラデーション</button>
                     </div>
 
                     <div class="color-picker-panel" data-panel="solid">
@@ -193,13 +210,13 @@ export class ColorPicker {
                     </div>
                     
                     <div class="color-sliders">
-                         <div class="hue-slider-container">
+                        <div class="hue-slider-container">
                             <div class="hue-slider">
                                 <div class="slider-handle"></div>
                             </div>
                         </div>
                         <div class="alpha-slider-container">
-                             <div class="alpha-slider">
+                            <div class="alpha-slider">
                                 <div class="slider-handle"></div>
                             </div>
                         </div>
@@ -220,7 +237,12 @@ export class ColorPicker {
                 </div>
             </div>
         `;
-        document.body.insertAdjacentHTML('beforeend', windowHTML);
+        
+        if (this.isInline) {
+            this.container.innerHTML = windowHTML;
+        } else {
+            document.body.insertAdjacentHTML('beforeend', windowHTML);
+        }
         this._queryElements();
     }
     
@@ -259,8 +281,10 @@ export class ColorPicker {
     }
 
     _bindEvents() {
-        this.elements.closeBtn.addEventListener('click', () => this.hide());
-        this.elements.header.addEventListener('mousedown', this._startWindowDrag.bind(this));
+        if (!this.isInline) {
+            this.elements.closeBtn.addEventListener('click', () => this.hide());
+            this.elements.header.addEventListener('mousedown', this._startWindowDrag.bind(this));
+        }
 
         this.elements.tabs.forEach(tab => {
             tab.addEventListener('click', () => this._switchMode(tab.dataset.mode));
@@ -346,10 +370,14 @@ export class ColorPicker {
     }
 
     hide() {
+        if (this.isInline) {
+            this.elements.window.style.display = 'none';
+            return;
+        }
         this.elements.window.style.display = 'none';
     }
 
-     _startWindowDrag(e) {
+    _startWindowDrag(e) {
         this.isWindowDragging = true;
         this.dragStartPos.x = e.clientX - this.elements.window.offsetLeft;
         this.dragStartPos.y = e.clientY - this.elements.window.offsetTop;

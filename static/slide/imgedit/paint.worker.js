@@ -177,9 +177,9 @@ function floodFill(x, y, newColor) {
         } else {
             const tolerance = 10;
             colorMatch = Math.abs(currentColor[0] - startColor[0]) <= tolerance &&
-                         Math.abs(currentColor[1] - startColor[1]) <= tolerance &&
-                         Math.abs(currentColor[2] - startColor[2]) <= tolerance &&
-                         Math.abs(currentColor[3] - startColor[3]) <= tolerance;
+                        Math.abs(currentColor[1] - startColor[1]) <= tolerance &&
+                        Math.abs(currentColor[2] - startColor[2]) <= tolerance &&
+                        Math.abs(currentColor[3] - startColor[3]) <= tolerance;
         }
 
         if (colorMatch) {

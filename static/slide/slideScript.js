@@ -232,6 +232,7 @@
                 }
             });
             this.updateState('presentation.script', reindexedLines.join('\n'));
+            this.renderScript(); // ★ 修正点: 台本エリアを再描画
         }
     });
 
@@ -291,10 +292,15 @@
     // スライド削除時に台本ロジック追加
     const originalDeleteSlide = App.deleteSlide;
     App.deleteSlide = function(slideId, silent = false) {
+        // ★ 修正点: オリジナルの削除処理を呼び出す前にインデックスを取得
+        const targetId = slideId || this.state.activeSlideId;
+        const deletedIdx = this.state.presentation.slides.findIndex(s => s.id === targetId);
+
         const result = originalDeleteSlide.apply(this, arguments);
-        if (result.success) {
-            const idx = this.state.presentation.slides.findIndex(s => s.id === slideId);
-            App._deleteSlideScriptLogic.call(this, idx);
+
+        // ★ 修正点: 削除が成功し、かつ有効なインデックスが取得できた場合に台本を削除
+        if (result.success && deletedIdx > -1) {
+            App._deleteSlideScriptLogic.call(this, deletedIdx);
         }
         return result;
     };

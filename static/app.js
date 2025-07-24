@@ -285,6 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (response.ok) {
                 alert('スライドが削除されました。');
+                alert('スライドが削除されました。');
                 fetchAndRenderSlides(); // リストを再読み込み
             } else {
                 const errorData = await response.json();

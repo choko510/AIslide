@@ -692,6 +692,8 @@
     flex-grow: 1;
     overflow-y: auto;
     padding: 16px;
+    display: flex;
+    flex-direction: column;
 }
 
 /* --- 2.4 Main Canvas Area --- */
@@ -1107,6 +1109,12 @@
 
 .sidebar-tab-content.active {
     display: block;
+}
+
+.sidebar-tab-content[data-tab-content="chat"].active {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Slide List (in sidebar) */

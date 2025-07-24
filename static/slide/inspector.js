@@ -124,46 +124,11 @@ class InspectorManager {
         const typeSpecificHTML = this._getTypeSpecificHTML(selectedElement);
         const customCssHTML = this._getCustomCssHTML();
 
-        const shadowEnabled = s.boxShadow && s.boxShadow !== 'none';
-        const shadowValues = this._getShadowValues(s.boxShadow);
-        const shadowContent = `
-            <div class="inspector-group">
-                <label class="d-flex align-items-center"><input type="checkbox" data-prop="shadowEnabled" ${shadowEnabled ? 'checked' : ''} style="margin-right: 8px;"> 影を有効にする</label>
-            </div>
-            <div id="shadow-controls" style="display: ${shadowEnabled ? 'block' : 'none'}">
-                <div class="inspector-group">
-                    <label>Xオフセット (px)</label>
-                    <div class="d-flex align-items-center">
-                        <input type="range" data-prop="shadowX" value="${shadowValues.x}" min="-50" max="50" step="1" style="flex-grow: 1;">
-                        <span class="value-display">${shadowValues.x}px</span>
-                    </div>
-                </div>
-                <div class="inspector-group">
-                    <label>Yオフセット (px)</label>
-                    <div class="d-flex align-items-center">
-                        <input type="range" data-prop="shadowY" value="${shadowValues.y}" min="-50" max="50" step="1" style="flex-grow: 1;">
-                        <span class="value-display">${shadowValues.y}px</span>
-                    </div>
-                </div>
-                <div class="inspector-group">
-                    <label>ぼかし (px)</label>
-                    <div class="d-flex align-items-center">
-                        <input type="range" data-prop="shadowBlur" value="${shadowValues.blur}" min="0" max="100" step="1" style="flex-grow: 1;">
-                        <span class="value-display">${shadowValues.blur}px</span>
-                    </div>
-                </div>
-                <div class="inspector-group">
-                    <label>色</label>
-                    <div id="color-picker-shadow-color"></div>
-                </div>
-            </div>
-        `;
 
         return `
             <div class="accordion">
                 ${accordionItem('配置とサイズ', transformContent)}
                 ${typeSpecificHTML}
-                ${accordionItem('影', shadowContent)}
                 ${accordionItem('アニメーション', animationContent)}
                 ${accordionItem('詳細設定', customCssHTML, false)}
             </div>
@@ -509,12 +474,6 @@ class InspectorManager {
                 callback: (color) => this._updateElementStyle(selectedElement, 'color', color),
                 paletteKey: 'iconColorPalette'
             },
-            'color-picker-shadow-color': {
-                title: '影の色',
-                initialColor: this._getShadowValues(selectedElement.style.boxShadow).color || '#969696FF',
-                callback: (color) => this._updateBoxShadow(selectedElement, undefined, color),
-                paletteKey: 'shadowColorPalette'
-            }
         };
 
         for (const id in colorConfigs) {
@@ -549,7 +508,7 @@ class InspectorManager {
             let picker = this.colorPickers[pickerId];
 
             if (!picker) {
-                 picker = new ColorPicker(pickerId, config.initialColor, config.callback, {
+                picker = new ColorPicker(pickerId, config.initialColor, config.callback, {
                     paletteKey: config.paletteKey,
                     title: config.title,
                     showEyedropper: true,
@@ -657,7 +616,7 @@ class InspectorManager {
         const tableBody = inspector.querySelector('#chart-data-tbody-inspector');
         if(tableBody) {
             tableBody.querySelectorAll('tr').forEach(row => {
-                 this._bindInspectorChartRowEvents(row, updateChartData);
+                this._bindInspectorChartRowEvents(row, updateChartData);
             });
         }
         
@@ -838,7 +797,7 @@ class InspectorManager {
 
     _getMaterialIconStyleOptions(selectedElement) {
         const currentStyle = selectedElement.content;
-         const options = [
+        const options = [
             { value: 'material-icons', name: 'Filled' },
             { value: 'material-icons-outlined', name: 'Outlined' },
             { value: 'material-icons-round', name: 'Round' },
@@ -931,32 +890,13 @@ class InspectorManager {
         }
     }
 
-    _getShadowValues(boxShadow) {
-        const defaults = { x: 8, y: 8, blur: 25, color: '#969696' };
-        if (!boxShadow || boxShadow === 'none') {
-            return defaults;
-        }
-
-        const colorMatch = boxShadow.match(/rgba?\(.*?\)|#[0-9a-fA-F]{3,6}/);
-        const color = colorMatch ? colorMatch[0] : defaults.color;
-        
-        const parts = boxShadow.replace(color, '').trim().split(/\s+/);
-        
-        return {
-            x: parseFloat(parts[0]) || defaults.x,
-            y: parseFloat(parts[1]) || defaults.y,
-            blur: parseFloat(parts[2]) || defaults.blur,
-            color: color
-        };
-    }
-
     handleInput(e) {
         e.stopPropagation();
         const el = this.app.getSelectedElement();
         if (!el) return;
 
         const prop = e.target.dataset.prop;
-        if (!prop || prop === 'customCss' || prop === 'color' || prop === 'backgroundColor' || prop === 'fill' || prop === 'stroke' || prop.startsWith('shadow')) return;
+        if (!prop || prop === 'customCss' || prop === 'color' || prop === 'backgroundColor' || prop === 'fill' || prop === 'stroke') return;
 
         if (!this._inspectorInputTimeout) {
             this.app.stateManager._saveToHistory();
@@ -1006,7 +946,7 @@ class InspectorManager {
                         if (elWidthPx > 0 && elHeightPx > 0) {
                             const rx = (value / elWidthPx) * 100;
                             const ry = (value / elHeightPx) * 100;
-                            shapeSvg.setAttribute('rx', rx);
+                            shapeSvg.setAttribute('rx', ry);
                             shapeSvg.setAttribute('ry', ry);
                         }
                     }
@@ -1034,59 +974,6 @@ class InspectorManager {
             this.app.saveState();
             this._inspectorInputTimeout = null;
         }, 300);
-    }
-
-    _handleShadowInput(el, prop, e) {
-        if (!this._inspectorInputTimeout) {
-            this.app.stateManager._saveToHistory();
-        }
-        if (this._inspectorInputTimeout) {
-            clearTimeout(this._inspectorInputTimeout);
-        }
-
-        const shadowControls = document.getElementById('shadow-controls');
-        if (prop === 'shadowEnabled') {
-            const isEnabled = e.target.checked;
-            shadowControls.style.display = isEnabled ? 'block' : 'none';
-            this._updateBoxShadow(el, isEnabled ? undefined : 'none');
-        } else {
-            if (e.target.type === 'range') {
-                const display = e.target.nextElementSibling;
-                if (display) display.textContent = `${e.target.value}px`;
-            }
-             if (!prop.startsWith('shadow')) return;
-            this._updateBoxShadow(el);
-        }
-
-        this._inspectorInputTimeout = setTimeout(() => {
-            this.app.saveState();
-            this._inspectorInputTimeout = null;
-        }, 300);
-    }
-
-    _updateBoxShadow(el, value, colorFromPicker = null) {
-        let boxShadowValue = value;
-
-        if (boxShadowValue === undefined) {
-             const x = document.querySelector('[data-prop="shadowX"]').value;
-             const y = document.querySelector('[data-prop="shadowY"]').value;
-             const blur = document.querySelector('[data-prop="shadowBlur"]').value;
-             const pickerId = 'color-picker-window-color-picker-shadow-color';
-             const existingColor = this.colorPickers[pickerId] ? this.colorPickers[pickerId].currentColor : this._getShadowValues(el.style.boxShadow).color;
-             const color = colorFromPicker || this._toRgbaString(this._parseColor(existingColor));
-             boxShadowValue = `${x}px ${y}px ${blur}px ${color}`;
-        }
-
-        const slideIndex = this.app.getActiveSlideIndex();
-        const elementIndex = this.app.getElementIndex(el.id);
-        const stylePath = `presentation.slides.${slideIndex}.elements.${elementIndex}.style.boxShadow`;
-        
-        this.app.updateState(stylePath, boxShadowValue, {render: false});
-
-        const domEl = this.app.elements.slideCanvas.querySelector(`[data-id="${el.id}"]`);
-        if (domEl) {
-            domEl.style.boxShadow = boxShadowValue;
-        }
     }
 }
 

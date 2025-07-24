@@ -372,9 +372,7 @@ class AIHandler {
 
         // 実行が成功し、かつ完了/質問タグがない場合のみ、ループを継続
         if (executionResult && executionResult.success && !command.includes('<complete>') && !command.includes('<question>')) {
-            const nextPrompt = executionResult.imageDataProcessed
-                ? "このスライドの画像を認識しました。これを基に、次に行うべきことを提案・実行してください。"
-                : "タスクの続きを実行してください。もしタスクが完了していれば<complete>タグで報告してください。";
+            const nextPrompt = `コマンドの実行に成功しました。\n現状のページに問題がなければ、次のスライドの作成してください。\nもしタスクが完了していれば<complete>タグで報告してください。`;
             
             const nextAction = () => this.handleSendMessage(nextPrompt);
 
@@ -446,6 +444,32 @@ class AIHandler {
                     resultContainer.appendChild(thumb);
                     imageDataProcessed = true;
                 }
+                // コマンド実行成功後、現在のスライドを画像としてキャプチャ
+                try {
+                    const captureResult = await this.handleViewSlideAsImage({
+                        getAttribute: (attr) => {
+                            if (attr === 'slide_id') return this.app.getState('activeSlideId');
+                            return null;
+                        }
+                    });
+                    if (captureResult.success && captureResult.imageData) {
+                        this.nextRequestImage = captureResult.imageData;
+                        const thumb = document.createElement('img');
+                        thumb.src = captureResult.imageData;
+                        thumb.style.cssText = 'max-width: 200px; max-height: 150px; border: 1px solid #ccc; margin-top: 10px; display: block;';
+                        
+                        const imageHeader = document.createElement('div');
+                        imageHeader.textContent = 'AIは以下の画像を認識しました:';
+                        imageHeader.style.marginTop = '10px';
+                        
+                        resultContainer.appendChild(imageHeader);
+                        resultContainer.appendChild(thumb);
+                        imageDataProcessed = true;
+                    }
+                } catch (captureError) {
+                    console.warn('スライドの自動画像キャプチャに失敗しました:', captureError);
+                    // エラーは表示せず、処理を続行
+                }
                 return { success: true, imageDataProcessed };
 
             } else {
@@ -456,11 +480,11 @@ class AIHandler {
                 if (this.elements.autoExecuteToggle?.checked) {
                     this.selfCorrectionCount++;
                     if (this.selfCorrectionCount > this.MAX_SELF_CORRECTION) {
-                         this.displayMessage(`AIによる自己修正が上限回数(${this.MAX_SELF_CORRECTION}回)に達しました。処理を中断します。`, 'error');
-                         this.isAIResponding = false;
-                         this.updateAIControlButtons();
-                         this._updateChatUIState(false);
-                         return { success: false, imageDataProcessed: false };
+                        this.displayMessage(`AIによる自己修正が上限回数(${this.MAX_SELF_CORRECTION}回)に達しました。処理を中断します。`, 'error');
+                        this.isAIResponding = false;
+                        this.updateAIControlButtons();
+                        this._updateChatUIState(false);
+                        return { success: false, imageDataProcessed: false };
                     }
 
                     resultContainer.appendChild(document.createElement('br'));
@@ -791,7 +815,7 @@ ${result.message}
         if (!messagesOverride && this.nextRequestImage) {
             const lastMessage = messages[messages.length - 1];
             if (lastMessage && lastMessage.role === 'user') {
-                 lastMessage.content = [
+                lastMessage.content = [
                     { type: 'text', text: lastMessage.content },
                     { type: 'image_url', image_url: { url: this.nextRequestImage, detail: "high" } }
                 ];
@@ -2041,4 +2065,3 @@ class AutonomousAgent {
         }
     }
 }
-

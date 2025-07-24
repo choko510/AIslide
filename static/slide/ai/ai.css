@@ -11,7 +11,7 @@
  */
 
 /* ==========================================================================
-   1. チャットUIスタイル
+    1. チャットUIスタイル
    ========================================================================== */
 .chat-message {
     /* slide.cssの .panel を継承 */
@@ -96,9 +96,6 @@
     opacity: 0.6;
     background-color: var(--bg-light);
 }
-.restore-checkpoint-btn-inline {
-    /* slide.cssの .btn, .btn-warning, .btn-sm を継承 */
-}
 
 /* エラーメッセージ */
 .error-msg {
@@ -168,7 +165,7 @@
 
 
 /* ==========================================================================
-   2. AIへの質問UIスタイル
+    2. AIへの質問UIスタイル
    ========================================================================== */
 .question-container-wrapper {
     /* .panelを継承 */
@@ -246,7 +243,7 @@
 }
 
 /* ==========================================================================
-   3. AIモードセレクター
+    3. AIモードセレクター
    ========================================================================== */
 #ai-mode-selector {
     display: flex;
@@ -292,7 +289,7 @@
 }
 
 /* ==========================================================================
-   4. AI完了メッセージ
+    4. AI完了メッセージ
    ========================================================================== */
 .complete-msg-container {
     background-color: #e9f7ef;
@@ -376,13 +373,21 @@
 }
 
 /* ==========================================================================
-   5. AIコントロールパネル（サイドバー内）
+    5. AIコントロールパネル（サイドバー内）
    ========================================================================== */
+#chat-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
 #ai-controls {
     margin-bottom: 10px;
     display: flex;
     flex-direction: column;
     gap: 8px;
+    flex-shrink: 0;
 }
 
 #ai-mode-selector {
@@ -448,17 +453,18 @@
 }
 
 #chat-messages {
-    height: 60vh;
-    max-height: 700px;
+    flex-grow: 1;
     overflow-y: auto;
     border: 1px solid var(--border-color);
     padding: 10px;
     margin-bottom: 10px;
     border-radius: var(--border-radius);
+    height: 300px; /* 固定の高さを設定 */
 }
 
 #chat-input-container {
     display: flex;
+    flex-shrink: 0;
 }
 
 #chat-input {

@@ -2,10 +2,16 @@ fastapi
 uvicorn[standard]
 sqlalchemy
 python-multipart
-google-generativeai
+google-genai
 python-jose[cryptography]
 werkzeug
 pillow
 passlib
 bcrypt
 Jinja2
+requests
+httpx
+faust-cchardet
+pycurl
+trafilatura
+duckduckgo-search

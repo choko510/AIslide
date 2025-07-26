@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スライドプランナー</title>
+    <link rel="stylesheet" href="plan.css">
+</head>
+<body>
+    <div class="planner-container">
+        <div id="progress-bar-container">
+            <div id="progress-bar"></div>
+        </div>
+        <div id="card">
+            <div id="question-container">
+                <!-- 質問はここに動的に挿入されます -->
+            </div>
+            <div id="navigation-container">
+                <button id="prev-button" class="nav-button">戻る</button>
+                <!-- 「次へ」ボタンはJSで動的に制御 -->
+            </div>
+        </div>
+    </div>
+    <script src="plan.js"></script>
+</body>
+</html>

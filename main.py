@@ -5,21 +5,26 @@ import logging
 from datetime import timedelta
 from typing import Annotated, Optional, List
 import asyncio
+import httpx
+import trafilatura
+from duckduckgo_search import DDGS
+
 
 from fastapi import (
     FastAPI, Depends, HTTPException, status, UploadFile,
     File, WebSocket, Request, Form
 )
 
-from fastapi.responses import FileResponse as FastAPIFileResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse as FastAPIFileResponse, HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.concurrency import run_in_threadpool
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from werkzeug.utils import secure_filename
-from google.generativeai.client import configure
-from google.generativeai.generative_models import GenerativeModel
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 from PIL import Image
 
 import module.auth as auth
@@ -76,6 +81,12 @@ class SlideResponse(BaseModel):
 class AIPrompt(BaseModel):
     prompt: str
 
+class URLRequest(BaseModel):
+    url: str
+
+class WordRequest(BaseModel):
+    keyword: str
+
 app = FastAPI()
 
 templates = Jinja2Templates(directory="templates")
@@ -85,9 +96,13 @@ templates = Jinja2Templates(directory="templates")
 async def read_index(request: Request):
     return templates.TemplateResponse("main.html", {"request": request, "slides": []})
 
+@app.get("/plan/", response_class=HTMLResponse)
+async def read_plan(request: Request):
+    return templates.TemplateResponse("plan.html", {"request": request})
+
 @app.get("/slide/", response_class=HTMLResponse)
-async def read_slide_index(request: Request):
-    return templates.TemplateResponse("slide.html", {"request": request})
+async def read_slide_index(request: Request, data: Optional[str] = None):
+    return templates.TemplateResponse("slide.html", {"request": request, "data": data})
 
 # --- User Account Endpoints ---
 @app.post("/auth/register", response_model=UserResponse)
@@ -333,52 +348,260 @@ async def delete_slide_endpoint(slide_id: int, *, db: Session = Depends(get_db),
     db.commit()
     return deleted_slide_details
 
+
+load_dotenv()
+
 # --- AI (Gemini) Endpoint ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if GEMINI_API_KEY:
-    configure(api_key=GEMINI_API_KEY)
-    gemini_model = GenerativeModel('gemini-pro')
-else:
+if not GEMINI_API_KEY:
     logger.warning("GEMINI_API_KEY not found. AI endpoint is disabled.")
-    gemini_model = None
+
+def reqAI(prompt: str, model_name: str = "gemini-1.5-pro", images: Optional[List[Image.Image]] = None):
+    """
+    AIモデルにリクエストを送信し、ストリーミングで応答を返す同期ジェネレータ。
+    FastAPIのStreamingResponseがこれを別スレッドで実行してくれる。
+    """
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        
+        model_to_use = "gemini-1.5-pro-vision-latest" if images else model_name
+
+        parts = []
+        if prompt:
+            parts.append(types.Part.from_text(prompt))
+        if images:
+            for img in images:
+                parts.append(types.Part.from_pil(img))
+        
+        contents = [types.Content(role="user", parts=parts)]
+
+        # ユーザー提供のコードに基づき、ツール設定を追加
+        tools = [
+            types.Tool(googleSearch=types.GoogleSearch()),
+        ]
+        # generation_configに名前が変更されている可能性を考慮
+        generation_config = types.GenerateContentConfig(
+            tools=tools,
+        )
+
+        response_stream = client.models.generate_content_stream(
+            model=f"models/{model_to_use}",
+            contents=contents,
+            generation_config=generation_config,
+        )
+
+        for chunk in response_stream:
+            if chunk.text:
+                yield chunk.text
+
+    except Exception as e:
+        logger.error(f"Geminiリクエストでエラーが発生しました: {e}", exc_info=True)
+        yield f"Error: {str(e)}"
+
 
 @app.post("/ai/ask")
 async def ai_ask(
     prompt: str = Form(...),
     image: UploadFile = File(None)
 ):
-    if not gemini_model:
-        raise HTTPException(status_code=503, detail="AI service is not configured.")
+    """
+    AIに質問を投げてストリーミングで回答を得るエンドポイント。
+    """
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="AI service is currently unavailable")
+
+    images = None
+    if image and image.file:
+        try:
+            img = Image.open(image.file)
+            images = [img]
+        except Exception as e:
+            logger.error(f"画像ファイルの読み込みに失敗: {e}", exc_info=True)
+            raise HTTPException(status_code=400, detail=f"Invalid image file: {str(e)}")
+
+    # 同期ジェネレータであるreqAIをStreamingResponseに渡す
+    return StreamingResponse(reqAI(prompt, images=images), media_type="text/event-stream")
+
+
+# --- Wikipedia Image Endpoint ---
+async def get_image_titles(client: httpx.AsyncClient, keyword: str, lang: str):
+    """Fetches image titles for a keyword from a specific language Wikipedia."""
+    URL = f"https://{lang}.wikipedia.org/w/api.php"
+    params = {"action": "query", "prop": "images", "titles": keyword, "format": "json"}
     try:
-        import tempfile
+        resp = await client.get(URL, params=params, timeout=0.5)
+        resp.raise_for_status()
+        data = resp.json()
+        pages = data.get("query", {}).get("pages", {})
+        page_id = list(pages.keys())[0]
+        if page_id == "-1" or "images" not in pages[page_id]:
+            return []
+        return [img["title"] for img in pages[page_id]["images"]]
+    except (httpx.RequestError, KeyError, IndexError):
+        return []
 
-        async def gemini_stream():
-            img_obj = None
-            if image is not None:
-                # 一時ファイルに保存
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
-                    content = await image.read()
-                    tmp.write(content)
-                    tmp.flush()
-                    img_path = tmp.name
-                img_obj = Image.open(img_path)
-                # Geminiに画像とテキストを渡す
-                if gemini_model:
-                    for chunk in getattr(gemini_model, 'generate_content_stream')([prompt, img_obj]):
-                        if hasattr(chunk, "text") and chunk.text:
-                            yield chunk.text
-                        await asyncio.sleep(0)
+async def get_image_urls(client: httpx.AsyncClient, titles: list[str], lang: str):
+    """Fetches image URLs for a list of titles from a specific language Wikipedia."""
+    if not titles:
+        return []
+    URL = f"https://{lang}.wikipedia.org/w/api.php"
+    params = {"action": "query", "prop": "imageinfo", "iiprop": "url", "titles": "|".join(titles), "format": "json"}
+    try:
+        resp = await client.get(URL, params=params, timeout=0.5)
+        resp.raise_for_status()
+        data = resp.json()
+        pages = data.get("query", {}).get("pages", {})
+        return [
+            page["imageinfo"][0]["url"]
+            for page in pages.values()
+            if "imageinfo" in page and page["imageinfo"]
+        ]
+    except (httpx.RequestError, KeyError, IndexError):
+        return []
+
+@app.get("/wiki/image/{keyword}")
+async def get_wiki_image(keyword: str):
+    async with httpx.AsyncClient() as client:
+        # Step 1: Fetch image titles from both languages concurrently
+        title_tasks = [
+            get_image_titles(client, keyword, "en"),
+            get_image_titles(client, keyword, "ja"),
+        ]
+        en_titles, ja_titles = await asyncio.gather(*title_tasks)
+
+        # Step 2: Fetch image URLs from both languages concurrently
+        url_tasks = [
+            get_image_urls(client, en_titles, "en"),
+            get_image_urls(client, ja_titles, "ja"),
+        ]
+        en_urls, ja_urls = await asyncio.gather(*url_tasks)
+
+        # Combine and deduplicate results
+        all_urls = set(en_urls) | set(ja_urls)
+        
+        if not all_urls:
+            raise HTTPException(status_code=404, detail="No images found on both English and Japanese Wikipedia.")
+
+        return JSONResponse(content={"image_urls": sorted(list(all_urls))})
+
+
+# --- Trafilatura Endpoint ---
+@app.post("/trafilatura/extract")
+async def extract_content_from_url(request: URLRequest, full_text: bool = False):
+    """
+    指定されたURLから本文を抽出し、整形して返すエンドポイント
+    full_text=true を指定すると全文を、指定しない場合は要約を返す
+    """
+    if not request.url:
+        raise HTTPException(status_code=400, detail="URL is required")
+
+    try:
+        # URLからHTMLをダウンロード
+        downloaded = await run_in_threadpool(trafilatura.fetch_url, request.url)
+        if downloaded is None:
+            raise HTTPException(status_code=404, detail="Could not fetch content from URL")
+
+        # 本文を抽出
+        content = await run_in_threadpool(
+            trafilatura.extract,
+            downloaded,
+            include_comments=False,
+            include_tables=True
+        )
+
+        if not content:
+            raise HTTPException(status_code=404, detail="Could not extract content from the page")
+
+        if not full_text and len(content) > 1000:
+            # 1000文字以降の最初の句点を探す
+            end_pos = content.find('。', 1000)
+            if end_pos != -1:
+                content = content[:end_pos + 1]  # 句点を含めて切り出す
             else:
-                if gemini_model:
-                    for chunk in getattr(gemini_model, 'generate_content_stream')(prompt):
-                        if hasattr(chunk, "text") and chunk.text:
-                            yield chunk.text
-                        await asyncio.sleep(0)
+                # 句点がない場合は改行を探す
+                end_pos = content.find('\n', 1000)
+                if end_pos != -1:
+                    content = content[:end_pos] + "..."
+                else:
+                    # それでもない場合は1000文字でカット
+                    content = content[:1000] + "..."
 
-        return StreamingResponse(gemini_stream(), media_type="text/plain")
+        return JSONResponse(content={"url": request.url, "content": content})
     except Exception as e:
-        logger.error(f"Error calling Gemini API: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Error processing AI request.")
+        logger.error(f"Error processing URL {request.url}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+
+# --- Research Endpoint ---
+@app.post("/research/word")
+async def research_by_word(request: WordRequest):
+    """
+    指定されたキーワードでWeb検索し、上位サイトの情報を要約して返す。
+    """
+    keyword = request.keyword
+    if not keyword:
+        raise HTTPException(status_code=400, detail="Keyword is required")
+
+    try:
+        # DuckDuckGoで検索を実行 (同期処理なのでスレッドプールで実行)
+        def search_ddg(query):
+            # DDGS can be used as a context manager.
+            with DDGS() as ddgs:
+                return [r for r in ddgs.text(query, max_results=3)]
+        
+        search_results = await run_in_threadpool(search_ddg, keyword)
+
+        if not search_results:
+            raise HTTPException(status_code=404, detail="No search results found.")
+
+        # 上位サイトのコンテンツをtrafilaturaで並行して取得
+        all_text = ""
+        for result in search_results:
+            url = result.get('href')
+            if not url:
+                continue
+
+            # fetch_urlとextractは同期的であるため、スレッドプールで実行
+            downloaded = await run_in_threadpool(trafilatura.fetch_url, url)
+            if downloaded:
+                extracted_text = await run_in_threadpool(
+                    trafilatura.extract,
+                    downloaded,
+                    include_comments=False,
+                    include_tables=True
+                )
+                if extracted_text:
+                    all_text += f"Source: {url}\nTitle: {result.get('title')}\n\n{extracted_text}\n\n---\n\n"
+
+        if not all_text:
+            raise HTTPException(status_code=404, detail="Could not extract content from search results.")
+
+        # Geminiに要約を依頼
+        summary_prompt = f"""以下の複数のWebサイトから抽出した情報源を分析し、ユーザーの検索キーワード「{keyword}」に対する包括的な回答を、一つの連続した日本語の文章として400文字程度で要約してください。
+        
+        要約のポイント：
+        - 複数の情報源からの情報を統合し、重複を排除してください。
+        - 最も重要で関連性の高い情報を優先してください。
+        - 客観的な事実に基づいて記述してください。
+        - 箇条書きは使用せず、自然な段落を持つ文章として構成してください。
+        - 情報源のURLやタイトルは最終的な要約に含めないでください。
+
+        情報源:
+        {all_text}
+        """
+        
+        summary = await reqAI(summary_prompt)
+
+        if not summary:
+            # 要約に失敗した場合は、抽出したテキストをそのまま返す（短縮して）
+            summary = (all_text[:2000] + '...') if len(all_text) > 2000 else all_text
+
+        return JSONResponse(content={"keyword": keyword, "content": summary})
+
+    except Exception as e:
+        logger.error(f"Error during research for keyword '{keyword}': {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"An error occurred during research: {str(e)}")
+
 
 # --- WebSocket Endpoint ---
 @app.websocket("/ws/collaborate/{slide_id}")

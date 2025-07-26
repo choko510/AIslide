@@ -1060,6 +1060,7 @@
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
 
     <!-- App scripts -->
+    <script src="ai/promptGenerator.js" defer></script>
     <script src="ai/ai.js" defer></script>
     <script type="module" src="presentation.js"></script>
     <script type="module" src="icon.js"></script>
@@ -1068,6 +1069,28 @@
     <script type="module" src="ColorPicker.js" defer></script>
     <script type="module" src="slide.js"></script>
     <script type="module" src="slideScript.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const data = '{{ data | safe }}';
+            if (data && data !== 'None') {
+                // アプリケーションの初期化を待つ
+                const checkAppReady = setInterval(() => {
+                    if (window.app && window.app.ai) {
+                        clearInterval(checkAppReady);
+                        try {
+                            const decodedData = decodeURIComponent(data);
+                            const jsonData = JSON.parse(decodedData);
+                            console.log("受け取ったプランデータ:", jsonData);
+                            // AIハンドラにプランデータを渡してスライド生成を開始
+                            window.app.ai.generateFromPlan(jsonData);
+                        } catch (e) {
+                            console.error("プランデータの解析またはAI処理の開始に失敗しました:", e);
+                        }
+                    }
+                }, 100);
+            }
+        });
+    </script>
 </body>
 
 </html>

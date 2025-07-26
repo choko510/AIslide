@@ -12,7 +12,8 @@ class AIHandler {
             this.app.updateState('autonomousMode', {}, { skipHistory: true });
         }
         this.elements = app.elements;
-        this.apiEndpoint = 'http://localhost:3000/ask-ai'; // AIサーバーのエンドポイント
+        this.promptGenerator = new PromptGenerator(app); // PromptGeneratorをインスタンス化
+        this.apiEndpoint = '/ai/ask'; // AIサーバーのエンドポイント
         this.aiMode = 'design'; // 'design', 'plan', 'ask'
         
         /** @type {Array<{role: 'user' | 'assistant', content: string}>} */
@@ -27,8 +28,38 @@ class AIHandler {
         this.selfCorrectionCount = 0; // 自己修正の試行回数カウンタ
         this.MAX_SELF_CORRECTION = 3; // 自己修正の最大試行回数
         this.popoverAbortController = null; // 提案ポップオーバーのイベントリスナー管理用
+ 
+         this.init();
+     }
+ 
+    /**
+     * plan.htmlから渡されたデータに基づいてスライド生成を開始する
+     * @param {object} planData - plan.jsから収集された質問と回答のオブジェクト
+     */
+    generateFromPlan(planData) {
+        // AIタブをアクティブにする
+        this.app.sidebar.switchTab('chat');
+        
+        // 以前のチャット履歴をクリア
+        this.resetChat();
 
-        this.init();
+        // AIモードをデザインに設定し、自動実行をオンにする
+        this.setAIMode('design');
+        if (this.elements.autoExecuteToggle) {
+            this.elements.autoExecuteToggle.checked = true;
+        }
+
+        // planDataを自然言語のプロンプトに変換
+        let prompt = "以下の要件に基づいて、プレゼンテーションを作成してください。\n\n";
+        for (const [question, answer] of Object.entries(planData)) {
+            prompt += `- ${question}: ${answer}\n`;
+        }
+        prompt += "\n最初のスライドから作成を開始してください。";
+        
+        this.displayMessage("プランデータに基づいてスライドの自動生成を開始します...", 'system', '自動生成');
+        
+        // AIとの対話を開始
+        this.handleSendMessage(prompt);
     }
 
     /**
@@ -44,7 +75,6 @@ class AIHandler {
     init() {
         this.cacheAIElements();
         this.bindEvents();
-        this.preparePrompts();
     }
 
     cacheAIElements() {
@@ -75,7 +105,7 @@ class AIHandler {
     bindEvents() {
         this.elements.sendChatBtn.addEventListener('click', () => this.handleSendMessage());
         this.elements.aiChatInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
                 e.preventDefault();
                 this.handleSendMessage();
             }
@@ -122,149 +152,6 @@ class AIHandler {
         }
     }
 
-    preparePrompts() {
-        this.basePromptContent = {
-            allCommandDefinitions: {
-                sequence: '<sequence> ... </sequence>: 複数のコマンドを順に実行する',
-                create_slide: '<create_slide> ... </create_slide>: スライドを新規作成し、要素を追加する',
-                delete_slide: '<delete_slide slide_id="..." />: スライドを削除する',
-                edit_element: `<edit_element element_id="..." slide_id="...">\n  <content>...</content>\n  <style ... />\n  <customCss>...</customCss>\n</edit_element>: 要素を編集する（カスタムCSSも編集可）`,
-                view_slide: '<view_slide slide_id="..." />: スライドを閲覧する',
-                switch_ai_mode: '<switch_ai_mode mode="design|plan|ask" />: AIのモードを指定されたモードに切り替える',
-                add_element: `<add_element type="text|image|video|table|icon|iframe|qrcode" [slide_id="..."]>\\n  <content>...</content>\\n  <style top, left, width, heightは0-100の%指定。fontSizeは数値(px)のみ。 top="..." left="..." width="..." height="..." zIndex="..." color="..." fontSize="..." fontFamily="..." rotation="..." animation="アニメーション名 継続時間 タイミング関数 遅延時間 イテレーション回数 方向 フィルモード (例: fadeIn 1s ease-out 0.5s forwards)" opacity="0.0-1.0" borderRadius="px" boxShadow="2px 2px 5px rgba(0,0,0,0.3)" />\\n  <customCss>...</customCss>\\n</add_element>: アクティブまたは指定スライドに要素を追加。HTMLを含む場合はcontentを子要素とする。`,
-                add_shape: `<add_shape type="rectangle|circle|triangle|line|arrow|star|speech-bubble" [slide_id="..."]>\n  <style fill="#cccccc" stroke="transparent" strokeWidth="2" borderRadius="px" boxShadow="2px 2px 5px rgba(0,0,0,0.3)" ... />\n  <customCss>...</customCss>\n</add_shape>: 図形要素を追加（カスタムCSSも指定可）`,
-                add_chart: `<add_chart type="bar|line|pie|doughnut|radar" [slide_id="..."]>\n  <title>グラフのタイトル</title>\n  <labels>ラベル1,ラベル2,ラベル3</labels>\n  <datasets>\n    <dataset label="データセット1" data="10,20,30" [color="#ff0000"] />\n    <dataset label="データセット2" data="15,25,35" [color="rgba(0,0,255,0.5)"] />\n  </datasets>\n  <options showLegend="true" showGrid="true" />\n  <style ... />\n</add_chart>: グラフ要素を追加。複数のデータセットも可。色は単色(#RRGGBB)またはカンマ区切りの複数色で指定。`,
-                add_icon: `<add_icon iconType="fa|mi" iconClass="..." [slide_id="..."]>\n  <style ... />\n  <customCss>...</customCss>\n</add_icon>: アイコン要素を追加（カスタムCSSも指定可）`,
-                add_qrcode: `<add_qrcode text="..." size="..." color="..." bgColor="..." [slide_id="..."]>\n  <style ... />\n  <customCss>...</customCss>\n</add_qrcode>: QRコード画像を生成し追加（カスタムCSSも指定可）`,
-                question: `<question type="free_text|multiple_choice">...</question>: 計画立案に必要な情報をユーザーに質問する`,
-                view_slide_as_image: `<view_slide_as_image slide_id="..." />: 指定されたスライドを画像として認識する。これにより、AIはスライドの視覚的なレイアウトを理解できる。`,
-                reorder_slides: `<reorder_slides order="slide_id_1,slide_id_2,slide_id_3" />: スライドの表示順序を変更する。カンマ区切りのスライドIDで新しい順序を指定する。`,
-                align_to_slide: '<align_to_slide element_id="..." direction="horizontal|vertical|both" />: 指定された要素をスライドに対して中央揃えする。',
-                set_background: '<set_background type="solid|gradient" color="#ffffff" gradient_start_color="#ffffff" gradient_end_color="#000000" angle="90" />: ページ全体の背景を設定する。',
-                complete: '<complete>完了報告</complete>: 全てのタスクが完了したことを報告する'
-            },
-            
-            modeCommands: {
-                design: ['sequence', 'create_slide', 'delete_slide', 'edit_element', 'view_slide', 'add_element', 'add_shape', 'add_chart', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'view_slide_as_image', 'reorder_slides', 'align_to_slide', 'set_background', 'complete', 'question'],
-                plan: ['sequence', 'view_slide', 'switch_ai_mode', 'question', 'view_slide_as_image', 'complete'],
-                ask: ['sequence', 'view_slide', 'view_slide_as_image']
-            },
-
-            usageExample: `
-            ### 使用例
-            <add_element type="text" content="タイトル">
-                <style top="10" left="10" fontSize="40"/>
-            </add_element>
-            <add_element type="text" content="アニメーションするテキスト">
-                <style top="50" left="50" fontSize="30" animation="fadeIn 1s ease-out"/>
-            </add_element>
-            <add_element type="image" content="https://example.com/animated.gif">
-                <style top="60" left="60" width="30" height="30" animation="bounce 2s infinite"/>
-            </add_element>
-            <add_element type="image" content="https://example.com/image.png">
-                <customCss>border-radius:16px; border:2px solid #333;</customCss>
-            </add_element>
-            <edit_element element_id="el-xxx">
-                <customCss>background:linear-gradient(90deg,#f00,#00f);</customCss>
-            </edit_element>
-            <add_icon iconType="fa" iconClass="fas fa-star">
-                <style top="5" left="5" width="10" height="10"/>
-                <customCss>color:gold; font-size:64px;</customCss>
-            </add_icon>
-            <add_qrcode text="https://example.com" size="256" color="#000" bgColor="#fff">
-                <customCss>box-shadow:0 0 8px #0003;</customCss>
-            </add_qrcode>
-            <add_shape type="rectangle">
-                <style top="25" left="25" width="50" height="50" fill="blue"/>
-            </add_shape>
-            <switch_ai_mode mode="design"/>
-`
-        };
-
-        this.systemPromptTemplates = {
-            design: `あなたは世界クラスのプレゼンテーションデザイナーです。ユーザーの指示を解釈し、以下の思考プロセス、対話戦略、デザイン原則、レイアウトルールに基づいて、プロフェッショナルで説得力のあるスライドを作成してください。
-
-        ### 思考プロセス
-        1.  **目的の理解**: このスライドの目的は何か？（情報提供、説得、意思決定など）
-        2.  **ターゲットの想定**: 誰に向けたスライドか？（専門家、初心者、経営層など）
-        3.  **文脈の把握**: ユーザーの指示、過去の対話、そして提供されたスライド画像（view_slide_as_image）から、デザインのトーン＆マナー（フォーマル、クリエイティブなど）や一貫性を読み取る。
-
-        ### 対話戦略
-        - **曖昧さの解消**: ユーザーの指示が曖昧な場合（例：「いい感じにして」）、具体的なデザインの方向性を確認するために、\`<question>\`コマンドを使って質問してください。
-        - **積極的な提案**: 指示がなくても、より良いデザインになるような提案（例：アイコンの追加、グラフの視覚化）をXMLコメントとして常に含めてください。提案は \`<!-- 提案: ... -->\` の形式で記述してください。
-
-        ### 基本デザイン原則
-        - **1スライド・1メッセージ**: 伝えたいことを一つに絞り、情報を詰め込みすぎない。
-        - **情報の階層化**: メッセージの重要度に応じて、見た目に明確な差をつける。例: タイトルは \`fontSize: 48\` で太字、サブタイトルは \`fontSize: 24\`、本文は \`fontSize: 18\` のように、サイズと太さでメリハリをつける。
-        - **近接**: アイコンと関連テキスト、見出しと本文など、関連する要素は近くに配置し、1つの視覚ユニットとして認識させる。
-        - **コントラスト**: 背景色と文字色には十分なコントラストを確保し、可読性を最優先する。
-        - **一貫性**: 複数のスライド画像が提供された場合は、それらを参考にフォントファミリー、カラースキーム、レイアウトスタイルを統一します。例えば、スライド1のカラースキームとスライド2のレイアウトを組み合わせるなど、複数の視覚的コンテキストを統合して新しいデザインを提案してください。
-
-        ### 超重要レイアウトルール
-        - **グリッドシステム**: スライドを仮想の12x12グリッドで考える。要素の配置(top, left)やサイズ(width, height)は、このグリッド線に沿わせることで、整然としたレイアウトを実現する。
-        - **レイアウトの多様性**: 常に中央揃えにするのではなく、Zパターン（視線を左上→右上→左下→右下と誘導）や、左右非対称のレイアウトを効果的に使い、視覚的なリズムを生み出す。
-        - **衝突回避**: 要素同士は絶対に重ねてはならない。各要素の周囲には最低でも5%の「マージン」を確保する。
-        - **余白の戦略的活用**: スライドの端から最低でも5%の余白（セーフエリア）を設ける。要素を端ギリギリに配置しない。
-        - **整列**: 複数の要素を配置する場合、左揃え、中央揃え、右揃えのいずれかで整列させ、視覚的な安定感を生み出す。
-
-        ### アニメーション活用原則
-        - **実装方法**: アニメーションは、animate.cssを用いて実装されています。
-        - **目的**: アニメーションは情報の強調、注意の喚起、状態変化の明示など、明確な目的を持って使用する。過度なアニメーションは避ける。
-        - **一貫性**: 同じ種類の要素や目的には、一貫したアニメーションスタイルを適用する。
-        - **一般的なアニメーションの一部の例**:
-            - \`fadeIn\`: 要素がフェードインして表示される。
-            - \`slideInUp\`: 要素が下からスライドインして表示される。
-            - \`bounce\`: 要素が跳ねるように表示される。
-            - \`rotateIn\`: 要素が回転しながら表示される。
-
-        ### 重要ルール
-        - **思考プロセスの可視化**: なぜそのデザインにしたのか、その根拠や意図をXMLコメント(\`<!-- ... -->\`)で必ず具体的に説明してください。例: \`<!-- Zパターンレイアウトを適用し、ユーザーの視線を自然に誘導します。 -->\` \`<!-- メインメッセージを強調するため、中央に大きく配置しました。 -->\`
-        - **フィードバックへの対応**: ユーザーからの修正依頼（「もっとこうしてほしい」など）があった場合は、チャット履歴を注意深く参照し、意図を汲み取って柔軟に提案を修正してください。
-        - **厳格なXML出力**: あなたの応答は、必ずルート要素を1つだけ持つ有効なXMLでなければなりません。XMLタグの外側には、いかなるテキスト、コメント、空白、改行も含めないでください。
-        - **改行の制御**: キャッチコピーや短い見出しのようなテキストを生成する際は、意図しない\`<br>\`タグなどの改行を含めないでください。
-        - **単一コマンドの原則**: 一度の応答には、'<sequence>'や'<create_slide>'などのコマンドを一つだけ含めてください。'<sequence>'と'<complete>'を同時に返すようなことは絶対にしないでください。
-        - 全ての要素は必ずキャンバス内(top, left, width, heightが0-100の範囲)に収まるように配置してください。
-        - **スライド1枚毎の出力**: 原則として、1枚のスライドに関する全てのコマンド（例: <create_slide>とその内部の<add_element>など）を1つの<sequence>ブロックにまとめて出力してください。
-        - **完了報告**: ユーザーから与えられたタスクが完了したと判断した場合のみ、**必ず** '<complete>完了した報告の文章</complete>' という形式で報告してください。例えば「スライドを3枚作って」という指示であれば、3枚作り終えたら、それ以上は何もせずに\`<complete>\`タグで報告します。不必要にスライドを追加し続けるなどの無限ループは絶対に避けてください。それ以外の途中経過の報告は一切不要です。
-        - **エラーからの自己修正**: もしあなたの生成したコマンドがエラーになった場合は、エラーメッセージを分析し、**どこが間違っていたのか**をXMLコメントで説明した上で、修正したコマンドを再生成してください。
-        `,
-                    plan: `あなたは優秀なプロジェクトプランナーです。ユーザーの最終目標に基づき、具体的で実行可能な行動計画を立案する役割を担います。
-
-        ### 計画立案の原則
-        - **目標の分解**: 最終目標を、具体的なスライド作成のステップに分解します。
-        - **情報の網羅性**: 各スライドで「何を」「どのように」伝えるかを明確に記述します。
-        - **確認ステップ**: 重要な意思決定（デザインの方向性、コンテンツの骨子など）が必要な場合は、計画の途中でユーザーに確認するステップを設けてください。
-        - **成果物の明確化**: 最終的にどのようなプレゼンテーションが完成するのか、全体像がわかるように計画を立ててください。
-
-        計画はステップバイステップで考え、それをXMLの<sequence>タグ内にXMLコメントとして記述して提案してください。
-
-        ### 質問機能
-        計画に必要な情報が不足している場合は、ユーザーに質問してください。質問は<question>タグを使用します。
-        **重要: ユーザーの手間を省くため、可能な限り選択肢形式('multiple_choice')を使用してください。** 自由回答('free_text')は、選択肢を提示することが困難な場合にのみ使用してください。
-
-        - **選択式 (推奨)**: <question type="multiple_choice"><text>質問文</text><option>選択肢A</option><option>選択肢B</option><option>その他</option></question>
-        - **自由回答**: <question type="free_text">質問文</question>
-
-        例:
-        <sequence>
-        <!-- 1. プレゼンテーションの基本方針を決定する -->
-        <!-- 2. タイトルスライドを作成する。タイトルは「〇〇」、サブタイトルは「△△」とする -->
-        <!-- 3. 会社概要スライドを作成する。内容は～とする -->
-        </sequence>
-        <question type="multiple_choice">
-        <text>このプレゼンの主な目的は何ですか？</text>
-        <option>製品やサービスを紹介する</option>
-        <option>研究成果を報告する</option>
-        <option>社内向けの情報を共有する</option>
-        </question>
-
-        重要: このモードでは、スライドを直接編集するコマンドは絶対に使用できません。使用可能なコマンドは上記「コマンド定義」に記載されているもののみです。
-        ユーザーが計画に同意したら、次の応答で<switch_ai_mode mode="design" />コマンドを生成し、デザインモードに移行してください。一度の応答で計画とモードスイッチを両方含めないでください。XML以外の説明やテキストは絶対に含めないでください。
-        `,
-            ask: `あなたはスライドエディタに関する質問に答えたり、簡単な操作を支援したりするAIアシスタントです。ユーザーの質問に対して、現在の状態を参考にし、必要であればコマンドを使用して回答や操作を行ってください。基本的には自然言語で分かりやすく回答しますが、操作を実行する場合はXMLコマンドを生成してください。
-`
-        };
-    }
 
     // --- UI操作とハンドラ ---
 
@@ -299,8 +186,13 @@ class AIHandler {
         const loadingMsgDiv = this.displayMessage('AIが応答を生成中...', 'loading');
 
         try {
+            // _requestToAIにloadingMsgDivを渡して、ストリーミング表示を可能にする
             const aiResponse = await this._requestToAI(loadingMsgDiv);
+            
+            // ストリーミング表示に使ったローディングメッセージは削除
             loadingMsgDiv.remove();
+            
+            // 完全なレスポンスを処理
             await this._processAIResponse(aiResponse);
         } catch (error) {
             loadingMsgDiv.remove();
@@ -393,13 +285,21 @@ class AIHandler {
     
     async handleExecuteCommandClick(button) {
         const commandText = button.dataset.command;
-        const resultContainer = button.nextElementSibling;
-        button.disabled = true;
-        button.textContent = '実行中...';
-        
-        await this.executeAndDisplayResult(commandText, resultContainer);
-        
-        button.style.display = 'none'; // 実行後はボタンを隠す
+        const messageDiv = button.closest('.chat-message');
+        if (!messageDiv) return;
+
+        const resultContainer = messageDiv.querySelector('.success-msg, .error-msg') || button.nextElementSibling;
+        const executeBtn = button;
+
+        const aiResponseElements = { resultContainer, executeBtn };
+
+        // 手動実行中であることを示すために状態を更新
+        this.isAIResponding = true;
+        this.updateAIControlButtons();
+        this._updateChatUIState(true);
+
+        // 実行と後続処理を_executeAndFollowUpに任せる
+        await this._executeAndFollowUp(commandText, aiResponseElements);
     }
 
     async executeAndDisplayResult(commandText, resultContainer) {
@@ -807,21 +707,8 @@ ${result.message}
      * @private
      */
     async _requestToAI(loadingMsgDiv, messagesOverride = null, maxRetries = 2) {
-        const systemPrompt = this.generateCommandSystemPrompt();
+        const systemPrompt = this.promptGenerator.generateCommandSystemPrompt(this.aiMode);
         let lastError = null;
-
-        let messages = messagesOverride ? [...messagesOverride] : [...this.chatHistory];
-        
-        if (!messagesOverride && this.nextRequestImage) {
-            const lastMessage = messages[messages.length - 1];
-            if (lastMessage && lastMessage.role === 'user') {
-                lastMessage.content = [
-                    { type: 'text', text: lastMessage.content },
-                    { type: 'image_url', image_url: { url: this.nextRequestImage, detail: "high" } }
-                ];
-            }
-            this.nextRequestImage = null;
-        }
 
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
             if (attempt > 0) {
@@ -833,33 +720,77 @@ ${result.message}
                 await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
             }
 
-            const currentSystemPrompt = systemPrompt + (lastError ? `\n### 前回の試行エラー\n前回の試行で以下のエラーが発生しました。内容を分析し、**どこが間違っていたのか**をXMLコメントで説明した上で、修正したコマンドを再生成してください。\nエラー: ${lastError.message}` : '');
-            const payload = { messages: [{ role: "system", content: currentSystemPrompt }, ...messages] };
-
             try {
+                const formData = new FormData();
+                const messages = messagesOverride ? [...messagesOverride] : [...this.chatHistory];
+
+                // プロンプトの構築
+                const promptHistory = messages.map(m => {
+                    let contentText = '';
+                    if (typeof m.content === 'string') {
+                        contentText = m.content;
+                    } else if (Array.isArray(m.content)) {
+                        const textPart = m.content.find(p => p.type === 'text');
+                        if (textPart) contentText = textPart.text;
+                    }
+                    return `${m.role}:\n${contentText}`;
+                }).join('\n\n---\n\n');
+                
+                const currentSystemPrompt = systemPrompt + (lastError ? `\n\n### 前回の試行エラー\n前回の試行で以下のエラーが発生しました。内容を分析し、**どこが間違っていたのか**をXMLコメントで説明した上で、修正したコマンドを再生成してください。\nエラー: ${lastError.message}` : '');
+                
+                const fullPrompt = `${currentSystemPrompt}\n\n===\n\n${promptHistory}`;
+                formData.append('prompt', fullPrompt);
+
+                // 画像の処理
+                if (this.nextRequestImage) {
+                    const res = await fetch(this.nextRequestImage);
+                    const blob = await res.blob();
+                    formData.append('image', blob, 'slide_capture.png');
+                    this.nextRequestImage = null;
+                }
+
                 const response = await fetch(this.apiEndpoint, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
+                    body: formData,
                 });
 
                 if (!response.ok) {
                     const errorText = await response.text();
                     throw new Error(`APIリクエスト失敗: ステータス ${response.status}. ${errorText}`);
                 }
-
-                const data = await response.json();
-                const content = data.choices?.[0]?.message?.content;
-                if (!content) throw new Error('APIからの応答形式が不正です。');
                 
-                // If messagesOverride is true, the caller expects raw content, not necessarily XML.
-                // So, we return it as a 'text' type.
-                if (messagesOverride) {
-                    return { type: 'text', content: content };
+                // ストリーミング処理
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullResponse = '';
+                const contentDiv = loadingMsgDiv.querySelector('.msg-content');
+                
+                // 初期のローディングメッセージをクリア
+                if(contentDiv) contentDiv.textContent = '';
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value, { stream: true });
+                    fullResponse += chunk;
+
+                    if (contentDiv) {
+                        contentDiv.textContent = fullResponse; // リアルタイムでUIを更新
+                    }
                 }
-    
-                // Otherwise, we expect XML and validate it.
-                return this._extractAndValidateCommand(content);
+                
+                if (fullResponse.startsWith("Error:")) {
+                    throw new Error(fullResponse);
+                }
+
+                if (!fullResponse) throw new Error('APIからの応答が空です。');
+                
+                if (messagesOverride) {
+                    return { type: 'text', content: fullResponse };
+                }
+
+                return this._extractAndValidateCommand(fullResponse);
 
             } catch (error) {
                 console.error(`AI API呼び出しエラー (試行 ${attempt + 1}):`, error);
@@ -909,6 +840,12 @@ ${result.message}
         
         let xmlCommand = xmlMatch[0].trim();
 
+        // 応急処置: XML属性値内の '&' を '&' に置換する。ただし、既存の文字実体参照は除く。
+        xmlCommand = xmlCommand.replace(/="([^"]*)"/g, (match, content) => {
+            const newContent = content.replace(/&(?![a-zA-Z]{2,5};|#\d{2,5};)/g, '&amp;');
+            return `="${newContent}"`;
+        });
+
         // 応急処置: AIが誤って content="<![CDATA[...]]>" という属性を生成した場合、
         // これを <content><![CDATA[...]]></content> という子要素に変換する。
         const regex = /(<add_element[^>]*?)(\s*content="<!\[CDATA\[([\s\S]*?)\]\]>")(.*?)(\/?>)/g;
@@ -936,58 +873,31 @@ ${result.message}
      * @private
      */
     async _processAIResponse(aiResponseObj) {
-        this._addHistory('assistant', aiResponseObj.content); // Store the content string
+        this._addHistory('assistant', aiResponseObj.content);
 
-        // If type is 'xml', proceed as before
-        const aiResponseElements = this.displayAIResponse(aiResponseObj.content); // Pass the XML string
+        const aiResponseElements = this.displayAIResponse(aiResponseObj.content);
         if (aiResponseElements.executeBtn) {
-            // autoExecuteToggleが有効な場合のみ自動実行
-            if (this.elements.autoExecuteToggle?.checked) {
-                await this._executeAndFollowUp(aiResponseObj.content, aiResponseElements); // Pass the XML string
+            const command = aiResponseObj.content;
+            const isModifying = this.isModifyingCommand(command);
+
+            // スライドを変更しないコマンドは常に自動実行
+            // スライドを変更するコマンドはトグルの状態に従う
+            if (!isModifying || this.elements.autoExecuteToggle?.checked) {
+                await this._executeAndFollowUp(command, aiResponseElements);
             } else {
-                // 自動実行がオフの場合は、ここで応答終了とみなす
+                // 自動実行しない場合
                 this.isAIResponding = false;
                 this.updateAIControlButtons();
                 this._updateChatUIState(false);
             }
         } else {
-            // 実行ボタンがない場合（質問や完了メッセージ）も応答終了
+            // 実行ボタンがない場合（質問や完了メッセージ）
             this.isAIResponding = false;
             this.updateAIControlButtons();
             this._updateChatUIState(false);
         }
     }
 
-    generateCommandSystemPrompt() {
-        const presentation = this.state.presentation && Array.isArray(this.state.presentation.slides)
-            ? this.state.presentation
-            : { slides: [], settings: {} };
-
-        // planモードから引き継いだ計画を取得
-        const inheritedPlan = this.getInheritedPlan();
-
-        const dynamicPrompt = `### 現在の状態
-        - スライドのサイズ: width=${presentation.settings.width}, height=${presentation.settings.height}
-        - アクティブなスライドID: ${this.state.activeSlideId || 'なし'}
-        - スライド一覧 (IDと要素数):
-        ${presentation.slides.length > 0 ? presentation.slides.map(s => `  - Slide(id=${s.id}): ${s.elements.length} elements`).join('\n') : 'スライドはありません'}
-        ${inheritedPlan ? `\n### 実行中の計画\n${inheritedPlan}` : ''}
-        `;
-
-        const { allCommandDefinitions, modeCommands, usageExample } = this.basePromptContent;
-        const availableCommandKeys = modeCommands[this.aiMode] || [];
-        
-        const commandDefinition = availableCommandKeys.length > 0
-            ? '### コマンド定義\n' + availableCommandKeys.map(key => allCommandDefinitions[key]).join('\n')
-            : '';
-
-        let systemPrompt = this.systemPromptTemplates[this.aiMode] || `あなたはWebスライドエディタを操作するためのAIアシスタントです。`;
-        
-        systemPrompt += `\n${commandDefinition}\n${usageExample}`;
-        systemPrompt += `\n${dynamicPrompt}`;
-
-        return systemPrompt;
-    }
 
     validateCommand(xmlCommand) {
         const parser = new DOMParser();
@@ -1008,7 +918,7 @@ ${result.message}
         const knownCommands = [
             'create_slide', 'delete_slide', 'edit_element', 'view_slide', 'sequence',
             'add_element', 'add_shape', 'add_chart', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'question',
-            'view_slide_as_image', 'reorder_slides', 'align_to_slide', 'set_background', 'complete'
+            'view_slide_as_image', 'reorder_slides', 'align_to_slide', 'set_background', 'complete', 'research'
         ];
         if (!knownCommands.includes(commandName)) {
             return { isValid: false, error: `不明なコマンド'${commandName}'です。` };
@@ -1076,6 +986,7 @@ ${result.message}
             case 'align_to_slide': return await this.handleAlignToSlide(commandNode);
             case 'set_background': return this.handleSetBackground(commandNode);
             case 'complete': return { success: true, message: commandNode.textContent.trim() || 'タスクが完了しました。' };
+            case 'research': return await this.handleResearch(commandNode);
             default: throw new Error(`不明なコマンド: ${commandName}`);
         }
     }
@@ -1282,6 +1193,13 @@ ${result.message}
         this.app.render();
         this.app.saveState();
         this.app.setActiveSlide(newSlideId);
+
+        // set_backgroundコマンドを探して実行
+        const setBackgroundNode = commandNode.querySelector('set_background');
+        if (setBackgroundNode) {
+            await this.handleSetBackground(setBackgroundNode);
+        }
+
 
         let elementCount = 0;
 
@@ -1608,6 +1526,62 @@ ${result.message}
             color += letters[Math.floor(Math.random() * 16)];
         }
         return color;
+    }
+
+    async handleResearch(commandNode) {
+        const type = commandNode.getAttribute('type');
+        const query = commandNode.textContent.trim();
+        const loadingMsgDiv = this.displayMessage(`${query}について調査中...`, 'loading');
+
+        if (!type || !query) {
+            throw new Error('researchコマンドにはtype属性と検索クエリが必要です。');
+        }
+
+        try {
+            let endpoint = '';
+            let body = {};
+
+            if (type === 'url') {
+                endpoint = '/trafilatura/extract';
+                body = { url: query, full_text: true };
+            } else if (type === 'word') {
+                // バックエンドに新しいエンドポイントを実装する必要がある
+                endpoint = '/research/word';
+                body = { keyword: query };
+            } else {
+                throw new Error(`不明なresearchタイプです: ${type}`);
+            }
+
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            
+            loadingMsgDiv.remove();
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '調査に失敗しました。');
+            }
+
+            const result = await response.json();
+            const resultMessage = `
+                <strong>調査結果 (${this.escapeHTML(query)}):</strong>
+                <div class="research-result">${this.escapeHTML(result.content)}</div>
+            `;
+            this.displayMessage(resultMessage, 'system');
+
+            // 次のAIへの入力としてコンテキストを追加
+            this._addHistory('user', `調査結果:\n${result.content}`);
+
+            return { success: true, message: '調査が完了しました。' };
+
+        } catch (error) {
+            if (loadingMsgDiv) loadingMsgDiv.remove();
+            console.error('Research command failed:', error);
+            return { success: false, message: error.message };
+        }
     }
 
     // --- 状態管理と自律モード ---
@@ -1954,6 +1928,48 @@ ${result.message}
         }
 
         popover.style.display = 'block';
+    }
+
+    /**
+     * コマンドがスライドを直接変更するかどうかを判定する
+     * @param {string} xmlCommand
+     * @returns {boolean} - スライドを変更する場合はtrue
+     */
+    isModifyingCommand(xmlCommand) {
+        const modifyingCommands = [
+            'create_slide', 'delete_slide', 'edit_element', 'add_element',
+            'add_shape', 'add_chart', 'add_icon', 'add_qrcode',
+            'reorder_slides', 'align_to_slide', 'set_background'
+        ];
+
+        try {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlCommand, "text/xml");
+            
+            if (xmlDoc.querySelector('parsererror')) {
+                return false; // パースエラーの場合は安全側に倒し、変更コマンドではないと判断
+            }
+            
+            const rootNode = xmlDoc.documentElement;
+            if (!rootNode) return false;
+
+            const commandName = rootNode.tagName.toLowerCase();
+
+            if (commandName === 'sequence') {
+                // sequenceの場合、子要素に一つでも変更系コマンドがあればtrue
+                for (const child of rootNode.children) {
+                    if (modifyingCommands.includes(child.tagName.toLowerCase())) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            return modifyingCommands.includes(commandName);
+        } catch (e) {
+            console.error("Error parsing command for modification check:", e);
+            return false; // エラー時も安全側に倒す
+        }
     }
 }
 

@@ -240,8 +240,7 @@
 
 .color-inputs input {
     flex-grow: 1;
-    flex-basis: 0;
-    /* 追加 */
+    width: 100%; /* 画面はみ出しバグ修正 */
     padding: 8px;
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);

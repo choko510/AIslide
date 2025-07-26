@@ -141,13 +141,14 @@ class AIHandler {
                 reorder_slides: `<reorder_slides order="slide_id_1,slide_id_2,slide_id_3" />: スライドの表示順序を変更する。カンマ区切りのスライドIDで新しい順序を指定する。`,
                 align_to_slide: '<align_to_slide element_id="..." direction="horizontal|vertical|both" />: 指定された要素をスライドに対して中央揃えする。',
                 set_background: '<set_background type="solid|gradient" color="#ffffff" gradient_start_color="#ffffff" gradient_end_color="#000000" angle="90" />: ページ全体の背景を設定する。',
-                complete: '<complete>完了報告</complete>: 全てのタスクが完了したことを報告する'
+                complete: '<complete>完了報告</complete>: 全てのタスクが完了したことを報告する',
+                research: '<research type="url|word">検索したいURLまたはワード</research>'
             },
             
             modeCommands: {
-                design: ['sequence', 'create_slide', 'delete_slide', 'edit_element', 'view_slide', 'add_element', 'add_shape', 'add_chart', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'view_slide_as_image', 'reorder_slides', 'align_to_slide', 'set_background', 'complete', 'question'],
+               design: ['sequence', 'create_slide', 'delete_slide', 'edit_element', 'view_slide', 'add_element', 'add_shape', 'add_chart', 'add_icon', 'add_qrcode', 'switch_ai_mode', 'view_slide_as_image', 'reorder_slides', 'align_to_slide', 'set_background', 'complete', 'question','],
                 plan: ['sequence', 'view_slide', 'switch_ai_mode', 'question', 'view_slide_as_image', 'complete'],
-                ask: ['sequence', 'view_slide', 'view_slide_as_image']
+               ask: ['sequence', 'view_slide', 'view_slide_as_image']
             },
 
             usageExample: `
@@ -178,7 +179,8 @@ class AIHandler {
                 <style top="25" left="25" width="50" height="50" fill="blue"/>
             </add_shape>
             <switch_ai_mode mode="design"/>
-`
+            <research type="word">今日の株価</research>
+           `           
         };
 
         this.systemPromptTemplates = {

@@ -484,13 +484,17 @@ async def get_wiki_image(keyword: str):
         ]
         en_urls, ja_urls = await asyncio.gather(*url_tasks)
 
-        # Combine and deduplicate results
+        # Combine and deduplicate results, excluding SVG files
         all_urls = set(en_urls) | set(ja_urls)
-        
-        if not all_urls:
-            raise HTTPException(status_code=404, detail="No images found on both English and Japanese Wikipedia.")
+        filtered_urls = [
+            url for url in all_urls
+            if not url.lower().endswith(".svg")
+        ]
 
-        return JSONResponse(content={"image_urls": sorted(list(all_urls))})
+        if not filtered_urls:
+            raise HTTPException(status_code=404, detail="No non-SVG images found on both English and Japanese Wikipedia.")
+
+        return JSONResponse(content={"image_urls": sorted(filtered_urls)})
 
 # --- WebSocket Endpoint ---
 @app.websocket("/ws/collaborate/{slide_id}")

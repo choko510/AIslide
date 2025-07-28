@@ -1327,6 +1327,12 @@ import { ColorPicker } from './ColorPicker.js';
                     gradientAngle: document.getElementById('gradient-angle'),
                     gradientAngleValue: document.getElementById('gradient-angle-value'),
                     pageBgColorPickerContainer: document.getElementById('page-bg-color-picker-container'),
+
+                    // Wikipedia Image Search
+                    wikiImageSearchInput: document.getElementById('wiki-image-search-input'),
+                    wikiImageSearchBtn: document.getElementById('wiki-image-search-btn'),
+                    wikiImageResultsContainer: document.getElementById('wiki-image-results-container'),
+                    wikiImageLoading: document.getElementById('wiki-image-loading'),
                 };
             },
 
@@ -1916,6 +1922,7 @@ import { ColorPicker } from './ColorPicker.js';
                     this._bindGroupEvents();
                     this._bindInspectorEvents();
                     this._bindGlobalEvents();
+                   this._bindWikiImageSearchEvents();
                 } catch (error) {
                     ErrorHandler.handle(error, 'bind_events');
                 }
@@ -1962,6 +1969,16 @@ import { ColorPicker } from './ColorPicker.js';
                 this.elements.saveBtn.addEventListener('click', () => this.saveState());
                 this.elements.presentBtn.addEventListener('click', () => this.presentationManager.startPresentation());
                 this.elements.exportBtn.addEventListener('click', (e) => this.showExportMenu(e));
+
+                // 台本パネル表示/非表示ボタン
+                const toggleScriptPanelBtn = document.getElementById('toggle-script-panel-btn');
+                if (toggleScriptPanelBtn) {
+                    toggleScriptPanelBtn.addEventListener('click', () => {
+                        const rightSidebar = this.elements.rightSidebar;
+                        const isDisplayed = rightSidebar.style.display === 'flex';
+                        rightSidebar.style.display = isDisplayed ? 'none' : 'flex';
+                    });
+                }
             },
 
             _bindQRCodeButton() {
@@ -2506,6 +2523,10 @@ import { ColorPicker } from './ColorPicker.js';
                 // Get all elements' pixel rects at the beginning of interaction
                 const allElementsPixelRects = this.getActiveSlide().elements.map(elData => {
                     const domEl = this.elements.slideCanvas.querySelector(`[data-id="${elData.id}"]`);
+                    if (!domEl) {
+                        const rect = { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0, centerX: 0, centerY: 0 };
+                        return { id: elData.id, rect };
+                    }
                     const rect = { left: domEl.offsetLeft, top: domEl.offsetTop, width: domEl.offsetWidth, height: domEl.offsetHeight };
                     rect.right = rect.left + rect.width;
                     rect.bottom = rect.top + rect.height;
@@ -2516,7 +2537,9 @@ import { ColorPicker } from './ColorPicker.js';
 
                 const initialStates = elementsToTrack.map(elData => {
                     const domEl = this.elements.slideCanvas.querySelector(`[data-id="${elData.id}"]`);
-                    if (domEl) domEl.style.willChange = 'transform, width, height';
+                    if (!domEl) return null;
+                    
+                    domEl.style.willChange = 'transform, width, height';
                     
                     // iframe pointer events
                     if (elData.type === 'iframe') {
@@ -2526,16 +2549,17 @@ import { ColorPicker } from './ColorPicker.js';
                         }
                     }
                     
+                    const foundRect = allElementsPixelRects.find(r => r.id === elData.id);
                     return {
                         id: elData.id,
                         startX: elData.style.left,
                         startY: elData.style.top,
                         startW: elData.style.width,
                         startH: elData.style.height ?? (domEl.offsetHeight / canvasRect.height * 100),
-                        initialRect: allElementsPixelRects.find(r => r.id === elData.id).rect,
+                        initialRect: foundRect ? foundRect.rect : { left: 0, top: 0, width: 0, height: 0 },
                         _initialFontSize: elData.style.fontSize
                     };
-                });
+                }).filter(Boolean);
 
                 this.batchUpdateState({
                     'interaction.initialStates': initialStates,
@@ -4867,9 +4891,73 @@ import { ColorPicker } from './ColorPicker.js';
                         this.pageBgColorPicker.setColor(backgroundColor);
                     }
                 }
-            }
-        }
-    };
+           }
+
+           }, // ここにカンマを追加
+           _bindWikiImageSearchEvents() {
+               if (this.elements.wikiImageSearchBtn) {
+                   this.elements.wikiImageSearchBtn.addEventListener('click', () => this.handleWikiImageSearch());
+               }
+               if (this.elements.wikiImageSearchInput) {
+                   this.elements.wikiImageSearchInput.addEventListener('keydown', (e) => {
+                       if (e.key === 'Enter') {
+                           e.preventDefault();
+                           this.handleWikiImageSearch();
+                       }
+                   });
+               }
+               if (this.elements.wikiImageResultsContainer) {
+                   this.elements.wikiImageResultsContainer.addEventListener('click', (e) => {
+                       const item = e.target.closest('.wiki-image-item');
+                       if (item && item.dataset.imageUrl) {
+                           // 画像追加時、Base64ではなくURLを直接渡す
+                           this.addElement('image', item.dataset.imageUrl);
+                       }
+                   });
+               }
+           }, // ここにカンマを追加
+
+           async handleWikiImageSearch() {
+               const keyword = this.elements.wikiImageSearchInput.value.trim();
+               if (!keyword) return;
+
+               this.elements.wikiImageLoading.style.display = 'block';
+               this.elements.wikiImageResultsContainer.innerHTML = '';
+
+               try {
+                   const response = await fetch(`/wiki/image/${encodeURIComponent(keyword)}`);
+                   if (!response.ok) {
+                       const errorData = await response.json().catch(() => ({ detail: 'Server error' }));
+                       throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                   }
+                   const data = await response.json();
+
+                   if (data.image_urls && data.image_urls.length > 0) {
+                       data.image_urls.forEach(url => {
+                           const item = document.createElement('div');
+                           item.className = 'wiki-image-item';
+                           item.dataset.imageUrl = url;
+                           
+                           const img = document.createElement('img');
+                           img.src = url;
+                           img.alt = keyword;
+                           img.loading = 'lazy'; // Lazy loading for images
+                           
+                           item.appendChild(img);
+                           this.elements.wikiImageResultsContainer.appendChild(item);
+                       });
+                   } else {
+                       this.elements.wikiImageResultsContainer.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">画像が見つかりませんでした。</p>';
+                   }
+               } catch (error) {
+                   console.error('Wikipedia image search failed:', error);
+                   this.elements.wikiImageResultsContainer.innerHTML = `<p style="color: var(--danger-color); text-align: center;">画像の検索中にエラーが発生しました。<br>${error.message}</p>`;
+                   ErrorHandler.handle(error, 'wiki_image_search');
+               } finally {
+                   this.elements.wikiImageLoading.style.display = 'none';
+               }
+           }, // ここにカンマを追加
+       }; // ここでAppオブジェクトが閉じられる
 
         // 画像編集モーダルを開く関数
         App.openImageEditor = function(imageDataURL, callback) {
@@ -5272,7 +5360,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const labelInput = document.createElement('input');
         labelInput.type = 'text';
         labelInput.dataset.type = 'label';
-        labelInput.value = label.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // Escape HTML
+        labelInput.value = label.replace(/</g, "<").replace(/>/g, ">"); // Escape HTML
         labelInput.style.cssText = 'width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;';
         labelCell.appendChild(labelInput);
 
@@ -5281,7 +5369,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const valueInput = document.createElement('input');
         valueInput.type = 'number';
         valueInput.dataset.type = 'value';
-        valueInput.value = value.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // Escape HTML
+        valueInput.value = value.replace(/</g, "<").replace(/>/g, ">"); // Escape HTML
         valueInput.style.cssText = 'width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;';
         valueCell.appendChild(valueInput);
 

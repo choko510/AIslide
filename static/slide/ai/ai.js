@@ -28,10 +28,10 @@ class AIHandler {
         this.selfCorrectionCount = 0; // 自己修正の試行回数カウンタ
         this.MAX_SELF_CORRECTION = 3; // 自己修正の最大試行回数
         this.popoverAbortController = null; // 提案ポップオーバーのイベントリスナー管理用
- 
-         this.init();
-     }
- 
+
+        this.init();
+    }
+
     /**
      * plan.htmlから渡されたデータに基づいてスライド生成を開始する
      * @param {object} planData - plan.jsから収集された質問と回答のオブジェクト
@@ -262,8 +262,13 @@ class AIHandler {
         const executionResult = await this.executeAndDisplayResult(command, uiElements.resultContainer);
         uiElements.executeBtn.style.display = 'none';
 
-        // 実行が成功し、かつ完了/質問タグがない場合のみ、ループを継続
-        if (executionResult && executionResult.success && !command.includes('<complete>') && !command.includes('<question>')) {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(command, "text/xml");
+        const commandName = xmlDoc.documentElement.tagName.toLowerCase();
+        const noContinueCommands = ['view_slide', 'view_slide_as_image', 'research', 'switch_ai_mode'];
+
+        // 実行が成功し、かつ完了/質問タグがなく、ループ継続対象のコマンドである場合のみ、ループを継続
+        if (executionResult && executionResult.success && !noContinueCommands.includes(commandName) && !command.includes('<complete>') && !command.includes('<question>')) {
             const nextPrompt = `コマンドの実行に成功しました。\n現状のページに問題がなければ、次のスライドの作成してください。\nもしタスクが完了していれば<complete>タグで報告してください。`;
             
             const nextAction = () => this.handleSendMessage(nextPrompt);
@@ -1529,60 +1534,86 @@ ${result.message}
     }
 
     async handleResearch(commandNode) {
-        const type = commandNode.getAttribute('type');
-        const query = commandNode.textContent.trim();
-        const loadingMsgDiv = this.displayMessage(`${query}について調査中...`, 'loading');
-
-        if (!type || !query) {
-            throw new Error('researchコマンドにはtype属性と検索クエリが必要です。');
-        }
-
-        try {
-            let endpoint = '';
-            let body = {};
-
-            if (type === 'url') {
-                endpoint = '/trafilatura/extract';
-                body = { url: query, full_text: true };
-            } else if (type === 'word') {
-                // バックエンドに新しいエンドポイントを実装する必要がある
-                endpoint = '/research/word';
-                body = { keyword: query };
-            } else {
-                throw new Error(`不明なresearchタイプです: ${type}`);
+            const type = commandNode.getAttribute('type');
+            const query = commandNode.textContent.trim();
+            const loadingMsgDiv = this.displayMessage(`${query}について調査中...`, 'loading');
+            const contentDiv = loadingMsgDiv.querySelector('.msg-content');
+    
+            if (!type || !query) {
+                loadingMsgDiv.remove();
+                throw new Error('researchコマンドにはtype属性と検索クエリが必要です。');
             }
-
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
-            
-            loadingMsgDiv.remove();
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || '調査に失敗しました。');
+    
+            try {
+                let prompt = '';
+                let finalMessageTitle = '';
+    
+                switch (type) {
+                    case 'url':
+                        finalMessageTitle = `「${query}」の要約結果`;
+                        prompt = `あなたは優秀なリサーチャーです。以下のURLの内容を読み込み、プレゼンテーションのスライドでそのまま使えるように、重要なポイントを箇条書きで簡潔にまとめてください。\n\nURL: "${query}"`;
+                        break;
+                    case 'word':
+                        finalMessageTitle = `「${query}」の調査結果`;
+                        prompt = `あなたは優秀なリサーチャーです。以下のキーワードについて調査し、プレゼンテーションのスライドでそのまま使えるように、重要なポイントを箇条書きで簡潔にまとめてください。\n\nキーワード: "${query}"`;
+                        break;
+                    default:
+                        throw new Error(`不明な調査タイプです: ${type}`);
+                }
+    
+                const formData = new FormData();
+                formData.append('prompt', prompt);
+                formData.append('is_search', 'true');
+    
+                const response = await fetch(this.apiEndpoint, {
+                    method: 'POST',
+                    body: formData,
+                });
+    
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`APIリクエスト失敗: ステータス ${response.status}. ${errorText}`);
+                }
+    
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let resultText = '';
+                
+                if (contentDiv) contentDiv.textContent = '';
+    
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value, { stream: true });
+                    resultText += chunk;
+    
+                    if (contentDiv && window.DOMPurify) {
+                        contentDiv.innerHTML = DOMPurify.sanitize(resultText.replace(/\n/g, '<br>'));
+                        contentDiv.scrollTop = contentDiv.scrollHeight;
+                    } else if (contentDiv) {
+                        contentDiv.textContent = resultText;
+                        contentDiv.scrollTop = contentDiv.scrollHeight;
+                    }
+                }
+                
+                if (resultText.startsWith("Error:")) {
+                    throw new Error(resultText);
+                }
+    
+                loadingMsgDiv.remove();
+                const formattedResult = resultText.replace(/\n/g, '<br>');
+                this.displayMessage(formattedResult, 'ai', finalMessageTitle);
+    
+                return { success: true, message: `「${query}」の調査が完了しました。` };
+    
+            } catch (error) {
+                if (loadingMsgDiv && loadingMsgDiv.parentNode) {
+                    loadingMsgDiv.remove();
+                }
+                throw error;
             }
-
-            const result = await response.json();
-            const resultMessage = `
-                <strong>調査結果 (${this.escapeHTML(query)}):</strong>
-                <div class="research-result">${this.escapeHTML(result.content)}</div>
-            `;
-            this.displayMessage(resultMessage, 'system');
-
-            // 次のAIへの入力としてコンテキストを追加
-            this._addHistory('user', `調査結果:\n${result.content}`);
-
-            return { success: true, message: '調査が完了しました。' };
-
-        } catch (error) {
-            if (loadingMsgDiv) loadingMsgDiv.remove();
-            console.error('Research command failed:', error);
-            return { success: false, message: error.message };
         }
-    }
 
     // --- 状態管理と自律モード ---
 

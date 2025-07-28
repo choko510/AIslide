@@ -11,7 +11,3 @@ bcrypt
 Jinja2
 requests
 httpx
-faust-cchardet
-pycurl
-trafilatura
-duckduckgo-search

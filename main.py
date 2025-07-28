@@ -356,19 +356,18 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     logger.warning("GEMINI_API_KEY not found. AI endpoint is disabled.")
 
-def reqAI(prompt: str, model_name: str = "gemini-1.5-pro", images: Optional[List[Image.Image]] = None):
+async def reqAI(prompt: str, model_name: str = "gemini-2.5-flash", is_search: bool = False, images: Optional[List[Image.Image]] = None):
     """
-    AIモデルにリクエストを送信し、ストリーミングで応答を返す同期ジェネレータ。
-    FastAPIのStreamingResponseがこれを別スレッドで実行してくれる。
+    AIモデルにリクエストを送信し、ストリーミングで応答を返す非同期ジェネレータ。
     """
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
         
-        model_to_use = "gemini-1.5-pro-vision-latest" if images else model_name
+        model_to_use = "gemini-2.5-flash" if images else model_name
 
         parts = []
         if prompt:
-            parts.append(types.Part.from_text(prompt))
+            parts.append(types.Part(text=prompt))
         if images:
             for img in images:
                 parts.append(types.Part.from_pil(img))
@@ -376,19 +375,27 @@ def reqAI(prompt: str, model_name: str = "gemini-1.5-pro", images: Optional[List
         contents = [types.Content(role="user", parts=parts)]
 
         # ユーザー提供のコードに基づき、ツール設定を追加
-        tools = [
-            types.Tool(googleSearch=types.GoogleSearch()),
-        ]
-        # generation_configに名前が変更されている可能性を考慮
-        generation_config = types.GenerateContentConfig(
-            tools=tools,
-        )
+        if is_search:
+            tools = [
+                types.Tool(url_context=types.UrlContext()),
+                types.Tool(googleSearch=types.GoogleSearch()),
+            ]
 
-        response_stream = client.models.generate_content_stream(
-            model=f"models/{model_to_use}",
-            contents=contents,
-            generation_config=generation_config,
-        )
+            generation_config = types.GenerateContentConfig(
+                tools=tools,
+            )
+
+            response_stream = client.models.generate_content_stream(
+                model=f"models/{model_to_use}",
+                contents=contents,
+                generation_config=generation_config,
+            )
+
+        else:
+            response_stream = client.models.generate_content_stream(
+                model=f"models/{model_to_use}",
+                contents=contents,
+            )
 
         for chunk in response_stream:
             if chunk.text:
@@ -402,6 +409,7 @@ def reqAI(prompt: str, model_name: str = "gemini-1.5-pro", images: Optional[List
 @app.post("/ai/ask")
 async def ai_ask(
     prompt: str = Form(...),
+    is_search: bool = Form(False),
     image: UploadFile = File(None)
 ):
     """
@@ -419,8 +427,8 @@ async def ai_ask(
             logger.error(f"画像ファイルの読み込みに失敗: {e}", exc_info=True)
             raise HTTPException(status_code=400, detail=f"Invalid image file: {str(e)}")
 
-    # 同期ジェネレータであるreqAIをStreamingResponseに渡す
-    return StreamingResponse(reqAI(prompt, images=images), media_type="text/event-stream")
+    # 非同期ジェネレータであるreqAIをStreamingResponseに渡す
+    return StreamingResponse(reqAI(prompt, is_search=is_search, images=images), media_type="text/event-stream")
 
 
 # --- Wikipedia Image Endpoint ---
@@ -484,125 +492,6 @@ async def get_wiki_image(keyword: str):
 
         return JSONResponse(content={"image_urls": sorted(list(all_urls))})
 
-
-# --- Trafilatura Endpoint ---
-@app.post("/trafilatura/extract")
-async def extract_content_from_url(request: URLRequest, full_text: bool = False):
-    """
-    指定されたURLから本文を抽出し、整形して返すエンドポイント
-    full_text=true を指定すると全文を、指定しない場合は要約を返す
-    """
-    if not request.url:
-        raise HTTPException(status_code=400, detail="URL is required")
-
-    try:
-        # URLからHTMLをダウンロード
-        downloaded = await run_in_threadpool(trafilatura.fetch_url, request.url)
-        if downloaded is None:
-            raise HTTPException(status_code=404, detail="Could not fetch content from URL")
-
-        # 本文を抽出
-        content = await run_in_threadpool(
-            trafilatura.extract,
-            downloaded,
-            include_comments=False,
-            include_tables=True
-        )
-
-        if not content:
-            raise HTTPException(status_code=404, detail="Could not extract content from the page")
-
-        if not full_text and len(content) > 1000:
-            # 1000文字以降の最初の句点を探す
-            end_pos = content.find('。', 1000)
-            if end_pos != -1:
-                content = content[:end_pos + 1]  # 句点を含めて切り出す
-            else:
-                # 句点がない場合は改行を探す
-                end_pos = content.find('\n', 1000)
-                if end_pos != -1:
-                    content = content[:end_pos] + "..."
-                else:
-                    # それでもない場合は1000文字でカット
-                    content = content[:1000] + "..."
-
-        return JSONResponse(content={"url": request.url, "content": content})
-    except Exception as e:
-        logger.error(f"Error processing URL {request.url}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
-
-
-# --- Research Endpoint ---
-@app.post("/research/word")
-async def research_by_word(request: WordRequest):
-    """
-    指定されたキーワードでWeb検索し、上位サイトの情報を要約して返す。
-    """
-    keyword = request.keyword
-    if not keyword:
-        raise HTTPException(status_code=400, detail="Keyword is required")
-
-    try:
-        # DuckDuckGoで検索を実行 (同期処理なのでスレッドプールで実行)
-        def search_ddg(query):
-            # DDGS can be used as a context manager.
-            with DDGS() as ddgs:
-                return [r for r in ddgs.text(query, max_results=3)]
-        
-        search_results = await run_in_threadpool(search_ddg, keyword)
-
-        if not search_results:
-            raise HTTPException(status_code=404, detail="No search results found.")
-
-        # 上位サイトのコンテンツをtrafilaturaで並行して取得
-        all_text = ""
-        for result in search_results:
-            url = result.get('href')
-            if not url:
-                continue
-
-            # fetch_urlとextractは同期的であるため、スレッドプールで実行
-            downloaded = await run_in_threadpool(trafilatura.fetch_url, url)
-            if downloaded:
-                extracted_text = await run_in_threadpool(
-                    trafilatura.extract,
-                    downloaded,
-                    include_comments=False,
-                    include_tables=True
-                )
-                if extracted_text:
-                    all_text += f"Source: {url}\nTitle: {result.get('title')}\n\n{extracted_text}\n\n---\n\n"
-
-        if not all_text:
-            raise HTTPException(status_code=404, detail="Could not extract content from search results.")
-
-        # Geminiに要約を依頼
-        summary_prompt = f"""以下の複数のWebサイトから抽出した情報源を分析し、ユーザーの検索キーワード「{keyword}」に対する包括的な回答を、一つの連続した日本語の文章として400文字程度で要約してください。
-        
-        要約のポイント：
-        - 複数の情報源からの情報を統合し、重複を排除してください。
-        - 最も重要で関連性の高い情報を優先してください。
-        - 客観的な事実に基づいて記述してください。
-        - 箇条書きは使用せず、自然な段落を持つ文章として構成してください。
-        - 情報源のURLやタイトルは最終的な要約に含めないでください。
-
-        情報源:
-        {all_text}
-        """
-        
-        summary = await reqAI(summary_prompt)
-
-        if not summary:
-            # 要約に失敗した場合は、抽出したテキストをそのまま返す（短縮して）
-            summary = (all_text[:2000] + '...') if len(all_text) > 2000 else all_text
-
-        return JSONResponse(content={"keyword": keyword, "content": summary})
-
-    except Exception as e:
-        logger.error(f"Error during research for keyword '{keyword}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"An error occurred during research: {str(e)}")
-
-
 # --- WebSocket Endpoint ---
 @app.websocket("/ws/collaborate/{slide_id}")
 async def websocket_collaborate(websocket: WebSocket, slide_id: str, *, token: Optional[str] = None, db: Session = Depends(get_db)):
@@ -632,3 +521,4 @@ app.mount("/", StaticFiles(directory="static"), name="static")
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="localhost", port=8000)
+

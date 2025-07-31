@@ -1183,6 +1183,8 @@ import { ColorPicker } from './ColorPicker.js';
                     
                     // bindEvents, loadState, render, initZoomControl は loadIconData() の後に実行
                     this.bindEvents();
+                    this._initPresentMenu(); // プレゼン表示方法メニュー初期化
+                    this._autoStartIfPopup(); // 新規ウィンドウでの自動開始対応
                     this.loadState();
                     this.render();
                     this.initZoomControl();
@@ -1272,6 +1274,7 @@ import { ColorPicker } from './ColorPicker.js';
                     presentBtn: document.getElementById('present-btn'),
                     exportBtn: document.getElementById('export-btn'),
                     exportMenu: document.getElementById('export-menu'),
+                    presentMenu: document.getElementById('present-menu'),
                     
                     // 要素追加ボタン
                     addTextBtn: document.getElementById('add-text-btn'),
@@ -1546,6 +1549,89 @@ import { ColorPicker } from './ColorPicker.js';
                         } else if (tabName === 'page-settings') {
                             this.initGlobalCssEditor();
                         }
+                    }
+                }
+            },
+
+            _initPresentMenu() {
+                const btn = this.elements.presentBtn;
+                const menu = this.elements.presentMenu;
+                if (!btn || !menu) return;
+
+                // Presentation API 対応可否で項目表示を切替
+                const hasPresentationApi = ('presentation' in navigator) &&
+                    !!(navigator.presentation && (typeof navigator.presentation.requestStart === 'function' || typeof navigator.presentation.requestSession === 'function'));
+                const apiItem = menu.querySelector('.present-api-only');
+                if (apiItem) apiItem.style.display = hasPresentationApi ? '' : 'none';
+
+                const toggleMenu = (e) => {
+                    e.stopPropagation();
+                    const rect = btn.getBoundingClientRect();
+                    menu.style.left = `${rect.left}px`;
+                    menu.style.top = `${rect.bottom + 6}px`;
+                    menu.style.display = (menu.style.display === 'none' || !menu.style.display) ? 'block' : 'none';
+                };
+
+                const hideMenu = () => { if (menu.style.display === 'block') menu.style.display = 'none'; };
+
+                // 既存のpresentBtnに紐づく「即座にstartPresentationを呼ぶ」ハンドラがあれば抑止するため、既存clickは一旦無効化
+                // addEventListenerで積まれている可能性はあるが、ここではデフォルト動作をpreventする専用ハンドラを先に登録
+                btn.addEventListener('click', (ev) => {
+                    // 既存のinline onClick等をブロック
+                    ev.preventDefault();
+                    ev.stopImmediatePropagation();
+                    toggleMenu(ev);
+                }, { capture: true });
+
+                // 通常の外側クリックで閉じる
+                document.addEventListener('click', (e) => {
+                    if (!menu.contains(e.target) && e.target !== btn) hideMenu();
+                });
+
+                // メニュー項目クリック
+                menu.addEventListener('click', async (e) => {
+                    const item = e.target.closest('.present-menu-item');
+                    if (!item) return;
+                    hideMenu();
+                    const mode = item.dataset.mode;
+                    try {
+                        if (mode === 'fullscreen') {
+                            this.presentationManager.startPresentation();
+                        } else if (mode === 'popup') {
+                            // 新規ウィンドウを開き、子ウィンドウ側で自動開始
+                            const url = new URL(window.location.href);
+                            url.hash = 'present';
+                            window.open(url.toString(), 'presentation', 'popup=1,width=1280,height=720');
+                        } else if (mode === 'external') {
+                            if (!hasPresentationApi) {
+                                ErrorHandler.showNotification('このブラウザはPresentation APIに対応していません', 'error');
+                                return;
+                            }
+                            await this.presentationManager.startExternalDisplay();
+                        }
+                    } catch (err) {
+                        ErrorHandler.handle(err, 'presentation_start');
+                    }
+                });
+
+                // Presentation API セッション断のリカバリ監視（簡易）
+                if (hasPresentationApi && navigator.presentation && navigator.presentation.defaultRequest) {
+                    try {
+                        navigator.presentation.defaultRequest.onconnectionavailable = (event) => {
+                            // 接続が復帰した時のハンドリング（必要なら同期メッセージ）
+                            if (window.developmentMode) console.log('Presentation connection available', event);
+                        };
+                    } catch (_) {}
+                }
+            },
+
+            _autoStartIfPopup() {
+                // 新規ウィンドウ（#present付き）で開かれた場合、自動で開始を試行
+                if (window.location.hash === '#present') {
+                    try {
+                        this.presentationManager.startPresentation();
+                    } catch (err) {
+                        ErrorHandler.handle(err, 'presentation_autostart');
                     }
                 }
             },

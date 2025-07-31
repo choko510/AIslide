@@ -1695,6 +1695,39 @@
     background-color: var(--bg-light);
 }
 
+/* Present menu (popover near toolbar Present button) */
+#present-menu {
+    display: none;
+    position: absolute;
+    z-index: 10000;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-md);
+    border-radius: var(--border-radius);
+    padding: 4px;
+    min-width: 220px;
+}
+
+#present-menu .present-menu-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-primary);
+    border-radius: 6px;
+}
+
+#present-menu .present-menu-item:hover {
+    background-color: var(--bg-light);
+}
+
+#present-menu .present-menu-item i {
+    width: 16px;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
 /* AI Suggestion Popover */
 #ai-suggestion-popover {
     display: none;

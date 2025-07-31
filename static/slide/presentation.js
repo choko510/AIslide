@@ -2,27 +2,100 @@ class PresentationManager {
     constructor(app) {
         this.app = app;
         this._presentationClickHandler = null;
+        this._externalSession = null;
+    }
+
+    async startExternalDisplay() {
+        // Presentation APIで外部ディスプレイに表示（ブラウザ差異を吸収）
+        try {
+            const anyNav = navigator;
+            if (!('presentation' in anyNav)) {
+                throw new Error('Presentation API not supported');
+            }
+            const url = new URL(window.location.href);
+            url.hash = 'present'; // ビュー側で自動開始
+
+            // Chromeの旧API: presentation.requestStart
+            // 一部実装: presentation.requestSession
+            // よって両方を条件分岐で試行
+            let session = null;
+            if (anyNav.presentation && typeof anyNav.presentation.requestStart === 'function') {
+                session = await anyNav.presentation.requestStart(url.toString());
+            } else if (anyNav.presentation && typeof anyNav.presentation.requestSession === 'function') {
+                session = await anyNav.presentation.requestSession(url.toString());
+            } else {
+                throw new Error('Presentation API entrypoint not available');
+            }
+
+            this._externalSession = session;
+
+            // セッションイベント（存在チェックしつつ）
+            if (session) {
+                if ('onconnect' in session) {
+                    session.onconnect = () => {
+                        if (window.developmentMode) console.log('Presentation session connected');
+                    };
+                }
+                if ('onterminate' in session) {
+                    session.onterminate = () => {
+                        if (window.developmentMode) console.log('Presentation session terminated');
+                        this._externalSession = null;
+                    };
+                }
+            }
+        } catch (e) {
+            ErrorHandler.handle(e, 'presentation_external');
+            ErrorHandler.showNotification('外部ディスプレイへの表示に失敗しました（ブラウザ未対応の可能性）', 'error');
+        }
     }
 
     startPresentation() {
+        // 事前にユーザーが明示選択したモードでのみフルスクリーンへ入るようにする。
+        // ここではフルスクリーン要求の失敗時は通知し、プレゼンモード状態は戻す。
         document.body.classList.add('presentation-mode');
-        this.app.elements.presentationView.requestFullscreen().catch(() => {
-            alert('フルスクリーンモードの開始に失敗しました。');
-            this.stopPresentation();
-        });
-        this.renderPresentationSlide();
-        window.addEventListener('resize', this.renderPresentationSlide.bind(this));
-        // クリックで次のスライド
-        this._presentationClickHandler = (e) => {
-            const rect = this.app.elements.presentationView.getBoundingClientRect();
-            const x = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
-            if (x < rect.left + rect.width / 2) {
-                this.changePresentationSlide(-1);
-            } else {
+
+        // キーボード操作: Space/Enter/→/↓ 次、←/↑ 前、Esc 終了
+        this._keyHandler = (e) => {
+            const code = e.code || e.key;
+            if (['Space', 'Enter', 'ArrowRight', 'ArrowDown'].includes(code)) {
+                e.preventDefault();
+                this._pauseAllMedia(); // 次へ行く前に現スライドのメディアを止める
                 this.changePresentationSlide(1);
+            } else if (['ArrowLeft', 'ArrowUp'].includes(code)) {
+                e.preventDefault();
+                this._pauseAllMedia();
+                this.changePresentationSlide(-1);
+            } else if (code === 'Escape' || e.key === 'Esc') {
+                e.preventDefault();
+                this.stopPresentation();
             }
         };
-        this.app.elements.presentationView.addEventListener('click', this._presentationClickHandler);
+        document.addEventListener('keydown', this._keyHandler, { capture: true });
+
+        // フルスクリーン要求はユーザー操作直後でないと拒否され得るため、Promiseを確実に扱う
+        this.app.elements.presentationView.requestFullscreen()
+            .then(() => {
+                this.renderPresentationSlide();
+                window.addEventListener('resize', this.renderPresentationSlide.bind(this));
+                // クリックで次のスライド
+                this._presentationClickHandler = (e) => {
+                    const rect = this.app.elements.presentationView.getBoundingClientRect();
+                    const x = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+                    if (x < rect.left + rect.width / 2) {
+                        this._pauseAllMedia();
+                        this.changePresentationSlide(-1);
+                    } else {
+                        this._pauseAllMedia();
+                        this.changePresentationSlide(1);
+                    }
+                };
+                this.app.elements.presentationView.addEventListener('click', this._presentationClickHandler);
+            })
+            .catch(() => {
+                // フルスクリーンが拒否された場合はモード解除
+                ErrorHandler.showNotification('フルスクリーンの開始に失敗しました。', 'error');
+                this.stopPresentation();
+            });
     }
 
     stopPresentation() {
@@ -34,6 +107,13 @@ class PresentationManager {
             this.app.elements.presentationView.removeEventListener('click', this._presentationClickHandler);
             this._presentationClickHandler = null;
         }
+        // キーボードイベント解除
+        if (this._keyHandler) {
+            document.removeEventListener('keydown', this._keyHandler, { capture: true });
+            this._keyHandler = null;
+        }
+        // 念のためメディア停止
+        this._pauseAllMedia();
     }
 
     changePresentationSlide(dir) {
@@ -42,6 +122,9 @@ class PresentationManager {
         let nextIdx = curIdx + dir;
         if (nextIdx >= 0 && nextIdx < slides.length) {
             this.app.setActiveSlide(slides[nextIdx].id);
+            // 新しいスライドに到達後、対象メディアのみ再生（autoplayがtrueの要素）
+            this._playAutoplayMedia();
+            // 次のスライドを先読み
             this.preloadNextSlide(nextIdx); // 次のスライドを事前に読み込む
         }
     }
@@ -58,6 +141,13 @@ class PresentationManager {
         document.body.appendChild(tempContainer);
 
         nextSlide.elements.forEach(elData => {
+            // 可能なら動画/音声のロードを開始
+            if (elData.type === 'video' || elData.type === 'audio') {
+                const media = el.querySelector(elData.type);
+                if (media && typeof media.load === 'function') {
+                    try { media.load(); } catch (e) { /* ignore */ }
+                }
+            }
             // アニメーションは事前読み込み時には適用しない
             const originalAnimation = elData.style.animation;
             elData.style.animation = '';
@@ -106,27 +196,36 @@ class PresentationManager {
 
             // アニメーション付与
             if (elData.style.animation) {
-                el.classList.remove('animate__animated', elData.style.animation);
+                // CSS animation指定（例: "fadeIn 1s ease-out"）が渡る可能性があるため、
+                // classList操作用には最初のトークンのみを使用する
+                const animToken = String(elData.style.animation).trim().split(/\s+/)[0];
+                el.classList.remove('animate__animated');
+                if (animToken) el.classList.remove(animToken);
                 void el.offsetWidth; // 強制再描画
-                el.classList.add('animate__animated', elData.style.animation);
+                el.classList.add('animate__animated');
+                if (animToken) el.classList.add(animToken);
                 el.addEventListener('animationend', function handler() {
-                    el.classList.remove('animate__animated', elData.style.animation);
+                    el.classList.remove('animate__animated');
+                    if (animToken) el.classList.remove(animToken);
                     el.removeEventListener('animationend', handler);
                 });
             }
             presentationSlideContainer.appendChild(el);
 
-            // 動画要素の場合、再生を開始
-            if (elData.type === 'video') {
-                const videoEl = el.querySelector('video');
-                if (videoEl && elData.content.autoplay) { // autoplayがtrueの場合のみ再生
-                    videoEl.play().catch(error => {
-                        console.warn('動画の自動再生に失敗しました:', error);
-                        // ユーザー操作なしで自動再生がブロックされた場合、再生ボタンを表示するなどの代替手段を検討
-                    });
+            // メディアの制御
+            if (elData.type === 'video' || elData.type === 'audio') {
+                const selector = elData.type === 'video' ? 'video' : 'audio';
+                const mediaEl = el.querySelector(selector);
+                if (mediaEl) {
+                    // 現スライド描画時点では一旦停止（明示制御）
+                    try { mediaEl.pause(); mediaEl.currentTime = mediaEl.currentTime; } catch (e) {}
+                    // autoplay指定の要素は後段の _playAutoplayMedia で開始
                 }
             }
         });
+
+        // 描画直後にautoplay対象のみ再生
+        this._playAutoplayMedia();
     }
 }
 

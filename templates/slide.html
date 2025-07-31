@@ -75,6 +75,19 @@
             <button id="export-btn" title="エクスポート"><i class="fas fa-download"></i><span>エクスポート</span></button>
             <button id="toggle-script-panel-btn" title="台本パネル表示/非表示"><i class="fas fa-book"></i><span>台本</span></button>
             <div id="export-menu"></div>
+            <!-- Present menu popover -->
+            <div id="present-menu" role="menu" aria-label="プレゼン表示方法" style="display:none;">
+              <div class="present-menu-item" data-mode="fullscreen" role="menuitem" tabindex="0">
+                <i class="fas fa-expand"></i> 現在のウィンドウで全画面
+              </div>
+              <div class="present-menu-item" data-mode="popup" role="menuitem" tabindex="0">
+                <i class="fas fa-window-restore"></i> 新しいウィンドウで表示
+              </div>
+              <!-- Presentation API 対応時のみ表示。JSで制御 -->
+              <div class="present-menu-item present-api-only" data-mode="external" role="menuitem" tabindex="0" style="display:none;">
+                <i class="fas fa-tv"></i> 外部ディスプレイに表示
+              </div>
+            </div>
         </div>
 
         <div id="app-body">

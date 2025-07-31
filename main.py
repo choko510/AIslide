@@ -234,31 +234,35 @@ async def get_my_slides(*, db: Session = Depends(get_db), current_user: Annotate
 async def update_password(
     user_update: UserUpdatePassword,
     current_user: Annotated[User, Depends(auth.get_current_user)],
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    lang: str = 'ja'
 ):
     if not auth.verify_password(user_update.current_password, str(current_user.hashed_password)):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incorrect current password")
+        raise create_error_response('invalid_credentials', lang, status.HTTP_400_BAD_REQUEST)
     
     current_user.set_hashed_password(auth.get_password_hash(user_update.new_password))
-    # SQLAlchemyのセッションを通じて更新をコミット
     db.commit()
     db.refresh(current_user)
-    return {"message": "Password updated successfully"}
+    
+    log_user_action('password_updated', current_user.id, lang=lang) # type: ignore
+    return create_user_response('password_updated', lang)
 
 @app.put("/users/me/username", status_code=status.HTTP_200_OK)
 async def update_username(
     user_update: UserUpdateUsername,
     current_user: Annotated[User, Depends(auth.get_current_user)],
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    lang: str = 'ja'
 ):
     if db.query(User).filter_by(username=user_update.new_username).first():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken")
+        raise create_error_response('username_already_exists', lang, status.HTTP_400_BAD_REQUEST)
     
     current_user.set_username(user_update.new_username)
-    # SQLAlchemyのセッションを通じて更新をコミット
     db.commit()
     db.refresh(current_user)
-    return {"message": "Username updated successfully"}
+
+    log_user_action('username_updated', current_user.id, f"New username: {user_update.new_username}", lang) # type: ignore
+    return create_user_response('username_updated', lang)
 
 
 # --- File Upload Endpoints ---
@@ -563,14 +567,9 @@ async def get_wiki_image(keyword: str):
 
 # --- WebSocket Endpoint ---
 @app.websocket("/ws/collaborate/{slide_id}")
-async def websocket_collaborate(websocket: WebSocket, slide_id: str, *, token: Optional[str] = None, db: Session = Depends(get_db)):
-    if not token:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Missing token")
-        return
-
-    user = await auth._decode_token_and_get_user(token, db)
-    if not user:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Authentication failed")
+async def websocket_collaborate(websocket: WebSocket, slide_id: str, user: Optional[User] = Depends(auth.get_current_user_ws)):
+    if user is None:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Authentication Failed")
         return
 
     await websocket.accept()
@@ -578,9 +577,10 @@ async def websocket_collaborate(websocket: WebSocket, slide_id: str, *, token: O
     try:
         while True:
             data = await websocket.receive_text()
+            # TODO: Implement actual collaboration logic instead of echo
             await websocket.send_text(f"User {user.username} said: {data} (slide: {slide_id})")
     except Exception as e:
-        logger.info(f"WebSocket connection closed for slide {slide_id}, user {user.username}: {e}")
+        logger.warning(f"WebSocket connection closed for slide {slide_id}, user {user.username}: {e}")
     finally:
         logger.info(f"User {user.username} disconnected from slide {slide_id}")
 

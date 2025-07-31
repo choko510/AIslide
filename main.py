@@ -3,7 +3,7 @@ import shutil
 import uuid
 import logging
 from datetime import timedelta
-from typing import Annotated, Optional, List
+from typing import Annotated, Optional, List, Dict, Any
 import asyncio
 import httpx
 import trafilatura
@@ -14,6 +14,7 @@ from fastapi import (
     FastAPI, Depends, HTTPException, status, UploadFile,
     File, WebSocket, Request, Form
 )
+from fastapi.security import OAuth2PasswordRequestForm
 
 from fastapi.responses import FileResponse as FastAPIFileResponse, HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -30,6 +31,83 @@ from PIL import Image
 import module.auth as auth
 from module.database import engine, get_db
 from module.models import Base, User, UploadedFile, Slide
+
+# 多言語対応メッセージ定義
+MESSAGES = {
+    'ja': {
+        'user_registered': 'ユーザー登録が完了しました',
+        'login_success': 'ログインしました',
+        'logout_success': 'ログアウトしました',
+        'file_uploaded': 'ファイルのアップロードが完了しました',
+        'file_deleted': 'ファイルを削除しました',
+        'slide_created': '新しいスライドを作成しました',
+        'slide_updated': 'スライドを更新しました',
+        'slide_deleted': 'スライドを削除しました',
+        'password_updated': 'パスワードを更新しました',
+        'username_updated': 'ユーザー名を更新しました',
+        'ai_request_processing': 'AI機能を処理中です',
+        'error_file_save': 'ファイルの保存中にエラーが発生しました',
+        'error_database': 'データベースエラーが発生しました',
+        'error_ai_service': 'AI機能でエラーが発生しました',
+        'error_validation': '入力内容に問題があります',
+        'username_already_exists': 'このユーザー名は既に使用されています',
+        'invalid_credentials': 'ユーザー名またはパスワードが正しくありません',
+        'file_not_found': 'ファイルが見つかりません',
+        'unauthorized_access': 'アクセス権限がありません',
+        'file_too_large': 'ファイルサイズが上限を超えています',
+        'invalid_file_type': 'サポートされていないファイル形式です'
+    },
+    'en': {
+        'user_registered': 'User registration completed',
+        'login_success': 'Successfully logged in',
+        'logout_success': 'Successfully logged out',
+        'file_uploaded': 'File uploaded successfully',
+        'file_deleted': 'File deleted successfully',
+        'slide_created': 'New slide created',
+        'slide_updated': 'Slide updated',
+        'slide_deleted': 'Slide deleted',
+        'password_updated': 'Password updated successfully',
+        'username_updated': 'Username updated successfully',
+        'ai_request_processing': 'Processing AI request',
+        'error_file_save': 'Error occurred while saving file',
+        'error_database': 'Database error occurred',
+        'error_ai_service': 'AI service error occurred',
+        'error_validation': 'Input validation failed',
+        'username_already_exists': 'Username already exists',
+        'invalid_credentials': 'Invalid username or password',
+        'file_not_found': 'File not found',
+        'unauthorized_access': 'Access denied',
+        'file_too_large': 'File size exceeds limit',
+        'invalid_file_type': 'Unsupported file type'
+    }
+}
+
+def get_message(key: str, lang: str = 'ja') -> str:
+    """指定された言語のメッセージを取得"""
+    return MESSAGES.get(lang, MESSAGES['ja']).get(key, key)
+
+def log_user_action(action: str, user_id: Optional[int] = None, details: str = "", lang: str = 'ja'):
+    """ユーザーアクションをフレンドリーなメッセージでログ出力"""
+    message = get_message(action, lang)
+    if user_id:
+        logger.info(f"[ユーザーID: {user_id}] {message} {details}")
+    else:
+        logger.info(f"{message} {details}")
+
+def create_user_response(message_key: str, lang: str = 'ja', **kwargs) -> Dict[str, Any]:
+    """ユーザー向けレスポンスを生成"""
+    return {
+        "message": get_message(message_key, lang),
+        "status": "success",
+        **kwargs
+    }
+
+def create_error_response(message_key: str, lang: str = 'ja', status_code: int = 400) -> HTTPException:
+    """エラーレスポンスを生成"""
+    return HTTPException(
+        status_code=status_code,
+        detail=get_message(message_key, lang)
+    )
 
 os.makedirs("data", exist_ok=True)
 # Create DB tables
@@ -106,35 +184,42 @@ async def read_slide_index(request: Request, data: Optional[str] = None):
 
 # --- User Account Endpoints ---
 @app.post("/auth/register", response_model=UserResponse)
-async def register_user(user: UserCreate, db: Session = Depends(get_db)):
+async def register_user(user: UserCreate, db: Session = Depends(get_db), lang: str = 'ja'):
     db_user = db.query(User).filter_by(username=user.username).first()
     if db_user:
-        raise HTTPException(status_code=400, detail="Username already registered")
+        raise create_error_response('username_already_exists', lang, 400)
+    
     hashed_password = auth.get_password_hash(user.password)
     db_user = User(username=user.username, hashed_password=hashed_password)
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+    
+    log_user_action('user_registered', db_user.id, f"ユーザー名: {user.username}", lang)  # type: ignore
     return db_user
 
 @app.post("/auth/login", response_model=auth.Token)
-async def login_user(form_data: UserCreate, db: Session = Depends(get_db)):
+async def login_user(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Session = Depends(get_db), lang: str = 'ja'):
     user = db.query(User).filter_by(username=form_data.username).first()
     if not user or not auth.verify_password(form_data.password, str(user.hashed_password)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail=get_message('invalid_credentials', lang),
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
     access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = auth.create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
+    
+    log_user_action('login_success', user.id, f"ユーザー名: {user.username}", lang)  # type: ignore
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.post("/auth/logout")
-async def logout_user():
-    return {"message": "Logout successful (placeholder)"}
+async def logout_user(lang: str = 'ja'):
+    log_user_action('logout_success', details="", lang=lang)
+    return create_user_response('logout_success', lang)
 
 @app.get("/users/me", response_model=UserResponse)
 async def read_users_me(current_user: Annotated[User, Depends(auth.get_current_user)]):
@@ -156,7 +241,6 @@ async def update_password(
     
     current_user.set_hashed_password(auth.get_password_hash(user_update.new_password))
     # SQLAlchemyのセッションを通じて更新をコミット
-    db.add(current_user)
     db.commit()
     db.refresh(current_user)
     return {"message": "Password updated successfully"}
@@ -172,7 +256,6 @@ async def update_username(
     
     current_user.set_username(user_update.new_username)
     # SQLAlchemyのセッションを通じて更新をコミット
-    db.add(current_user)
     db.commit()
     db.refresh(current_user)
     return {"message": "Username updated successfully"}
@@ -192,24 +275,24 @@ ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif"]
 ALLOWED_FONT_TYPES = ["font/ttf", "font/otf", "font/woff", "font/woff2"]
 ALLOWED_VIDEO_TYPES = ["video/mp4", "video/webm", "video/ogg"]
 
-async def save_upload_file(upload_file: UploadFile, destination_folder: str, db_file_entry: UploadedFile, db: Session, file_type: str):
+async def save_upload_file(upload_file: UploadFile, destination_folder: str, db_file_entry: UploadedFile, db: Session, file_type: str, lang: str = 'ja'):
     max_size = MAX_FILE_SIZES.get(file_type)
     if not max_size:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid file type: {file_type}")
+        raise create_error_response('invalid_file_type', lang, status.HTTP_400_BAD_REQUEST)
     
     if upload_file.size is None or upload_file.size > max_size:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File too large. Max size for {file_type} is {max_size // (1024*1024)}MB."
+            detail=get_message('file_too_large', lang) + f" ({file_type}: {max_size // (1024*1024)}MB)"
         )
 
     content_type = upload_file.content_type
     if file_type == "image" and content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid image type. Allowed: {ALLOWED_IMAGE_TYPES}")
+        raise create_error_response('invalid_file_type', lang, status.HTTP_400_BAD_REQUEST)
     elif file_type == "font" and content_type not in ALLOWED_FONT_TYPES:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid font type. Allowed: {ALLOWED_FONT_TYPES}")
+        raise create_error_response('invalid_file_type', lang, status.HTTP_400_BAD_REQUEST)
     elif file_type == "video" and content_type not in ALLOWED_VIDEO_TYPES:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid video type. Allowed: {ALLOWED_VIDEO_TYPES}")
+        raise create_error_response('invalid_file_type', lang, status.HTTP_400_BAD_REQUEST)
 
     original_filename = secure_filename(upload_file.filename or "")
     file_extension = os.path.splitext(original_filename)[1]
@@ -220,26 +303,29 @@ async def save_upload_file(upload_file: UploadFile, destination_folder: str, db_
     uploads_root = os.path.abspath(UPLOAD_DIR)
     abs_path = os.path.abspath(file_location)
     if not abs_path.startswith(uploads_root):
-        logger.error(f"Attempted to save file outside uploads dir: {abs_path}")
-        raise HTTPException(status_code=400, detail="Invalid file path.")
-
+        logger.error(f"セキュリティエラー: 許可されていないパスへのファイル保存を試行: {abs_path}")
+        raise create_error_response('error_validation', lang, 400)
 
     try:
         with open(file_location, "wb+") as file_object:
             await run_in_threadpool(shutil.copyfileobj, upload_file.file, file_object)
 
+        # ファイルパスを設定 - SQLAlchemyモデルの更新
+        setattr(db_file_entry, 'file_path', file_location)
         db.add(db_file_entry)
         db.commit()
         db.refresh(db_file_entry)
+        
+        log_user_action('file_uploaded', db_file_entry.owner_id, f"ファイル名: {original_filename}", lang)  # type: ignore
         return db_file_entry
     except Exception as e:
-        logger.error(f"Error saving file {upload_file.filename}: {e}", exc_info=True)
+        logger.error(f"ファイル保存エラー ({upload_file.filename}): {e}", exc_info=True)
         if os.path.exists(file_location):
             try:
                 await run_in_threadpool(os.remove, file_location)
             except Exception as remove_e:
-                logger.error(f"Failed to remove partial file {file_location}: {remove_e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not save file.")
+                logger.error(f"一時ファイルの削除に失敗: {file_location}: {remove_e}")
+        raise create_error_response('error_file_save', lang, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @app.post("/upload/{file_type}", response_model=FileResponse)
 async def upload_file_unified(
@@ -249,11 +335,6 @@ async def upload_file_unified(
     db: Session = Depends(get_db),
     current_user: Annotated[User, Depends(auth.get_current_user)]
 ):
-    allowed_file_types = ["image", "font", "video"]
-    if file_type not in allowed_file_types:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid file type: {file_type}")
-
-    # file_typeの値を検証
     allowed_file_types = ["image", "font", "video"]
     if file_type not in allowed_file_types:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid file type: {file_type}")
@@ -356,46 +437,30 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     logger.warning("GEMINI_API_KEY not found. AI endpoint is disabled.")
 
-async def reqAI(prompt: str, model_name: str = "gemini-2.5-flash", is_search: bool = False, images: Optional[List[Image.Image]] = None):
+def reqAI(prompt: str, model_name: str = "gemini-2.5-flash", is_search: bool = False, images: Optional[List[Any]] = None):
     """
-    AIモデルにリクエストを送信し、ストリーミングで応答を返す非同期ジェネレータ。
+    AIモデルにリクエストを送信し、ストリーミングで応答を返すジェネレータ。
     """
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
         
-        model_to_use = "gemini-2.5-flash" if images else model_name
+        model_to_use = "gemini-1.5-flash" if images else model_name
 
-        parts = []
+        content_parts = []
         if prompt:
-            parts.append(types.Part(text=prompt))
+            content_parts.append(prompt)
         if images:
-            for img in images:
-                parts.append(types.Part.from_pil(img))
-        
-        contents = [types.Content(role="user", parts=parts)]
+            content_parts.extend(images)
 
-        # ユーザー提供のコードに基づき、ツール設定を追加
+        config = None
         if is_search:
-            tools = [
-                types.Tool(url_context=types.UrlContext()),
-                types.Tool(googleSearch=types.GoogleSearch()),
-            ]
+            config = types.GenerateContentConfig(tools=[{"google_search": {}}])
 
-            generation_config = types.GenerateContentConfig(
-                tools=tools,
-            )
-
-            response_stream = client.models.generate_content_stream(
-                model=f"models/{model_to_use}",
-                contents=contents,
-                generation_config=generation_config,
-            )
-
-        else:
-            response_stream = client.models.generate_content_stream(
-                model=f"models/{model_to_use}",
-                contents=contents,
-            )
+        response_stream = client.models.generate_content_stream(
+            model=model_to_use,
+            contents=content_parts,
+            config=config
+        )
 
         for chunk in response_stream:
             if chunk.text:
@@ -437,7 +502,7 @@ async def get_image_titles(client: httpx.AsyncClient, keyword: str, lang: str):
     URL = f"https://{lang}.wikipedia.org/w/api.php"
     params = {"action": "query", "prop": "images", "titles": keyword, "format": "json"}
     try:
-        resp = await client.get(URL, params=params, timeout=0.5)
+        resp = await client.get(URL, params=params, timeout=5.0)
         resp.raise_for_status()
         data = resp.json()
         pages = data.get("query", {}).get("pages", {})
@@ -455,7 +520,7 @@ async def get_image_urls(client: httpx.AsyncClient, titles: list[str], lang: str
     URL = f"https://{lang}.wikipedia.org/w/api.php"
     params = {"action": "query", "prop": "imageinfo", "iiprop": "url", "titles": "|".join(titles), "format": "json"}
     try:
-        resp = await client.get(URL, params=params, timeout=0.5)
+        resp = await client.get(URL, params=params, timeout=5.0)
         resp.raise_for_status()
         data = resp.json()
         pages = data.get("query", {}).get("pages", {})

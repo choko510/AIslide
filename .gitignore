@@ -19,5 +19,8 @@ yarn-error.log*
 # OS
 .DS_Store
 Thumbs.db
+# Roo Code
+.roomodes
+
 # その他
 *.log

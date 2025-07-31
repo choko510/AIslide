@@ -4,210 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AIslide - ダッシュボード</title>
-    <link rel="stylesheet" href="{{ url_for('static', path='slide/slide.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
     <link rel="stylesheet" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/all.css">
-    <style>
-        body {
-            background-color: var(--bg-light);
-            color: var(--text-primary);
-            font-family: 'Noto Sans JP', sans-serif;
-            display: flex;
-            height: 100vh;
-            overflow: hidden;
-        }
-        .dashboard-container {
-            display: flex;
-            width: 100%;
-        }
-        .sidebar {
-            width: 260px;
-            background-color: var(--bg-white);
-            border-right: 1px solid var(--border-color);
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
-        }
-        .sidebar h1 {
-            font-size: 24px;
-            font-weight: 700;
-            color: var(--primary-color);
-            margin-bottom: 32px;
-        }
-        .create-new-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            padding: 12px;
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: var(--border-radius);
-            font-size: 16px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-        .create-new-btn:hover {
-            background-color: var(--primary-color-hover);
-        }
-        .main-content {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            overflow-y: auto;
-        }
-        .header {
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            padding: 16px 40px;
-            border-bottom: 1px solid var(--border-color);
-            background-color: var(--bg-white);
-            flex-shrink: 0;
-        }
-        .auth-buttons button, .user-info button {
-            background: none;
-            border: 1px solid var(--border-color);
-            padding: 8px 16px;
-            border-radius: var(--border-radius);
-            margin-left: 12px;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-        .auth-buttons button:hover, .user-info button:hover {
-            background-color: var(--bg-light);
-        }
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .content-area {
-            padding: 40px;
-        }
-        .content-area h2 {
-            font-size: 28px;
-            margin-bottom: 24px;
-        }
-        .slide-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 24px;
-        }
-        .slide-card {
-            background-color: var(--bg-white);
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow-sm);
-            overflow: hidden;
-            transition: var(--transition);
-            border: 1px solid var(--border-color);
-        }
-        .slide-card:hover {
-            box-shadow: var(--shadow-md);
-            transform: translateY(-4px);
-        }
-        .slide-thumbnail-placeholder {
-            aspect-ratio: 16 / 9;
-            background-color: var(--bg-light);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-secondary);
-        }
-        .slide-info {
-            padding: 16px;
-        }
-        .slide-title {
-            font-weight: 600;
-            margin-bottom: 12px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .slide-actions {
-            display: flex;
-            gap: 12px;
-        }
-        .slide-actions button {
-            flex-grow: 1;
-            padding: 8px;
-            border-radius: var(--border-radius);
-            cursor: pointer;
-            border: 1px solid var(--border-color);
-            background: transparent;
-            transition: var(--transition);
-        }
-        .slide-actions .edit-btn {
-            background-color: var(--primary-color);
-            color: white;
-            border-color: var(--primary-color);
-        }
-        .slide-actions .edit-btn:hover {
-            background-color: var(--primary-color-hover);
-        }
-        .slide-actions .delete-btn:hover {
-            background-color: var(--danger-color);
-            color: white;
-            border-color: var(--danger-color);
-        }
-
-        /* Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.5);
-            justify-content: center;
-            align-items: center;
-        }
-        .modal.is-open {
-            display: flex;
-        }
-        .modal-content {
-            background-color: var(--bg-white);
-            padding: 32px;
-            border-radius: var(--border-radius);
-            width: 90%;
-            max-width: 400px;
-            box-shadow: var(--shadow-md);
-        }
-        .modal-content h2 {
-            margin-top: 0;
-            margin-bottom: 24px;
-        }
-        .modal-content input {
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 16px;
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-        }
-        .modal-content button {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: var(--border-radius);
-            background-color: var(--primary-color);
-            color: white;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        .modal-switch {
-            text-align: center;
-            margin-top: 16px;
-        }
-        .modal-switch a {
-            color: var(--primary-color);
-            cursor: pointer;
-        }
-    </style>
 </head>
 <body>
 
@@ -265,6 +63,49 @@
             </div>
         </div>
     </div>
+
+    <!-- Custom Alert -->
+    <div id="custom-alert" class="custom-alert">
+        <div class="alert-content">
+            <i id="alert-icon" class="alert-icon"></i>
+            <div id="alert-title" class="alert-title"></div>
+            <div id="alert-message" class="alert-message"></div>
+            <div class="alert-buttons">
+                <button id="alert-ok-btn" class="alert-button primary">OK</button>
+                <button id="alert-cancel-btn" class="alert-button secondary" style="display: none;">キャンセル</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <h2>設定</h2>
+            <div class="settings-section">
+                <label for="settings-language-select">言語 / Language:</label>
+                <select id="settings-language-select">
+                    <option value="ja">日本語</option>
+                    <option value="en">English</option>
+                </select>
+            </div>
+            
+            <div class="settings-section">
+                <label for="settings-theme-select">テーマ / Theme:</label>
+                <select id="settings-theme-select">
+                    <option value="light">ライト / Light</option>
+                    <option value="dark">ダーク / Dark</option>
+                </select>
+            </div>
+            
+            <div class="settings-buttons">
+                <button id="settings-save-btn" class="settings-button primary">保存 / Save</button>
+                <button id="settings-cancel-btn" class="settings-button secondary">キャンセル / Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
 
     <script type="module" src="{{ url_for('static', path='app.js') }}"></script>
 </body>

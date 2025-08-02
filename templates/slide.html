@@ -174,49 +174,56 @@
                                         Icons</span></button>
                             </div>
 
-                            <!-- Font Awesome Section -->
-                            <div id="font-awesome-section">
-                                <div class="icon-search-toolbar">
-                                    <input type="text" id="fa-icon-search-input" placeholder="Font Awesomeアイコン検索..." />
-                                </div>
-                                <div class="icon-style-selector-container">
-                                    <label>スタイル</label>
-                                    <select id="fa-style-select">
-                                        <option value="fas">Solid</option>
-                                        <option value="far">Regular</option>
-                                        <option value="fal">Light</option>
-                                        <option value="fat">Thin</option>
-                                    </select>
-                                </div>
-                                <div id="fa-icon-category-filter" class="icon-category-filter">
-                                    <!-- Font Awesome カテゴリーボタンはJSで動的に生成されます -->
-                                </div>
-                                <div id="fa-icon-list-container" class="icon-list-container">
-                                    <!-- Font Awesome アイコンはここにJavaScriptで描画されます -->
+                            <!-- Minimal UI -->
+                            <div class="icon-search-toolbar" id="icon-unified-search-toolbar" style="display:flex; gap:8px; align-items:center;">
+                                <input type="text" id="icon-search-input" placeholder="アイコンを検索..." />
+                                <button id="icon-filter-toggle" class="sidebar-add-btn small-btn" aria-expanded="false">詳細フィルタ</button>
+                            </div>
+
+                            <div id="icon-filter-panel" class="icon-filter-panel" style="display:none;">
+                                <div class="icon-filter-row" style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+                                    <label style="display:flex; align-items:center; gap:6px;">
+                                        <input type="checkbox" id="provider-fa" checked />
+                                        <span>Font Awesome</span>
+                                    </label>
+                                    <label style="display:flex; align-items:center; gap:6px;">
+                                        <input type="checkbox" id="provider-mi" checked />
+                                        <span>Material</span>
+                                    </label>
+
+                                    <div style="display:flex; align-items:center; gap:6px;">
+                                        <label for="fa-style-select-unified">FAスタイル</label>
+                                        <select id="fa-style-select-unified">
+                                            <option value="fas">Solid</option>
+                                            <option value="far">Regular</option>
+                                            <option value="fal">Light</option>
+                                            <option value="fat">Thin</option>
+                                        </select>
+                                    </div>
+
+                                    <div style="display:flex; align-items:center; gap:6px;">
+                                        <label for="mi-style-select-unified">Materialスタイル</label>
+                                        <select id="mi-style-select-unified">
+                                            <option value="material-icons">Filled</option>
+                                            <option value="material-icons-outlined">Outlined</option>
+                                            <option value="material-icons-round">Round</option>
+                                            <option value="material-icons-sharp">Sharp</option>
+                                            <option value="material-icons-two-tone">Two Tone</option>
+                                        </select>
+                                    </div>
+
+                                    <div style="display:flex; align-items:center; gap:6px;">
+                                        <label for="icon-category-select">カテゴリ</label>
+                                        <select id="icon-category-select">
+                                            <!-- JSで動的に生成 -->
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
 
-                            <!-- Material Icons Section -->
-                            <div id="material-icons-section" style="display: none;">
-                                <div class="icon-search-toolbar">
-                                    <input type="text" id="mi-icon-search-input" placeholder="Material Icons検索..." />
-                                </div>
-                                <div class="icon-style-selector-container">
-                                    <label>スタイル</label>
-                                    <select id="mi-style-select">
-                                        <option value="material-icons">Filled</option>
-                                        <option value="material-icons-outlined">Outlined</option>
-                                        <option value="material-icons-round">Round</option>
-                                        <option value="material-icons-sharp">Sharp</option>
-                                        <option value="material-icons-two-tone">Two Tone</option>
-                                    </select>
-                                </div>
-                                <div id="mi-icon-category-filter" class="icon-category-filter">
-                                    <!-- Material Icons カテゴリーボタンはJSで動的に生成されます -->
-                                </div>
-                                <div id="mi-icon-list-container" class="icon-list-container">
-                                    <!-- Material Icons はここにJavaScriptで描画されます -->
-                                </div>
+                            <!-- Unified Icon List Section -->
+                            <div id="icon-list-container" class="icon-list-container">
+                                <!-- Font Awesome / Material Icons を統合表示 -->
                             </div>
                         </div>
                         <div class="sidebar-tab-content" data-tab-content="inspector">

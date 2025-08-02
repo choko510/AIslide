@@ -3,6 +3,18 @@ class IconManager {
         this.app = app;
         this.faIconFuse = null;
         this.miIconFuse = null;
+
+        // 検索パフォーマンス最適化用の状態
+        this._faFuseReady = false;
+        this._miFuseReady = false;
+        this._faCache = new Map(); // key: `${term}::${category}`
+        this._miCache = new Map();
+
+        // リスト仮想化/段階表示
+        this._renderLimit = 100;      // 初回表示件数
+        this._renderStep = 100;       // 追加表示件数
+        this._faLastState = { term: '', category: 'すべて', items: [], offset: 0 };
+        this._miLastState = { term: '', category: 'すべて', items: [], offset: 0 };
     }
 
     async loadIconData() {
@@ -12,28 +24,21 @@ class IconManager {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             const data = await response.json();
-            this.app.config.fontAwesomeIcons = data.fontAwesomeIcons;
-            this.app.config.materialIcons = data.materialIcons;
+            this.app.config.fontAwesomeIcons = data.fontAwesomeIcons || [];
+            this.app.config.materialIcons = data.materialIcons || [];
 
-            // アイコンに英語名(クラス名から)をaliasプロパティとして追加
+            // alias 付与（検索キー縮小に合わせる）
             this.app.config.fontAwesomeIcons.forEach(icon => {
                 const cls = icon.class.split(' ')[1] || '';
                 icon.alias = cls.replace('fa-', '');
             });
             this.app.config.materialIcons.forEach(icon => {
-                icon.alias = icon.name.toLowerCase().replace(/ /g, '_');
+                icon.alias = (icon.name || '').toLowerCase().replace(/ /g, '_');
             });
-            // Fuse.js を使ったアイコンのあいまい検索インスタンス
-            this.faIconFuse = new Fuse(this.app.config.fontAwesomeIcons, {
-                keys: ['name', 'category', 'class', 'alias', 'keywords'],
-                threshold: 0.4,
-                ignoreLocation: true
-            });
-            this.miIconFuse = new Fuse(this.app.config.materialIcons, {
-                keys: ['name', 'category', 'class', 'alias', 'keywords'],
-                threshold: 0.4,
-                ignoreLocation: true
-            });
+
+            // Fuse は遅延構築（初回検索時に作成/再利用）
+            this._faFuseReady = false;
+            this._miFuseReady = false;
 
         } catch (error) {
             console.error("Failed to load icon data:", error);
@@ -50,6 +55,22 @@ class IconManager {
         // アイコンサイドバーイベント
         this._bindIconSidebarEvents('fa');
         this._bindIconSidebarEvents('mi');
+
+        // 統一検索欄と統一カテゴリのバインド
+        this._bindUnifiedIconControls();
+
+        // 初期状態: トグルは見た目としてアクティブに（将来的にフィルタ用途に流用可）
+        const faToggleButton = document.getElementById('fa-toggle-btn');
+        const miToggleButton = document.getElementById('mi-toggle-btn');
+        if (faToggleButton) faToggleButton.classList.add('active');
+        if (miToggleButton) miToggleButton.classList.add('active');
+
+        // 統一カテゴリ生成（ドロップダウン）と初期描画
+        this.initUnifiedCategorySelect();
+        this._bindFilterPanelToggle();
+        const term = '';
+        const category = 'すべて';
+        this.renderUnifiedIconList(term, category, { reset: true });
     }
 
     _bindIconToggleButtons() {
@@ -80,29 +101,18 @@ class IconManager {
     }
 
     _bindIconSidebarEvents(iconType) {
-        const searchInput = this.app.elements[`${iconType}IconSearchInput`];
-        const categoryFilter = this.app.elements[`${iconType}IconCategoryFilter`];
-        const styleSelect = document.getElementById(`${iconType}-style-select`);
+        // 統一検索・統一カテゴリに依存するため、ここではスタイルセレクトとクリックのみ個別設定
+        // 統一セレクタを参照
+        const styleSelect = document.getElementById(iconType === 'fa' ? 'fa-style-select-unified' : 'mi-style-select-unified');
         const listContainer = this.app.elements[`${iconType}IconListContainer`];
-
-        if (searchInput) {
-            searchInput.addEventListener('input', e => {
-                const activeCategoryButton = categoryFilter.querySelector('button.active');
-                const category = activeCategoryButton ? activeCategoryButton.dataset.category : 'すべて';
-                this.renderIconList(iconType, e.target.value, category);
-            });
-        }
 
         if (styleSelect) {
             styleSelect.addEventListener('change', () => {
-                const activeCategoryButton = categoryFilter.querySelector('button.active');
-                const category = activeCategoryButton ? activeCategoryButton.dataset.category : 'すべて';
-                this.renderIconList(iconType, searchInput.value, category);
+                const select = document.getElementById('icon-category-select');
+                const category = select?.value || 'すべて';
+                const term = document.getElementById('icon-search-input')?.value || '';
+                this.renderUnifiedIconList(term, category, { reset: true });
             });
-        }
-
-        if (categoryFilter) {
-            this.initCategoryFilters(iconType);
         }
 
         if (listContainer) {
@@ -115,128 +125,286 @@ class IconManager {
         }
     }
 
+    // 既存の個別カテゴリ初期化は使用しない（後方互換で残すが未使用）
     initCategoryFilters(iconType) {
-        let categories;
-        let filterContainer;
-        let activeElements;
+        // no-op: 統一カテゴリを使用
+        return;
+    }
 
-        if (iconType === 'fa') {
-            categories = ['すべて', ...new Set(this.app.config.fontAwesomeIcons.map(icon => icon.category))];
-            filterContainer = this.app.elements.faIconCategoryFilter;
-            activeElements = this.app.elements.faIconSearchInput;
-        } else if (iconType === 'mi') {
-            categories = ['すべて', ...new Set(this.app.config.materialIcons.map(icon => icon.category))];
-            filterContainer = this.app.elements.miIconCategoryFilter;
-            activeElements = this.app.elements.miIconSearchInput;
-        } else {
-            return; // 未知のアイコンタイプ
-        }
+    initUnifiedCategorySelect() {
+        const select = document.getElementById('icon-category-select');
+        if (!select) return;
 
-        filterContainer.innerHTML = '';
+        const faCats = new Set(this.app.config.fontAwesomeIcons.map(icon => icon.category).filter(Boolean));
+        const miCats = new Set(this.app.config.materialIcons.map(icon => icon.category).filter(Boolean));
+        const categoriesSet = new Set(['すべて', ...faCats, ...miCats]);
+        const categories = Array.from(categoriesSet);
+        const others = categories.filter(c => c !== 'すべて').sort((a,b)=> a.localeCompare(b,'ja'));
+        const finalCats = ['すべて', ...others];
 
-        categories.forEach(category => {
-            const button = document.createElement('button');
-            button.textContent = category;
-            button.dataset.category = category;
-            Object.assign(button.style, {
-                padding: '4px 10px',
-                border: '1px solid var(--border-color)',
-                borderRadius: '12px',
-                background: 'transparent',
-                cursor: 'pointer',
-                fontSize: '12px'
-            });
+        select.innerHTML = '';
+        finalCats.forEach(cat => {
+            const opt = document.createElement('option');
+            opt.value = cat;
+            opt.textContent = cat;
+            select.appendChild(opt);
+        });
 
-            if (category === 'すべて') {
-                button.classList.add('active');
-                button.style.backgroundColor = 'var(--primary-color)';
-                button.style.color = 'white';
-                button.style.borderColor = 'var(--primary-color)';
-            }
-
-            button.addEventListener('click', () => {
-                filterContainer.querySelectorAll('button').forEach(btn => {
-                    btn.classList.remove('active');
-                    btn.style.backgroundColor = 'transparent';
-                    btn.style.color = 'inherit';
-                    btn.style.borderColor = 'var(--border-color)';
-                });
-                button.classList.add('active');
-                button.style.backgroundColor = 'var(--primary-color)';
-                button.style.color = 'white';
-                button.style.borderColor = 'var(--primary-color)';
-
-                activeElements.value = ''; // カテゴリ変更時に検索をクリア
-                this.renderIconList(iconType, '', category);
-            });
-            filterContainer.appendChild(button);
+        select.addEventListener('change', () => {
+            const term = document.getElementById('icon-search-input')?.value || '';
+            const category = select.value || 'すべて';
+            this.renderUnifiedIconList(term, category, { reset: true });
         });
     }
 
-    renderIconList(iconType, searchTerm = '', category = 'すべて') {
+    _bindUnifiedIconControls() {
+        const searchInput = document.getElementById('icon-search-input');
+        const select = document.getElementById('icon-category-select');
+        const providerFa = document.getElementById('provider-fa');
+        const providerMi = document.getElementById('provider-mi');
+
+        // デバウンス
+        const debounce = (fn, delay = 300) => {
+            let t;
+            return (...args) => {
+                clearTimeout(t);
+                t = setTimeout(() => fn.apply(this, args), delay);
+            };
+        };
+
+        const trigger = () => {
+            const value = searchInput?.value || '';
+            const category = select?.value || 'すべて';
+            this.renderUnifiedIconList(value, category, { reset: true });
+        };
+
+        if (searchInput) {
+            const handler = debounce(() => trigger(), 300);
+            searchInput.addEventListener('input', handler);
+        }
+        if (providerFa) providerFa.addEventListener('change', trigger);
+        if (providerMi) providerMi.addEventListener('change', trigger);
+    }
+
+    // 検索キー縮小版の Fuse オプション
+    _getFuseOptions() {
+        return {
+            keys: ['name', 'alias', 'keywords'],
+            threshold: 0.35,
+            ignoreLocation: true
+        };
+    }
+
+    async _ensureFuse(iconType, pool) {
+        if (iconType === 'fa') {
+            if (!this._faFuseReady) {
+                this.faIconFuse = new Fuse(pool, this._getFuseOptions());
+                this._faFuseReady = true;
+            }
+        } else {
+            if (!this._miFuseReady) {
+                this.miIconFuse = new Fuse(pool, this._getFuseOptions());
+                this._miFuseReady = true;
+            }
+        }
+    }
+
+    renderIconList(iconType, searchTerm = '', category = 'すべて', options = { reset: false, target: null }) {
         let icons;
         let iconListContainer;
         let fuseInstance;
+        let cache;
+        let state;
 
         if (iconType === 'fa') {
             icons = this.app.config.fontAwesomeIcons;
-            iconListContainer = this.app.elements.faIconListContainer;
+            iconListContainer = options.target || document.getElementById('icon-list-container');
             fuseInstance = this.faIconFuse;
+            cache = this._faCache;
+            state = this._faLastState;
         } else if (iconType === 'mi') {
             icons = this.app.config.materialIcons;
-            iconListContainer = this.app.elements.miIconListContainer;
+            iconListContainer = options.target || document.getElementById('icon-list-container');
             fuseInstance = this.miIconFuse;
+            cache = this._miCache;
+            state = this._miLastState;
         } else {
             return;
         }
 
         if (!iconListContainer) return;
-        iconListContainer.innerHTML = '';
 
-        let filteredIcons = icons;
-        if (searchTerm) {
-            filteredIcons = fuseInstance.search(searchTerm).map(r => r.item);
+        // カテゴリ先フィルタ
+        let pool = category === 'すべて' ? icons : icons.filter(i => i.category === category);
+
+        // 検索なしなら Fuse 不使用
+        let result = pool;
+        const cacheKey = `${searchTerm}::${category}`;
+        if (searchTerm && searchTerm.trim()) {
+            // キャッシュ確認
+            if (cache.has(cacheKey)) {
+                result = cache.get(cacheKey);
+            } else {
+                // 遅延構築（初回のみ）
+                if (!fuseInstance) {
+                    this._ensureFuse(iconType, pool);
+                    fuseInstance = iconType === 'fa' ? this.faIconFuse : this.miIconFuse;
+                } else {
+                    // データ本体は変わらない前提。カテゴリで事前絞り込みのため createIndex せず直接検索対象を pool にする
+                    // Fuse は初期配列で構築されるため、別カテゴリでは精度が下がる可能性がある。
+                    // シンプル化のため、カテゴリ変化時は再構築する。
+                    const lastCategory = (iconType === 'fa' ? this._faLastState.category : this._miLastState.category);
+                    if (lastCategory !== category) {
+                        this._ensureFuse(iconType, pool);
+                        fuseInstance = iconType === 'fa' ? this.faIconFuse : this.miIconFuse;
+                    }
+                }
+                result = fuseInstance.search(searchTerm).map(r => r.item);
+                cache.set(cacheKey, result);
+            }
         }
 
-        // カテゴリフィルタリングを適用
-        filteredIcons = filteredIcons.filter(icon => {
-            return category === 'すべて' || icon.category === category;
-        });
+        // ステート更新（offset リセット or 継続）
+        if (options && options.reset) {
+            state.term = searchTerm;
+            state.category = category;
+            state.items = result;
+            state.offset = 0;
+        } else {
+            // カテゴリ/検索語が変わっていればリセット
+            if (state.term !== searchTerm || state.category !== category) {
+                state.term = searchTerm;
+                state.category = category;
+                state.items = result;
+                state.offset = 0;
+            } else {
+                state.items = result;
+            }
+        }
 
-        filteredIcons.forEach(icon => {
+        // 描画
+        const start = 0;
+        const end = Math.min(state.items.length, (state.offset || 0) + this._renderLimit);
+        const slice = state.items.slice(start, end);
+
+        // 統合描画のときは、FA描画のタイミングでクリアし、MI描画では追記する
+        if (!options || options.reset || iconType === 'fa') {
+            iconListContainer.innerHTML = '';
+        }
+
+        const frag = document.createDocumentFragment();
+
+        // サイドバー幅に応じた動的グリッド算出
+        const computeGrid = () => {
+            const containerWidth = iconListContainer.clientWidth || 320;
+            const minItem = 64;   // アイテム最小幅
+            const maxItem = 120;  // アイテム最大幅
+            const gap = 8;
+
+            let columns = Math.max(1, Math.floor(containerWidth / minItem));
+            // 列数が少なすぎてアイテム幅が大きくなりすぎる場合は列数を増やす
+            while (columns < 12 && (containerWidth / columns) > maxItem) {
+                columns++;
+            }
+            const itemWidth = Math.floor((containerWidth - (gap * (columns - 1))) / columns);
+            return { columns, itemWidth, gap };
+        };
+
+        const grid = computeGrid();
+
+        // コンテナをフレックス化（wrap + gap）。中央寄せ/行末余白を解消
+        iconListContainer.style.display = 'flex';
+        iconListContainer.style.flexWrap = 'wrap';
+        iconListContainer.style.alignItems = 'stretch';
+        iconListContainer.style.justifyContent = 'flex-start';
+        iconListContainer.style.columnGap = grid.gap + 'px';
+        iconListContainer.style.rowGap = grid.gap + 'px';
+
+        slice.forEach(icon => {
             const iconDiv = document.createElement('div');
             iconDiv.className = 'icon-item';
             iconDiv.dataset.iconClass = icon.class;
             iconDiv.dataset.iconType = iconType;
+
+            // ベースの見た目
             iconDiv.style.padding = '10px';
             iconDiv.style.border = '1px solid var(--border-color)';
             iconDiv.style.borderRadius = 'var(--border-radius)';
             iconDiv.style.cursor = 'pointer';
             iconDiv.style.textAlign = 'center';
-            iconDiv.style.minWidth = '60px';
+            iconDiv.style.boxSizing = 'border-box';
+
+            // Flex 子要素としての幅指定
+            iconDiv.style.flex = `0 1 ${grid.itemWidth}px`;
+            iconDiv.style.maxWidth = grid.itemWidth + 'px';
+            iconDiv.style.minWidth = Math.max(56, Math.min(grid.itemWidth, 140)) + 'px';
 
             if (iconType === 'fa') {
                 let stylePrefix = 'fas';
-                const styleSelect = document.getElementById('fa-style-select');
+                const styleSelect = document.getElementById('fa-style-select-unified');
                 if (styleSelect) stylePrefix = styleSelect.value;
                 const faClass = icon.class.replace(/^(fas|far|fal|fat)\s/, stylePrefix + ' ');
                 const iTag = document.createElement('i');
-                iTag.className = `${faClass} fa-2x`;
+                iTag.className = `${faClass}`;
+                // アイテム幅に応じてフォントサイズをスケール（Flex幅で再計算）
+                const widthPx = grid.itemWidth;
+                const scaleEm = Math.max(1.2, Math.min(2.0, (widthPx / 80) * 2));
+                iTag.style.fontSize = `${scaleEm}em`;
                 iTag.style.pointerEvents = 'none';
                 iconDiv.appendChild(iTag);
             } else if (iconType === 'mi') {
                 let stylePrefix = 'material-icons';
-                const styleSelect = document.getElementById('mi-style-select');
+                const styleSelect = document.getElementById('mi-style-select-unified');
                 if (styleSelect) stylePrefix = styleSelect.value;
                 const spanTag = document.createElement('span');
                 spanTag.className = `${stylePrefix}`;
-                spanTag.textContent = icon.class; // Material Icons uses the class name as text content
-                spanTag.style.fontSize = '2em'; // Adjust size for visibility
+                spanTag.textContent = icon.class;
+                const widthPx = grid.itemWidth;
+                const px = Math.max(20, Math.min(34, Math.floor(widthPx * 0.34)));
+                spanTag.style.fontSize = `${px}px`;
                 spanTag.style.pointerEvents = 'none';
                 iconDiv.appendChild(spanTag);
             }
-            iconListContainer.appendChild(iconDiv);
+            frag.appendChild(iconDiv);
         });
+
+        // Flex 化のためそのまま追加
+        iconListContainer.appendChild(frag);
+
+        // もっと見るボタン（統合表示で1つだけ）
+        if (iconType === 'mi') {
+            const faEnd = Math.min(this._faLastState.items.length, (this._faLastState.offset || 0) + this._renderLimit);
+            const miEnd = Math.min(this._miLastState.items.length, (this._miLastState.offset || 0) + this._renderLimit);
+            const total = this._faLastState.items.length + this._miLastState.items.length;
+            const shown = faEnd + miEnd;
+            if (shown < total) {
+                const moreBtn = document.createElement('button');
+                moreBtn.textContent = `さらに表示 (${Math.min(this._renderStep, total - shown)}件)`;
+                moreBtn.className = 'icon-more-btn';
+                moreBtn.addEventListener('click', () => {
+                    this._faLastState.offset = faEnd;
+                    this._miLastState.offset = miEnd;
+                    this._renderLimit += this._renderStep;
+                    this.renderUnifiedIconList(state.term, state.category, { reset: false });
+                });
+                iconListContainer.appendChild(moreBtn);
+            } else {
+                this._renderLimit = 100;
+            }
+        }
+
+        // サイドバー幅変化に応じて再レイアウト（統合描画を再実行）
+        if (!this._iconResizeObserver) {
+            this._iconResizeObserver = new ResizeObserver(() => {
+                const term = document.getElementById('icon-search-input')?.value || '';
+                const select = document.getElementById('icon-category-select');
+                const category = select?.value || 'すべて';
+                this.renderUnifiedIconList(term, category, { reset: false });
+            });
+        }
+        // 重複 observe を避けるため一旦 unobserve してから observe
+        try { this._iconResizeObserver.unobserve(iconListContainer); } catch(e) {}
+        this._iconResizeObserver.observe(iconListContainer);
     }
 
     addIconElement(iconType, iconClass, style = {}) {
@@ -270,7 +438,7 @@ class IconManager {
             // For Material Icons, also store the actual icon name (content for span tag)
             newEl.miContent = iconClass;
             // Material Iconsのスタイルを適用
-            const miStyleSelect = document.getElementById('mi-style-select');
+            const miStyleSelect = document.getElementById('mi-style-select-unified');
             if (miStyleSelect) {
                 newEl.content = miStyleSelect.value; // e.g., "material-icons-outlined"
             }
@@ -291,6 +459,38 @@ class IconManager {
         }
         this.app.saveState();
         this.app.render();
+    }
+    // 統合描画のためのヘルパー
+    renderUnifiedIconList(searchTerm = '', category = 'すべて', options = { reset: true }) {
+        const container = document.getElementById('icon-list-container');
+        if (!container) return;
+
+        // プロバイダフィルタ
+        const useFa = document.getElementById('provider-fa')?.checked !== false;
+        const useMi = document.getElementById('provider-mi')?.checked !== false;
+
+        // 選択状況に応じて描画
+        if (useFa && useMi) {
+            this.renderIconList('fa', searchTerm, category, { reset: true, target: container });
+            this.renderIconList('mi', searchTerm, category, { reset: false, target: container });
+        } else if (useFa) {
+            this.renderIconList('fa', searchTerm, category, { reset: true, target: container });
+        } else if (useMi) {
+            this.renderIconList('mi', searchTerm, category, { reset: true, target: container });
+        } else {
+            container.innerHTML = '';
+        }
+    }
+    _bindFilterPanelToggle() {
+        const toggleBtn = document.getElementById('icon-filter-toggle');
+        const panel = document.getElementById('icon-filter-panel');
+        if (!toggleBtn || !panel) return;
+
+        toggleBtn.addEventListener('click', () => {
+            const open = panel.style.display !== 'none';
+            panel.style.display = open ? 'none' : 'block';
+            toggleBtn.setAttribute('aria-expanded', String(!open));
+        });
     }
 }
 window.IconManager = IconManager;

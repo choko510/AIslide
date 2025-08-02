@@ -1372,6 +1372,16 @@
     margin-bottom: 10px;
 }
 
+/* 統一検索エリアの微調整 */
+#icon-unified-search-toolbar {
+    margin-top: 6px;
+}
+
+/* 統一カテゴリの見た目は既存と同等 */
+#icon-category-filter {
+    margin-bottom: 10px;
+}
+
 .icon-search-toolbar input {
     width: 100%;
     padding: 8px;
@@ -1381,6 +1391,32 @@
 
 .icon-style-selector-container {
     margin-bottom: 10px;
+}
+
+#icon-unified-style-container select {
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+#icon-unified-style-container label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+/* Minimal UI */
+.icon-filter-panel {
+    background: var(--bg-light);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+.icon-more-btn {
+    margin: 8px auto;
+    display: block;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
 }
 
 .icon-style-selector-container label {

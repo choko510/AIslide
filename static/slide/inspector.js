@@ -487,42 +487,7 @@ class InspectorManager {
 
     _setupColorPickerTrigger(containerId, config) {
         const container = document.getElementById(containerId);
-        if (!container) return;
-
-        // 見た目をカラーボックスのようにする
-        container.classList.add('color-picker-trigger');
-        const colorDisplay = document.createElement('div');
-        // initialColorがグラデーション文字列の場合も考慮
-        colorDisplay.style.background = config.initialColor;
-        container.innerHTML = ''; // 中身をクリア
-        container.appendChild(colorDisplay);
-
-        if (config.disabled) {
-            container.style.pointerEvents = 'none';
-            container.style.opacity = '0.5';
-            return;
-        }
-
-        container.onclick = (e) => {
-            const pickerId = `color-picker-window-${containerId}`;
-            let picker = this.colorPickers[pickerId];
-
-            if (!picker) {
-                picker = new ColorPicker(pickerId, config.initialColor, config.callback, {
-                    paletteKey: config.paletteKey,
-                    title: config.title,
-                    showEyedropper: true,
-                    showReset: true,
-                    defaultColor: config.initialColor
-                });
-                this.colorPickers[pickerId] = picker;
-            } else {
-                picker.setColor(config.initialColor);
-                picker.onChangeCallback = config.callback; // コールバックを最新に更新
-            }
-            
-            picker.show(e.clientX, e.clientY);
-        };
+        this.app._setupColorPickerTrigger(container, config);
     }
 
     _updateElementStyle(selectedElement, prop, value) {

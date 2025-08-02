@@ -1142,12 +1142,54 @@ import { ColorPicker } from './ColorPicker.js';
             elements: {},
             config: {},
             guideLineManager: null,
+            popupColorPicker: null,
             domElementCache: new Map(),
             thumbnailCache: new Map(),
             _animationFrameId: null,
             _boundHandleMouseMove: null,
             _boundHandleMouseUp: null,
             _sidebarCloseHandler: null,
+
+            _setupColorPickerTrigger(container, config) {
+                if (!container) return;
+
+                container.classList.add('color-picker-trigger');
+                const colorDisplay = document.createElement('div');
+                colorDisplay.style.background = config.initialColor;
+                container.innerHTML = '';
+                container.appendChild(colorDisplay);
+
+                if (config.disabled) {
+                    container.style.pointerEvents = 'none';
+                    container.style.opacity = '0.5';
+                    return;
+                }
+
+                container.onclick = (e) => {
+                    const pickerId = 'color-picker-window-popup';
+                    let picker = this.popupColorPicker;
+
+                    if (!picker) {
+                        picker = new ColorPicker(pickerId, config.initialColor, null, {
+                            title: config.title,
+                            showEyedropper: true,
+                            showReset: true,
+                        });
+                        this.popupColorPicker = picker;
+                    }
+
+                    picker.setColor(config.initialColor);
+                    picker.options.paletteKey = config.paletteKey;
+                    picker.elements.window.querySelector('.color-picker-title').textContent = config.title;
+
+                    picker.onChangeCallback = (color) => {
+                        colorDisplay.style.background = color;
+                        config.callback(color);
+                    };
+
+                    picker.show(e.clientX, e.clientY);
+                };
+            },
 
             applyStyles(element, styles) {
                 StyleManager.applyStyles(element, styles);
@@ -1369,22 +1411,17 @@ import { ColorPicker } from './ColorPicker.js';
                     this.applyCustomCss();
                     this.applyPageBackground();
                     
-                    // ColorPickerの初期化
-                    if (this.elements.pageBgColorPickerContainer) {
-                        this.pageBgColorPicker = new ColorPicker(
-                            this.elements.pageBgColorPickerContainer,
-                            this.state.presentation.settings.backgroundColor,
-                            (color) => {
-                                this.updateState('presentation.settings.backgroundColor', color);
-                                this.applyPageBackground();
-                                this.saveState();
-                            },
-                            {
-                                defaultColor: '#ffffff',
-                                paletteKey: 'pageBackgroundPalette'
-                            }
-                        );
-                    }
+                    this._setupColorPickerTrigger(this.elements.pageBgColorPickerContainer, {
+                        title: '背景色',
+                        initialColor: this.state.presentation.settings.backgroundColor,
+                        callback: (color) => {
+                            this.updateState('presentation.settings.backgroundColor', color);
+                            this.applyPageBackground();
+                            this.saveState();
+                        },
+                        paletteKey: 'pageBackgroundPalette',
+                        defaultColor: '#ffffff'
+                    });
 
                 } catch (error) {
                     ErrorHandler.handle(error, 'load_state');

@@ -613,6 +613,25 @@
     #sidebar-content.active {
         transform: translateY(0%);
     }
+
+    /* --- Mobile Responsive Grid Adjustments --- */
+    #element-add-buttons-container,
+    .pos-size-grid {
+        grid-template-columns: 1fr;
+    }
+
+    #qr-modal .qr-grid,
+    #chart-modal .chart-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .color-inputs {
+        flex-wrap: wrap;
+    }
+    .color-inputs input {
+        flex-basis: 100%;
+    }
 }
 
 #toolbar button {

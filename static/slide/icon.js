@@ -119,7 +119,10 @@ class IconManager {
             listContainer.addEventListener('click', e => {
                 const iconDiv = e.target.closest('.icon-item');
                 if (iconDiv && iconDiv.dataset.iconClass) {
-                    this.addIconElement(iconType, iconDiv.dataset.iconClass);
+                    // MI の場合は miContent(実アイコン名)も保持しているので渡す
+                    const iconClass = iconDiv.dataset.iconClass;
+                    const miContent = iconDiv.dataset.miContent; // undefined for FA
+                    this.addIconElement(iconType, iconClass, { miContent });
                 }
             });
         }
@@ -353,12 +356,14 @@ class IconManager {
                 iTag.style.pointerEvents = 'none';
                 iconDiv.appendChild(iTag);
             } else if (iconType === 'mi') {
+                // style class は content、アイコン名は miContent として dataset に格納
                 let stylePrefix = 'material-icons';
                 const styleSelect = document.getElementById('mi-style-select-unified');
                 if (styleSelect) stylePrefix = styleSelect.value;
                 const spanTag = document.createElement('span');
                 spanTag.className = `${stylePrefix}`;
-                spanTag.textContent = icon.class;
+                spanTag.textContent = icon.class; // ここは実アイコン名（miContent）
+                iconDiv.dataset.miContent = icon.class;
                 const widthPx = grid.itemWidth;
                 const px = Math.max(20, Math.min(34, Math.floor(widthPx * 0.34)));
                 spanTag.style.fontSize = `${px}px`;
@@ -408,44 +413,22 @@ class IconManager {
     }
 
     addIconElement(iconType, iconClass, style = {}) {
+        // iconClass: FA -> "fas fa-xxx" 等, MI -> 実アイコン名（例: "home"）
         const slide = this.app.getActiveSlide();
         if (!slide) return;
 
-        const defaultFontSize = 48;
-        const fontSize = style.fontSize || defaultFontSize;
-        const canvasWidth = this.app.state.presentation.settings.width || CANVAS_WIDTH;
-        const canvasHeight = this.app.state.presentation.settings.height || CANVAS_HEIGHT;
-
-        const newEl = {
-            id: this.app.generateId('el'),
-            type: 'icon',
-            iconType: iconType, // Store icon type (fa or mi)
-            content: iconClass, // Class string for FA, class name for MI
-            style: {
-                top: 20,
-                left: 20,
-                width: (fontSize / canvasWidth) * 100,
-                height: (fontSize / canvasHeight) * 100,
-                rotation: 0,
-                color: '#212529',
-                fontSize: fontSize,
-                animation: '',
-                ...style // 渡されたスタイルで上書き
-            }
-        };
-
         if (iconType === 'mi') {
-            // For Material Icons, also store the actual icon name (content for span tag)
-            newEl.miContent = iconClass;
-            // Material Iconsのスタイルを適用
+            // Material Icons は content=スタイルクラス, miContent=実アイコン名 で保存する
             const miStyleSelect = document.getElementById('mi-style-select-unified');
-            if (miStyleSelect) {
-                newEl.content = miStyleSelect.value; // e.g., "material-icons-outlined"
-            }
+            const contentClass = miStyleSelect ? miStyleSelect.value : 'material-icons';
+            const miName = style?.miContent || iconClass; // 実アイコン名
+            const normalizedStyle = { ...style, miContent: miName };
+            // 既に style.miContent に入っている場合でも保持し、第二引数には contentClass（クラス）を渡す
+            this.app.addIconElement('mi', contentClass, normalizedStyle);
+            return;
         }
-
-        this.app.addIconElement(iconType, iconClass, style);
-        // App.addIconElement 内で selectedElementIds の更新、saveState、render が行われる
+        // Font Awesome はそのままクラス文字列を渡す
+        this.app.addIconElement('fa', iconClass, style);
     }
     
     updateIconStyle(element, newStylePrefix) {

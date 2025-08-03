@@ -719,7 +719,7 @@ ${result.message}
             if (attempt > 0) {
                 const retryMsg = `リトライ中... (${attempt}/${maxRetries})`;
                 if (loadingMsgDiv) {
-                    const contentDiv = loadingMsgDiv.querySelector('.msg-content');
+                    const contentDiv = loadingMsgDiv.querySelector?.('.msg-content');
                     if (contentDiv) contentDiv.textContent = retryMsg;
                 }
                 await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
@@ -746,12 +746,18 @@ ${result.message}
                 const fullPrompt = `${currentSystemPrompt}\n\n===\n\n${promptHistory}`;
                 formData.append('prompt', fullPrompt);
 
-                // 画像の処理
+                // 画像の処理（失敗してもフォーム送信自体は続行する）
                 if (this.nextRequestImage) {
-                    const res = await fetch(this.nextRequestImage);
-                    const blob = await res.blob();
-                    formData.append('image', blob, 'slide_capture.png');
-                    this.nextRequestImage = null;
+                    try {
+                        const res = await fetch(this.nextRequestImage);
+                        const blob = await res.blob();
+                        formData.append('image', blob, 'slide_capture.png');
+                    } catch (imgErr) {
+                        console.warn('画像添付に失敗しました。画像なしで続行します:', imgErr);
+                    } finally {
+                        // 次回リクエストに持ち越さない
+                        this.nextRequestImage = null;
+                    }
                 }
 
                 const response = await fetch(this.apiEndpoint, {
@@ -760,36 +766,63 @@ ${result.message}
                 });
 
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`APIリクエスト失敗: ステータス ${response.status}. ${errorText}`);
+                    // 二重消費を避けるため一度だけテキスト化
+                    let errorText = '';
+                    try {
+                        errorText = await response.text();
+                    } catch {
+                        errorText = `(ステータス ${response.status})`;
+                    }
+                    const httpErr = new Error(`APIリクエスト失敗: ステータス ${response.status}. ${errorText}`);
+                    httpErr.isRetriable = response.status >= 500;
+                    throw httpErr;
                 }
                 
                 // ストリーミング処理
-                const reader = response.body.getReader();
+                const reader = response.body?.getReader?.();
                 const decoder = new TextDecoder();
                 let fullResponse = '';
-                const contentDiv = loadingMsgDiv.querySelector('.msg-content');
+                const contentDiv = loadingMsgDiv?.querySelector?.('.msg-content');
                 
                 // 初期のローディングメッセージをクリア
-                if(contentDiv) contentDiv.textContent = '';
+                if (contentDiv) contentDiv.textContent = '';
 
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) break;
-                    
-                    const chunk = decoder.decode(value, { stream: true });
-                    fullResponse += chunk;
+                if (!reader) {
+                    // ボディがストリームでない環境対策
+                    const text = await response.text();
+                    fullResponse = text || '';
+                    if (contentDiv) contentDiv.textContent = fullResponse;
+                } else {
+                    try {
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done) break;
+                            
+                            const chunk = decoder.decode(value, { stream: true });
+                            fullResponse += chunk;
 
-                    if (contentDiv) {
-                        contentDiv.textContent = fullResponse; // リアルタイムでUIを更新
+                            if (contentDiv) {
+                                contentDiv.textContent = fullResponse; // リアルタイムでUIを更新
+                            }
+                        }
+                    } finally {
+                        // 読み取り中断/終了時にキャンセルを明示（Safariなどの実装差対策）
+                        try { await reader.cancel(); } catch {}
                     }
                 }
                 
-                if (fullResponse.startsWith("Error:")) {
-                    throw new Error(fullResponse);
+                // バックエンドが "Error:" で始まるテキストを返す場合を検知
+                if (fullResponse?.trim().startsWith("Error:")) {
+                    const backendErr = new Error(fullResponse.trim());
+                    backendErr.isRetriable = true; // サーバ側一時エラーの可能性
+                    throw backendErr;
                 }
 
-                if (!fullResponse) throw new Error('APIからの応答が空です。');
+                if (!fullResponse) {
+                    const emptyErr = new Error('APIからの応答が空です。');
+                    emptyErr.isRetriable = true;
+                    throw emptyErr;
+                }
                 
                 if (messagesOverride) {
                     return { type: 'text', content: fullResponse };
@@ -803,7 +836,7 @@ ${result.message}
             }
         }
         
-        const finalError = new Error(`AIコマンドの生成に失敗しました: ${lastError.message}`);
+        const finalError = new Error(`AIコマンドの生成に失敗しました: ${lastError?.message || '不明なエラー'}`);
         finalError.isRetriable = true;
         throw finalError;
     }

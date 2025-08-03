@@ -1985,6 +1985,13 @@ import { ColorPicker } from './ColorPicker.js';
                         el.innerText = content;
                     }
                 }
+
+                // 既存データからiframeが描画されるケースでも警告を出す
+                if (elData.type === 'iframe' && elData.content && elData.content.url) {
+                    App.showEmbedWarning(`スライドに埋め込みが含まれています: ${elData.content.url}
+外部サイトのスクリプトが実行される可能性があります。信頼できる提供元か確認してください。`, { oncePerSession: true });
+                }
+
                 return el;
             },
 
@@ -2032,6 +2039,7 @@ import { ColorPicker } from './ColorPicker.js';
                 // 要素追加ボタン
                 this.elements.addTextBtn.addEventListener('click', () => this.addElement('text'));
                 this.elements.addChartBtn.addEventListener('click', () => this.addChart());
+                // iframeは専用モーダルを起動（URL追加前に警告＆プレビュー）
                 this.elements.addIframeBtn.addEventListener('click', () => this.addElement('iframe'));
                 this.elements.addShapeBtn.addEventListener('click', () => MicroModal.show('shape-modal'));
                 
@@ -3221,11 +3229,9 @@ import { ColorPicker } from './ColorPicker.js';
                     };
                     newEl.style.height = 30;
                 } else if (type === 'iframe') {
-                    const url = prompt('埋め込みたいコンテンツのURLを入力してください:');
-                    if (!url) return;
-                    newEl.content = { url: url, sandbox: 'allow-scripts allow-same-origin allow-popups' }; // デフォルトのsandbox属性
-                    newEl.style.width = 50;
-                    newEl.style.height = 50;
+                    // 専用モーダルを開いて、URL追加前に警告とプレビューを表示
+                    App.openEmbedModal();
+                    return;
                 } else if (type === 'shape') {
                     if (!content || !content.shapeType) {
                         console.error('図形タイプが指定されていません。');
@@ -5045,6 +5051,220 @@ import { ColorPicker } from './ColorPicker.js';
            }, // ここにカンマを追加
        }; // ここでAppオブジェクトが閉じられる
 
+       // 埋め込み警告ユーティリティ + モーダル制御（統合版）
+       (function attachEmbedWarningAPI(){
+         let warnedUrls = new Set();
+         let warnedOnceThisSession = false;
+
+         function getWarningEl() {
+           const el = document.getElementById('embed-warning');
+           if (!el) return null;
+           const close = document.getElementById('embed-warning-close');
+           if (close && !close._bound) {
+             close._bound = true;
+             close.addEventListener('click', () => {
+               el.style.display = 'none';
+             });
+           }
+           return el;
+         }
+
+         App.showEmbedWarning = function(message, opts = {}) {
+           const { oncePerUrl = false, url = null, oncePerSession = false } = opts;
+           if (oncePerSession && warnedOnceThisSession) return;
+           if (oncePerUrl && url && warnedUrls.has(url)) return;
+
+           const warnEl = getWarningEl();
+           if (!warnEl) return;
+           const msgEl = document.getElementById('embed-warning-message');
+           if (msgEl) msgEl.textContent = message;
+
+           warnEl.style.display = 'block';
+
+           if (oncePerSession) warnedOnceThisSession = true;
+           if (oncePerUrl && url) warnedUrls.add(url);
+         };
+
+         // 埋め込みモーダルの制御（URL検証 + デバウンス + 既定 allow-scripts）
+         App.openEmbedModal = function() {
+           const modalId = 'embed-modal';
+           const urlInput = document.getElementById('embed-url-input');
+           const widthInput = document.getElementById('embed-width-input');
+           const heightInput = document.getElementById('embed-height-input');
+           const preview = document.getElementById('embed-preview');
+           const insertBtn = document.getElementById('embed-insert-btn');
+
+           if (!urlInput || !preview || !insertBtn) {
+             ErrorHandler.showNotification('埋め込みモーダルの初期化に失敗しました', 'error');
+             return;
+           }
+
+           // 初期値
+           urlInput.value = '';
+           widthInput.value = 50;
+           heightInput.value = 50;
+           preview.removeAttribute('src');
+
+           // 上級者向け: アコーディオン開閉
+           const advToggle = document.getElementById('embed-advanced-toggle');
+           const advPanel  = document.getElementById('embed-advanced-panel');
+           if (advToggle && advPanel && !advToggle._bound) {
+             advToggle._bound = true;
+             advToggle.addEventListener('click', () => {
+               const expanded = advToggle.getAttribute('aria-expanded') === 'true';
+               advToggle.setAttribute('aria-expanded', String(!expanded));
+               advPanel.hidden = expanded;
+               const icon = advToggle.querySelector('i.fas');
+               if (icon) {
+                 icon.classList.toggle('fa-chevron-right', expanded);
+                 icon.classList.toggle('fa-chevron-down', !expanded);
+               }
+             });
+           }
+
+           // デフォルト sandbox は allow-scripts のみ
+           document.querySelectorAll('.embed-sbx').forEach(cb => {
+             if (cb.value === 'allow-scripts') cb.checked = true;
+             else cb.checked = false;
+           });
+           preview.setAttribute('sandbox', 'allow-scripts');
+
+           // URL形式チェック用ヘルパ
+           const isValidHttpUrl = (val) => {
+             try {
+               const u = new URL(val, window.location.origin);
+               if (!/^https?:$/.test(u.protocol)) return false;
+               // ドメイン風または localhost/127.0.0.1 許可
+               const hostOk = /([a-z0-9-]+\.)+[a-z]{2,}$/i.test(u.hostname) || /^localhost$/.test(u.hostname) || /^127\.0\.0\.1$/.test(u.hostname);
+               // パスは任意、ただしスキーム直後のtypoを粗検知
+               const typoLike = /https?:;\/\/|https?:\/\/\/|https?:\/\/:|https?:\/\/\s/i.test(val);
+               return hostOk && !typoLike;
+             } catch {
+               return false;
+             }
+           };
+
+           // 入力終了待ちのデバウンス
+           let embedUrlTimer = null;
+           const schedulePreview = () => {
+             clearTimeout(embedUrlTimer);
+             embedUrlTimer = setTimeout(updatePreview, 500);
+           };
+
+           // プレビュー更新関数
+           const updatePreview = () => {
+             const url = urlInput.value.trim();
+
+             // sandboxの組み立て（デフォルト allow-scripts）
+             const sbx = (() => {
+               const selected = Array.from(document.querySelectorAll('.embed-sbx:checked')).map(i => i.value);
+               if (selected.length === 0) return 'allow-scripts';
+               return selected.join(' ');
+             })();
+             preview.setAttribute('sandbox', sbx);
+
+             if (!url) {
+               preview.removeAttribute('src');
+               preview.title = '';
+               urlInput.setCustomValidity('');
+               urlInput.reportValidity();
+               return;
+             }
+
+             if (!isValidHttpUrl(url)) {
+               preview.removeAttribute('src');
+               preview.title = '';
+               urlInput.setCustomValidity('有効な http/https のURLを入力してください。例: https://example.com/page');
+               urlInput.reportValidity();
+               return;
+             }
+
+             urlInput.setCustomValidity('');
+             urlInput.reportValidity();
+
+             try {
+               const u = new URL(url, window.location.origin);
+               preview.src = u.toString();
+               preview.title = u.toString();
+             } catch {
+               preview.removeAttribute('src');
+               preview.title = '';
+             }
+           };
+
+           // デバウンスを適用
+           urlInput.oninput = schedulePreview;
+           document.querySelectorAll('.embed-sbx').forEach(cb => cb.onchange = updatePreview);
+
+           // URL入力前に注意喚起（モーダルオープン時に一度）
+           App.showEmbedWarning('外部サイトのコンテンツを埋め込む前に、提供元が信頼できることを確認してください。', { oncePerSession: true });
+
+           // 追加ボタン
+           if (!insertBtn._bound) {
+             insertBtn._bound = true;
+             insertBtn.addEventListener('click', () => {
+               const url = urlInput.value.trim();
+               if (!url) {
+                 alert('URLを入力してください');
+                 return;
+               }
+               if (!isValidHttpUrl(url)) {
+                 alert('http/https の正しいURLを入力してください。');
+                 return;
+               }
+               let u;
+               try {
+                 u = new URL(url, window.location.origin);
+                 if (!/^https?:$/.test(u.protocol)) {
+                   alert('http/https のURLのみ許可されます。');
+                   return;
+                 }
+               } catch {
+                 alert('不正なURLです。正しいURLを入力してください。');
+                 return;
+               }
+
+               // 追加前に警告（ここで必ず表示）
+               App.showEmbedWarning(`以下のURLを埋め込みます: ${u.toString()}
+ 外部サイトのスクリプトが実行される可能性があります。信頼できる提供元か確認してください。`, { oncePerUrl: false, url: u.toString() });
+
+               // sandbox属性（未選択時でも allow-scripts を強制）
+               const selectedSbx = Array.from(document.querySelectorAll('.embed-sbx:checked')).map(i => i.value);
+               const sandbox = (selectedSbx.length ? selectedSbx.join(' ') : 'allow-scripts');
+               // サイズ
+               const w = Math.max(10, Math.min(100, Number(widthInput.value) || 50));
+               const h = Math.max(10, Math.min(100, Number(heightInput.value) || 50));
+
+               // 実際に要素を追加
+               const slide = App.getActiveSlide();
+               if (!slide) return;
+
+               const newElStyle = { top: 20, left: 20, width: w, height: h, zIndex: slide.elements.length + 1, rotation: 0, animation: '' };
+               const content = { url: u.toString(), sandbox: sandbox || 'allow-scripts allow-same-origin' };
+               const added = App.addElementToSlide(slide.id, 'iframe', content, newElStyle);
+               if (added) {
+                 App.updateState('selectedElementIds', [added.id]);
+                 App.saveState();
+                 App.render();
+                 if (typeof MicroModal !== 'undefined') MicroModal.close(modalId);
+               }
+             });
+           }
+
+           // モーダルを開く
+           if (typeof MicroModal !== 'undefined') {
+             MicroModal.show(modalId, {
+               awaitCloseAnimation: true,
+               disableScroll: true
+             });
+           } else {
+             ErrorHandler.showNotification('モーダルライブラリが読み込まれていません', 'error');
+           }
+         };
+       })();
+
+
+
         // 画像編集モーダルを開く関数
         App.openImageEditor = function(imageDataURL, callback) {
             if (typeof window.initEditorWithImageData === "function") {
@@ -5515,6 +5735,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         csvPasteArea.style.display = 'none';
         csvPasteArea.value = '';
     });
+
+    // 「埋め込み」ボタンにモーダル起動をバインド（重複バインド防止付き）
+    const addIframeBtn = document.getElementById('add-iframe-btn');
+    if (addIframeBtn && !addIframeBtn._embedBound) {
+        addIframeBtn._embedBound = true;
+        addIframeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (typeof App.openEmbedModal === 'function') {
+                App.openEmbedModal();
+            } else {
+                // フォールバック: 直接の注意喚起のみ
+                App.showEmbedWarning('外部サイトのコンテンツを埋め込む前に、提供元が信頼できることを確認してください。', { oncePerSession: true });
+            }
+        });
+    }
 
     // 5. Appの初期化
     await App.init();

@@ -16,23 +16,26 @@
     Object.assign(App, {
         // 台本パネルの表示/非表示を切り替え
         toggleScriptPanel() {
-            const rightSidebar = this.elements.rightSidebar;
-            if (!rightSidebar) return;
-            const isVisible = rightSidebar.style.display !== 'none';
-            rightSidebar.style.display = isVisible ? 'none' : 'flex';
-            localStorage.setItem('webSlideMakerScriptPanelVisible', !isVisible);
+            // 状態をトグルし、UIは render で反映
+            const key = 'webSlideMakerScriptPanelVisible';
+            const current = localStorage.getItem(key);
+            const next = current === 'true' ? 'false' : 'true';
+            localStorage.setItem(key, next);
+
+            // 内部UI状態にも保持（なければ作成）
+            this.state.ui = this.state.ui || {};
+            this.state.ui.scriptPanelVisible = (next === 'true');
+
+            // 即時反映
+            this.render();
         },
 
         // 台本パネルの表示状態をロード
         _loadScriptPanelState() {
-            const rightSidebar = this.elements.rightSidebar;
-            if (!rightSidebar) return;
-            const savedState = localStorage.getItem('webSlideMakerScriptPanelVisible');
-            if (savedState === 'true') {
-                rightSidebar.style.display = 'flex';
-            } else if (savedState === 'false') {
-                rightSidebar.style.display = 'none';
-            }
+            const saved = localStorage.getItem('webSlideMakerScriptPanelVisible');
+            const visible = saved === null ? true : (saved === 'true');
+            this.state.ui = this.state.ui || {};
+            this.state.ui.scriptPanelVisible = visible;
         },
 
         // 台本エリアをレンダリング
@@ -141,7 +144,9 @@
 
         // 初期化時に台本機能をバインド
         _initScriptFeatures() {
+            // 状態の復元（elements キャッシュ後でも安全）
             this._loadScriptPanelState();
+
             if (this.elements.scriptDisplay) {
                 this.elements.scriptDisplay.addEventListener('input', this.handleScriptInput.bind(this));
                 this.elements.scriptDisplay.addEventListener('focusout', this._saveScriptFromDOMImmediately.bind(this));
@@ -149,6 +154,9 @@
             if (this.elements.toggleScriptPanelBtn) {
                 this.elements.toggleScriptPanelBtn.addEventListener('click', () => this.toggleScriptPanel());
             }
+
+            // 初期レンダリングで右サイドバー可視状態を反映
+            this.render();
         },
 
         // 台本入力イベントハンドラ
@@ -240,6 +248,8 @@
     const originalAppInit = App.init;
     App.init = function() {
         originalAppInit.apply(this, arguments);
+        // elements キャッシュが行われた後に呼ばれるように順序を保証
+        // すでに cacheElements をフックしているため、ここでは機能初期化のみ
         this._initScriptFeatures();
     };
 
@@ -254,6 +264,14 @@
     const originalRender = App.render;
     App.render = function() {
         originalRender.apply(this, arguments);
+
+        // 右サイドバーの表示/非表示を状態から反映
+        const rs = this.elements.rightSidebar;
+        if (rs) {
+            const visible = this.state?.ui?.scriptPanelVisible;
+            rs.style.display = visible ? 'flex' : 'none';
+        }
+
         // 台本エリアが編集中なら再描画しない
         const scriptDisplay = this.elements.scriptDisplay;
         if (scriptDisplay && scriptDisplay.contains(document.activeElement)) {

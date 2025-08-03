@@ -6,8 +6,6 @@ from datetime import timedelta
 from typing import Annotated, Optional, List, Dict, Any
 import asyncio
 import httpx
-import trafilatura
-from duckduckgo_search import DDGS
 
 
 from fastapi import (

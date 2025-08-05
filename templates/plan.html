@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スライドプランナー</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='plan/plan.css') }}">
+</head>
+<body class="page-transition">
+    <div class="planner-container">
+        <div id="progress-bar-container">
+            <div id="progress-bar"></div>
+        </div>
+        <div id="card">
+            <div id="question-container">
+                <!-- 質問はここに動的に挿入されます -->
+            </div>
+            <div id="navigation-container">
+                <div class="nav-left">
+                    <button id="prev-button" class="nav-button" aria-label="前の質問へ">戻る</button>
+                </div>
+                <div class="nav-right">
+                    <button id="skip-button" class="nav-button" aria-label="この質問をスキップ">スキップ</button>
+                    <!-- 「次へ」ボタンはJSで動的に制御 -->
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', path='plan/plan.js') }}"></script>
+</body>
+</html>

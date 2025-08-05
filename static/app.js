@@ -1,4 +1,160 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // ---- ページ遷移（フルリロード向け）初期化 ----
+    (function setupFullReloadTransition() {
+        const doc = document;
+        const body = document.body;
+
+        // ---- 軽量プリフェッチ（先読み）機能 ----
+        // 目的: ホバー/タッチ開始で対象ページを fetch してブラウザHTTPキャッシュへ格納し、実遷移を高速化
+        // 対象: data-prefetch または data-transition を持つ a/button/要素（/plan/ を含む）
+        const prefetchCache = new Set();
+        const PREFETCH_TIMEOUT = 4000;
+
+        function canPrefetch(url) {
+            try {
+                const u = new URL(url, window.location.href);
+                if (u.origin !== window.location.origin) return false;
+                // GETのみ、拡張子付き静的資産は除外（htmlルート想定を優先）
+                const path = u.pathname;
+                const ext = path.split('.').pop();
+                const blockList = ['png','jpg','jpeg','gif','webp','svg','pdf','zip','rar','css','js','map','ico','json'];
+                if (blockList.includes(ext)) return false;
+                return true;
+            } catch {
+                return false;
+            }
+        }
+
+        function prefetch(url) {
+            if (!canPrefetch(url)) return;
+            const abs = new URL(url, window.location.href).href;
+            if (prefetchCache.has(abs)) return;
+            prefetchCache.add(abs);
+
+            // fetch を使って HTML を先読み（no-cors ではなく same-origin）
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), PREFETCH_TIMEOUT);
+            fetch(abs, {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: { 'X-Prefetch': '1' },
+                signal: controller.signal
+            }).catch(() => {
+                // 失敗は無視（本番遷移時は通常ロードされる）
+            }).finally(() => {
+                clearTimeout(id);
+            });
+        }
+
+        function findHrefFromElement(el) {
+            // a 要素: href
+            const a = el.closest('a[href]');
+            if (a) return a.getAttribute('href');
+
+            // data-href（button等）に対応（main.htmlのAIボタンなど）
+            const btn = el.closest('[data-href]');
+            if (btn) return btn.getAttribute('data-href');
+
+            // 特定IDのフォールバック
+            const aiBtn = el.closest('#create-with-ai');
+            if (aiBtn) return '/plan/';
+
+            return null;
+        }
+
+        // マウスオーバー/タッチ開始でプリフェッチ
+        doc.addEventListener('mouseover', (e) => {
+            const href = findHrefFromElement(e.target);
+            if (!href) return;
+            // 遷移アニメ対象のヒューリスティック: data-transition or /plan/
+            const targetEl = e.target.closest('[data-transition], #create-with-ai, a[href*="/plan/"], a[href="/plan/"]');
+            if (!targetEl) return;
+
+            prefetch(href);
+            targetEl.classList.add('link-prefetching');
+        }, { passive: true });
+
+        doc.addEventListener('touchstart', (e) => {
+            const href = findHrefFromElement(e.target);
+            if (!href) return;
+            const targetEl = e.target.closest('[data-transition], #create-with-ai, a[href*="/plan/"], a[href="/plan/"]');
+            if (!targetEl) return;
+
+            prefetch(href);
+            targetEl.classList.add('link-prefetching');
+        }, { passive: true });
+
+        // 離脱時クラス除去（見た目用）
+        doc.addEventListener('mouseout', (e) => {
+            const el = e.target.closest('.link-prefetching');
+            if (el) el.classList.remove('link-prefetching');
+        }, { passive: true });
+
+        // 初回入場アニメーション
+        body.classList.add('page-transition', 'page-enter');
+        // 次フレームで enter-active に変更
+        requestAnimationFrame(() => {
+            body.classList.add('page-enter-active');
+            // トランジション終了でクリーンアップ
+            const onEnterEnd = (e) => {
+                if (e.target !== body) return;
+                body.classList.remove('page-enter', 'page-enter-active');
+                body.removeEventListener('transitionend', onEnterEnd);
+            };
+            body.addEventListener('transitionend', onEnterEnd);
+        });
+
+        // 同一タブ通常リンクのクリックで離脱アニメーション
+        doc.addEventListener('click', (ev) => {
+            // 修飾キーや中クリック、ダウンロード、外部、#アンカーは除外
+            if (ev.defaultPrevented) return;
+            const a = ev.target.closest('a');
+            if (!a) return;
+            if (a.target && a.target !== '_self') return;
+            if (a.hasAttribute('download')) return;
+            const href = a.getAttribute('href');
+            if (!href || href.startsWith('#')) return;
+
+            // 同一オリジンのみ
+            const url = new URL(href, window.location.href);
+            if (url.origin !== window.location.origin) return;
+
+            // ファイル拡張子が .pdf 等の直接ダウンロード/外部資産でないことを軽くチェック
+            const path = url.pathname;
+            const ext = path.split('.').pop();
+            const blockList = ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'zip', 'rar'];
+            if (blockList.includes(ext)) return;
+
+            // data-no-transition が付与されている場合はスキップ
+            if (a.dataset.noTransition === 'true') return;
+
+            // ここまで来たら遷移をアニメーション付きで実行
+            ev.preventDefault();
+
+            // 離脱アニメーション開始
+            // 既存の enter 系があれば除去
+            body.classList.remove('page-enter', 'page-enter-active');
+            body.classList.add('page-transition', 'page-exit');
+            // 次フレームで exit-active へ
+            requestAnimationFrame(() => {
+                body.classList.add('page-exit-active');
+                const MAX_WAIT = 450; // フォールバック
+                let navigated = false;
+                const go = () => {
+                    if (navigated) return;
+                    navigated = true;
+                    window.location.href = url.href;
+                };
+                const onExitEnd = (e) => {
+                    if (e.target !== body) return;
+                    body.removeEventListener('transitionend', onExitEnd);
+                    go();
+                };
+                body.addEventListener('transitionend', onExitEnd);
+                setTimeout(go, MAX_WAIT);
+            });
+        }, true);
+    })();
     const authArea = document.getElementById('auth-area');
     const loginModal = document.getElementById('login-modal');
     const registerModal = document.getElementById('register-modal');
@@ -7,13 +163,338 @@ document.addEventListener('DOMContentLoaded', () => {
     const showRegisterModalBtn = document.getElementById('show-register-modal');
     const showLoginModalBtn = document.getElementById('show-login-modal');
     const createNewSlideBtn = document.getElementById('create-new-slide-btn');
+    const newPresentationModal = document.getElementById('new-presentation-modal');
+    const createWithAIBtn = document.getElementById('create-with-ai');
+    const createFromScratchBtn = document.getElementById('create-from-scratch');
+    const newPresentationCancelBtn = document.getElementById('new-presentation-cancel');
     const slideListContainer = document.getElementById('slide-list');
 
     const API_BASE_URL = ''; // FastAPIが同じオリジンで提供されるため空文字列
 
+    // --- 多言語対応システム ---
+    const MESSAGES = {
+        'ja': {
+            'welcome': 'ようこそ',
+            'login': 'ログイン',
+            'register': '新規登録',
+            'logout': 'ログアウト',
+            'username': 'ユーザー名',
+            'password': 'パスワード',
+            'login_success': 'ログインしました',
+            'logout_success': 'ログアウトしました',
+            'register_success': '新規登録が完了しました。ログインしてください。',
+            'slide_created': '新しいスライドを作成しました',
+            'slide_deleted': 'スライドが削除されました',
+            'confirm_delete': 'このスライドを削除してもよろしいですか？',
+            'login_required': 'この操作にはログインが必要です',
+            'error_occurred': 'エラーが発生しました',
+            'network_error': 'ネットワークエラーが発生しました。接続を確認してください。',
+            'server_error': 'サーバーエラーが発生しました。しばらく時間をおいてから再度お試しください。',
+            'validation_error': '入力内容に問題があります。確認してください。',
+            'unauthorized_error': 'アクセス権限がありません。再度ログインしてください。',
+            'login_error_title': 'ログインエラー',
+            'register_error_title': '登録エラー',
+            'password_error_title': 'パスワードエラー',
+            'slide_error_title': 'スライドエラー',
+            'no_slides_message': 'まだスライドがありません。「新しいプレゼンテーション」ボタンから作成しましょう！',
+            'slide_fetch_error': 'スライドの取得に失敗しました',
+            'slide_create_error': 'スライドの作成に失敗しました',
+            'slide_delete_error': 'スライドの削除に失敗しました',
+            'edit': '編集',
+            'delete': '削除',
+            'loading': '読み込み中...',
+            'processing': '処理中...',
+            'settings': '設定',
+            'dark_mode': 'ダークモード',
+            'language': '言語',
+            'japanese': '日本語',
+            'english': 'English',
+            'save': '保存',
+            'cancel': 'キャンセル',
+            'settings_saved': '設定を保存しました'
+        },
+        'en': {
+            'welcome': 'Welcome',
+            'login': 'Login',
+            'register': 'Register',
+            'logout': 'Logout',
+            'username': 'Username',
+            'password': 'Password',
+            'login_success': 'Successfully logged in',
+            'logout_success': 'Successfully logged out',
+            'register_success': 'Registration completed. Please log in.',
+            'slide_created': 'New slide created',
+            'slide_deleted': 'Slide deleted',
+            'confirm_delete': 'Are you sure you want to delete this slide?',
+            'login_required': 'Login required for this operation',
+            'error_occurred': 'An error occurred',
+            'network_error': 'Network error occurred. Please check your connection.',
+            'server_error': 'Server error occurred. Please try again later.',
+            'validation_error': 'Input validation failed. Please check your input.',
+            'unauthorized_error': 'Access denied. Please log in again.',
+            'login_error_title': 'Login Error',
+            'register_error_title': 'Registration Error',
+            'password_error_title': 'Password Error',
+            'slide_error_title': 'Slide Error',
+            'no_slides_message': 'No slides yet. Create one using the "New Presentation" button!',
+            'slide_fetch_error': 'Failed to fetch slides',
+            'slide_create_error': 'Failed to create slide',
+            'slide_delete_error': 'Failed to delete slide',
+            'edit': 'Edit',
+            'delete': 'Delete',
+            'loading': 'Loading...',
+            'processing': 'Processing...',
+            'settings': 'Settings',
+            'dark_mode': 'Dark Mode',
+            'language': 'Language',
+            'japanese': '日本語',
+            'english': 'English',
+            'save': 'Save',
+            'cancel': 'Cancel',
+            'settings_saved': 'Settings saved'
+        }
+    };
+
+    // 現在の言語設定を取得
+    function getCurrentLanguage() {
+        return localStorage.getItem('app_language') || 'ja';
+    }
+
+    // 言語設定を保存
+    function setLanguage(lang) {
+        localStorage.setItem('app_language', lang);
+        updateUILanguage();
+    }
+
+    // メッセージを取得
+    function getMessage(key, lang = null) {
+        const currentLang = lang || getCurrentLanguage();
+        return MESSAGES[currentLang]?.[key] || MESSAGES['ja'][key] || key;
+    }
+
+    // UIの言語を更新
+    function updateUILanguage() {
+        const lang = getCurrentLanguage();
+        
+        // ボタンテキストの更新
+        const loginBtn = document.getElementById('show-login-btn');
+        const registerBtn = document.getElementById('show-register-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+
+        if (loginBtn) loginBtn.textContent = getMessage('login');
+        if (registerBtn) registerBtn.textContent = getMessage('register');
+        if (logoutBtn) logoutBtn.textContent = getMessage('logout');
+    }
+
+    // エラーコードから適切なメッセージを生成
+    function getErrorMessage(response, defaultKey = 'error_occurred') {
+        const lang = getCurrentLanguage();
+        
+        if (response.status === 400) {
+            return getMessage('validation_error', lang);
+        } else if (response.status === 401) {
+            return getMessage('unauthorized_error', lang);
+        } else if (response.status === 403) {
+            return getMessage('unauthorized_error', lang);
+        } else if (response.status === 404) {
+            return getMessage('slide_fetch_error', lang);
+        } else if (response.status >= 500) {
+            return getMessage('server_error', lang);
+        }
+        
+        return getMessage(defaultKey, lang);
+    }
+
+    // ネットワークエラーの判定
+    function isNetworkError(error) {
+        return error instanceof TypeError && error.message.includes('Failed to fetch');
+    }
+
+    // --- ダークモード機能 ---
+    function getCurrentTheme() {
+        return localStorage.getItem('app_theme') || 'light';
+    }
+
+    function setTheme(theme) {
+        localStorage.setItem('app_theme', theme);
+        applyTheme(theme);
+    }
+
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        document.body.classList.toggle('dark-mode', theme === 'dark');
+    }
+
+    // --- 設定モーダル機能 ---
+    function openSettingsModal() {
+        const settingsModal = document.getElementById('settings-modal');
+        if (settingsModal) {
+            // 現在の設定値を反映
+            const languageSelect = document.getElementById('settings-language-select');
+            const themeSelect = document.getElementById('settings-theme-select');
+            
+            if (languageSelect) languageSelect.value = getCurrentLanguage();
+            if (themeSelect) themeSelect.value = getCurrentTheme();
+            
+            settingsModal.classList.add('is-open');
+        }
+    }
+
+    function closeSettingsModal() {
+        const settingsModal = document.getElementById('settings-modal');
+        if (settingsModal) {
+            settingsModal.classList.remove('is-open');
+        }
+    }
+
+    function saveSettings() {
+        const languageSelect = document.getElementById('settings-language-select');
+        const themeSelect = document.getElementById('settings-theme-select');
+        
+        if (languageSelect) {
+            setLanguage(languageSelect.value);
+        }
+        
+        if (themeSelect) {
+            setTheme(themeSelect.value);
+        }
+        
+        closeSettingsModal();
+        showToast(getMessage('settings_saved'), '', 'success');
+    }
+
+    // --- カスタムアラート関数 ---
+    function showCustomAlert(message, title = 'お知らせ', type = 'info') {
+        return new Promise((resolve) => {
+            const alertElement = document.getElementById('custom-alert');
+            const iconElement = document.getElementById('alert-icon');
+            const titleElement = document.getElementById('alert-title');
+            const messageElement = document.getElementById('alert-message');
+            const okBtn = document.getElementById('alert-ok-btn');
+            const cancelBtn = document.getElementById('alert-cancel-btn');
+
+            // アイコンの設定
+            iconElement.className = `alert-icon ${type}`;
+            switch (type) {
+                case 'success':
+                    iconElement.innerHTML = '<i class="fas fa-check-circle"></i>';
+                    break;
+                case 'error':
+                    iconElement.innerHTML = '<i class="fas fa-times-circle"></i>';
+                    break;
+                case 'warning':
+                    iconElement.innerHTML = '<i class="fas fa-exclamation-triangle"></i>';
+                    break;
+                default:
+                    iconElement.innerHTML = '<i class="fas fa-info-circle"></i>';
+            }
+
+            titleElement.textContent = title;
+            messageElement.textContent = message;
+            cancelBtn.style.display = 'none';
+
+            alertElement.classList.add('show');
+
+            const handleOk = () => {
+                alertElement.classList.remove('show');
+                okBtn.removeEventListener('click', handleOk);
+                resolve(true);
+            };
+
+            okBtn.addEventListener('click', handleOk);
+        });
+    }
+
+    function showCustomConfirm(message, title = '確認') {
+        return new Promise((resolve) => {
+            const alertElement = document.getElementById('custom-alert');
+            const iconElement = document.getElementById('alert-icon');
+            const titleElement = document.getElementById('alert-title');
+            const messageElement = document.getElementById('alert-message');
+            const okBtn = document.getElementById('alert-ok-btn');
+            const cancelBtn = document.getElementById('alert-cancel-btn');
+
+            // アイコンの設定
+            iconElement.className = 'alert-icon warning';
+            iconElement.innerHTML = '<i class="fas fa-question-circle"></i>';
+
+            titleElement.textContent = title;
+            messageElement.textContent = message;
+            okBtn.textContent = 'はい';
+            cancelBtn.textContent = 'いいえ';
+            cancelBtn.style.display = 'inline-block';
+
+            alertElement.classList.add('show');
+
+            const handleOk = () => {
+                alertElement.classList.remove('show');
+                okBtn.removeEventListener('click', handleOk);
+                cancelBtn.removeEventListener('click', handleCancel);
+                okBtn.textContent = 'OK';
+                resolve(true);
+            };
+
+            const handleCancel = () => {
+                alertElement.classList.remove('show');
+                okBtn.removeEventListener('click', handleOk);
+                cancelBtn.removeEventListener('click', handleCancel);
+                okBtn.textContent = 'OK';
+                resolve(false);
+            };
+
+            okBtn.addEventListener('click', handleOk);
+            cancelBtn.addEventListener('click', handleCancel);
+        });
+    }
+
+    function showToast(message, title = '', type = 'info', duration = 3000) {
+        const toastContainer = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+
+        const iconMap = {
+            success: 'fas fa-check-circle',
+            error: 'fas fa-times-circle',
+            warning: 'fas fa-exclamation-triangle',
+            info: 'fas fa-info-circle'
+        };
+
+        toast.innerHTML = `
+            <i class="toast-icon ${type} ${iconMap[type]}"></i>
+            <div class="toast-content">
+                ${title ? `<div class="toast-title">${title}</div>` : ''}
+                <div class="toast-message">${message}</div>
+            </div>
+            <button class="toast-close">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+
+        toastContainer.appendChild(toast);
+
+        const closeBtn = toast.querySelector('.toast-close');
+        const closeToast = () => {
+            toast.style.animation = 'fadeOut 0.3s ease forwards';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 300);
+        };
+
+        closeBtn.addEventListener('click', closeToast);
+        setTimeout(closeToast, duration);
+    }
+
     // --- モーダル制御 ---
     function openModal(modal) {
         modal.classList.add('is-open');
+    }
+
+    // 新規作成の選択ダイアログを開く
+    function openNewPresentationChoice() {
+        if (!newPresentationModal) return;
+        openModal(newPresentationModal);
     }
 
     function closeModal(modal) {
@@ -66,11 +547,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     renderLoggedInUI(user.username);
                     fetchAndRenderSlides();
                 } else {
+                    console.warn('認証トークンが無効です:', response.status);
                     removeToken();
                     renderLoggedOutUI();
                 }
             } catch (error) {
                 console.error('認証チェックエラー:', error);
+                if (isNetworkError(error)) {
+                    showToast(getMessage('network_error'), '', 'warning', 5000);
+                }
                 removeToken();
                 renderLoggedOutUI();
             }
@@ -80,24 +565,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderLoggedInUI(username) {
+        const welcomeMsg = getMessage('welcome');
+        const logoutText = getMessage('logout');
+        const settingsText = getMessage('settings');
+        
         authArea.innerHTML = `
             <div class="user-info">
-                <span>ようこそ、${username}さん！</span>
-                <button id="logout-btn">ログアウト</button>
+                <span>${welcomeMsg}、${username}さん！</span>
+                <button id="settings-btn" class="settings-btn" title="${settingsText}">
+                    <i class="fas fa-cog"></i>
+                </button>
+                <button id="logout-btn">${logoutText}</button>
             </div>
         `;
+        
         document.getElementById('logout-btn').addEventListener('click', handleLogout);
+        document.getElementById('settings-btn').addEventListener('click', openSettingsModal);
     }
 
     function renderLoggedOutUI() {
+        const loginText = getMessage('login');
+        const registerText = getMessage('register');
+        const settingsText = getMessage('settings');
+        
         authArea.innerHTML = `
             <div class="auth-buttons">
-                <button id="show-login-btn">ログイン</button>
-                <button id="show-register-btn">新規登録</button>
+                <button id="show-login-btn">${loginText}</button>
+                <button id="show-register-btn">${registerText}</button>
+                <button id="settings-btn" class="settings-btn" title="${settingsText}">
+                    <i class="fas fa-cog"></i>
+                </button>
             </div>
         `;
+        
         document.getElementById('show-login-btn').addEventListener('click', () => openModal(loginModal));
         document.getElementById('show-register-btn').addEventListener('click', () => openModal(registerModal));
+        document.getElementById('settings-btn').addEventListener('click', openSettingsModal);
     }
 
     async function handleLogin(event) {
@@ -109,23 +612,27 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`${API_BASE_URL}/auth/login`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: JSON.stringify({ username, password })
+                body: new URLSearchParams({ username, password })
             });
 
             if (response.ok) {
                 const data = await response.json();
                 setToken(data.access_token);
                 closeModal(loginModal);
+                showToast(getMessage('login_success'), '', 'success');
                 checkAuthAndRenderUI(); // UI更新とスライド取得
             } else {
-                const errorData = await response.json();
-                alert(`ログイン失敗: ${errorData.detail}`);
+                const errorMessage = getErrorMessage(response, 'unauthorized_error');
+                await showCustomAlert(errorMessage, getMessage('login_error_title'), 'error');
             }
         } catch (error) {
             console.error('ログインエラー:', error);
-            alert('ログイン中にエラーが発生しました。');
+            const errorMessage = isNetworkError(error) ?
+                getMessage('network_error') :
+                getMessage('error_occurred');
+            await showCustomAlert(errorMessage, getMessage('login_error_title'), 'error');
         }
     }
 
@@ -133,6 +640,13 @@ document.addEventListener('DOMContentLoaded', () => {
         event.preventDefault();
         const username = registerForm.elements['register-username'].value;
         const password = registerForm.elements['register-password'].value;
+
+        // パスワードのバリデーション
+        const passwordValidationResult = validatePassword(password);
+        if (!passwordValidationResult.isValid) {
+            await showCustomAlert(passwordValidationResult.message, getMessage('password_error_title'), 'warning');
+            return;
+        }
 
         try {
             const response = await fetch(`${API_BASE_URL}/auth/register`, {
@@ -144,33 +658,60 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (response.ok) {
-                alert('新規登録が完了しました。ログインしてください。');
+                await showCustomAlert(getMessage('register_success'), getMessage('register_error_title'), 'success');
                 closeModal(registerModal);
                 openModal(loginModal);
             } else {
-                const errorData = await response.json();
-                alert(`新規登録失敗: ${errorData.detail}`);
+                const errorMessage = getErrorMessage(response, 'validation_error');
+                await showCustomAlert(errorMessage, getMessage('register_error_title'), 'error');
             }
         } catch (error) {
             console.error('新規登録エラー:', error);
-            alert('新規登録中にエラーが発生しました。');
+            const errorMessage = isNetworkError(error) ?
+                getMessage('network_error') :
+                getMessage('error_occurred');
+            await showCustomAlert(errorMessage, getMessage('register_error_title'), 'error');
         }
     }
 
-    function handleLogout() {
+    // パスワードバリデーション関数
+    function validatePassword(password) {
+        const minLength = 7;
+
+        if (password.length < minLength) {
+            return { isValid: false, message: `パスワードは${minLength}文字以上である必要があります。` };
+        }
+
+        // 同じ数字が4回以上連続しない
+        if (/(.)\1\1\1/.test(password)) {
+            return { isValid: false, message: '同じ文字が4回以上連続するパスワードは使用できません。' };
+        }
+
+        // 数字のみではないことを確認
+        if (/^\d+$/.test(password)) {
+            return { isValid: false, message: 'パスワードには英数字や記号を含める必要があります。' };
+        }
+
+        return { isValid: true, message: 'パスワードは有効です。' };
+    }
+
+    async function handleLogout() {
         removeToken();
         renderLoggedOutUI();
         slideListContainer.innerHTML = ''; // スライドリストをクリア
-        alert('ログアウトしました。');
+        showToast(getMessage('logout_success'), '', 'info');
     }
 
     // --- スライド関連 ---
     async function fetchAndRenderSlides() {
         const token = getToken();
         if (!token) {
-            slideListContainer.innerHTML = '<p>ログインしてスライドを表示</p>';
+            slideListContainer.innerHTML = `<p>${getMessage('login_required')}</p>`;
             return;
         }
+
+        // ローディング表示
+        slideListContainer.innerHTML = `<p>${getMessage('loading')}</p>`;
 
         try {
             const response = await fetch(`${API_BASE_URL}/users/me/slides`, {
@@ -183,9 +724,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const slides = await response.json();
                 renderSlides(slides);
             } else {
-                const errorData = await response.json();
-                console.error('スライド取得失敗:', errorData.detail);
-                slideListContainer.innerHTML = `<p>スライドの取得に失敗しました: ${errorData.detail}</p>`;
+                const errorMessage = getErrorMessage(response, 'slide_fetch_error');
+                console.error('スライド取得失敗:', response.status);
+                slideListContainer.innerHTML = `<p>${errorMessage}</p>`;
                 if (response.status === 401) { // トークン切れなどで認証エラーの場合
                     removeToken();
                     renderLoggedOutUI();
@@ -193,14 +734,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('スライド取得エラー:', error);
-            slideListContainer.innerHTML = '<p>スライドの取得中にエラーが発生しました。</p>';
+            const errorMessage = isNetworkError(error) ?
+                getMessage('network_error') :
+                getMessage('slide_fetch_error');
+            slideListContainer.innerHTML = `<p>${errorMessage}</p>`;
         }
     }
 
     function renderSlides(slides) {
         slideListContainer.innerHTML = ''; // 既存のスライドをクリア
         if (slides.length === 0) {
-            slideListContainer.innerHTML = '<p>まだスライドがありません。「新しいプレゼンテーション」ボタンから作成しましょう！</p>';
+            slideListContainer.innerHTML = `<p>${getMessage('no_slides_message')}</p>`;
             return;
         }
 
@@ -215,8 +759,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="slide-info">
                     <div class="slide-title">スライド #${slide.id}</div>
                     <div class="slide-actions">
-                        <button class="edit-btn" data-slide-id="${slide.id}">編集</button>
-                        <button class="delete-btn" data-slide-id="${slide.id}">削除</button>
+                        <button class="edit-btn" data-slide-id="${slide.id}">${getMessage('edit')}</button>
+                        <button class="delete-btn" data-slide-id="${slide.id}">${getMessage('delete')}</button>
                     </div>
                 </div>
             `;
@@ -227,36 +771,72 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // 既存: 直接スライドを作成する関数（必要時に使用）
     async function handleCreateNewSlide() {
         const token = getToken();
         if (!token) {
-            alert('新しいスライドを作成するにはログインが必要です。');
+            await showCustomAlert(getMessage('login_required'), getMessage('slide_error_title'), 'warning');
             openModal(loginModal);
             return;
         }
 
         try {
-            // FastAPIのSlideCreateスキーマに合わせて空のslide_dataを送信
+            showToast(getMessage('processing'), '', 'info', 2000);
             const response = await fetch(`${API_BASE_URL}/slides`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ slide_data: "{}" }) // 空のJSONオブジェクトを送信
+                body: JSON.stringify({ slide_data: "{}" })
             });
 
             if (response.ok) {
                 const newSlide = await response.json();
+                showToast(getMessage('slide_created'), '', 'success');
                 window.location.href = `/slide.html?slide_id=${newSlide.id}`;
             } else {
-                const errorData = await response.json();
-                alert(`スライド作成失敗: ${errorData.detail}`);
+                const errorMessage = getErrorMessage(response, 'slide_create_error');
+                await showCustomAlert(errorMessage, getMessage('slide_error_title'), 'error');
             }
         } catch (error) {
             console.error('スライド作成エラー:', error);
-            alert('スライドの作成中にエラーが発生しました。');
+            const errorMessage = isNetworkError(error) ?
+                getMessage('network_error') :
+                getMessage('slide_create_error');
+            await showCustomAlert(errorMessage, getMessage('slide_error_title'), 'error');
         }
+    }
+
+    // 新しいプレゼンテーションの選択肢ボタン動作
+    if (newPresentationModal) {
+        newPresentationModal.addEventListener('click', (e) => {
+            if (e.target === newPresentationModal) closeModal(newPresentationModal);
+        });
+    }
+    // ヘッダーXボタン
+    if (newPresentationCancelBtn) {
+        newPresentationCancelBtn.addEventListener('click', () => {
+            if (newPresentationModal) closeModal(newPresentationModal);
+        });
+    }
+    // フッターのキャンセル（存在すれば）
+    const newPresentationCancelFooter = document.getElementById('new-presentation-cancel-footer');
+    if (newPresentationCancelFooter) {
+        newPresentationCancelFooter.addEventListener('click', () => {
+            if (newPresentationModal) closeModal(newPresentationModal);
+        });
+    }
+    if (createWithAIBtn) {
+                // プリフェッチ対象として data-href をセット（上部のプリフェッチが参照）
+                createWithAIBtn.setAttribute('data-href', '/plan/');
+                // 直接の location.href 遷移は main.html 側のフォールバックで a に変換して実行
+            }
+    if (createFromScratchBtn) {
+        createFromScratchBtn.addEventListener('click', async () => {
+            // 0から作成: 既存のスライド作成API呼び出し後、slide.htmlへ
+            await handleCreateNewSlide();
+        });
     }
 
     function handleEditSlide(slideId) {
@@ -264,18 +844,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function handleDeleteSlide(slideId) {
-        if (!confirm('このスライドを削除してもよろしいですか？')) {
+        const confirmed = await showCustomConfirm(getMessage('confirm_delete'), getMessage('slide_error_title'));
+        if (!confirmed) {
             return;
         }
 
         const token = getToken();
         if (!token) {
-            alert('スライドを削除するにはログインが必要です。');
+            await showCustomAlert(getMessage('login_required'), getMessage('slide_error_title'), 'warning');
             openModal(loginModal);
             return;
         }
 
         try {
+            // ローディング通知
+            showToast(getMessage('processing'), '', 'info', 2000);
+            
             const response = await fetch(`${API_BASE_URL}/slides/${slideId}`, {
                 method: 'DELETE',
                 headers: {
@@ -284,23 +868,48 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (response.ok) {
-                alert('スライドが削除されました。');
+                showToast(getMessage('slide_deleted'), '', 'success');
                 fetchAndRenderSlides(); // リストを再読み込み
             } else {
-                const errorData = await response.json();
-                alert(`スライド削除失敗: ${errorData.detail}`);
+                const errorMessage = getErrorMessage(response, 'slide_delete_error');
+                await showCustomAlert(errorMessage, getMessage('slide_error_title'), 'error');
             }
         } catch (error) {
             console.error('スライド削除エラー:', error);
-            alert('スライドの削除中にエラーが発生しました。');
+            const errorMessage = isNetworkError(error) ?
+                getMessage('network_error') :
+                getMessage('slide_delete_error');
+            await showCustomAlert(errorMessage, getMessage('slide_error_title'), 'error');
         }
     }
 
     // --- イベントリスナー登録 ---
     loginForm.addEventListener('submit', handleLogin);
     registerForm.addEventListener('submit', handleRegister);
-    createNewSlideBtn.addEventListener('click', handleCreateNewSlide);
+    // クリック時はまず選択モーダルを開く
+    if (createNewSlideBtn) {
+        createNewSlideBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            openNewPresentationChoice();
+        });
+    }
+
+    // 設定モーダルのイベントリスナー
+    const settingsModal = document.getElementById('settings-modal');
+    if (settingsModal) {
+        settingsModal.addEventListener('click', (e) => {
+            if (e.target === settingsModal) closeSettingsModal();
+        });
+        
+        const saveBtn = document.getElementById('settings-save-btn');
+        const cancelBtn = document.getElementById('settings-cancel-btn');
+        
+        if (saveBtn) saveBtn.addEventListener('click', saveSettings);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeSettingsModal);
+    }
 
     // 初期UIのレンダリング
+    applyTheme(getCurrentTheme()); // 初期テーマ設定を適用
     checkAuthAndRenderUI();
+    updateUILanguage(); // 初期言語設定を適用
 });

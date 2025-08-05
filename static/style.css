@@ -1,168 +1,1028 @@
+/**
+ * @file style.css
+ * @brief AIslide ダッシュボード専用スタイルシート
+ * @description モダンで洗練されたダッシュボードデザイン
+ */
+
+/* ==========================================================================
+   1. CSS変数とテーマ拡張
+   ========================================================================== */
+
+:root {
+    /* ダッシュボード専用カラー */
+    --dashboard-primary: #2563eb;
+    --dashboard-primary-hover: #1d4ed8;
+    --dashboard-secondary: #64748b;
+    --dashboard-accent: #059669;
+    --danger-color: #dc2626;
+    --danger-color-hover: #b91c1c;
+    --dashboard-bg-primary: #ffffff;
+    --dashboard-bg-secondary: #f8fafc;
+    --dashboard-sidebar-bg: #ffffff;
+    --dashboard-sidebar-text: #64748b;
+    --dashboard-sidebar-text-active: #1e293b;
+    --dashboard-border: #e2e8f0;
+    --dashboard-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+    --dashboard-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --dashboard-text-primary: #1e293b;
+    --dashboard-text-secondary: #64748b;
+    --dashboard-text-muted: #94a3b8;
+    
+    /* アニメーション */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    
+    /* レイアウト */
+    --sidebar-width: 280px;
+    --header-height: 70px;
+    --border-radius-sm: 6px;
+    --border-radius-md: 12px;
+    --border-radius-lg: 16px;
+}
+
+[data-theme="dark"] {
+    --dashboard-bg-primary: #1e293b;
+    --dashboard-bg-secondary: #334155;
+    --dashboard-sidebar-bg: #0f172a;
+    --dashboard-text-primary: #f1f5f9;
+    --dashboard-text-secondary: #cbd5e1;
+    --dashboard-text-muted: #64748b;
+    --dashboard-border: #475569;
+}
+
+/* ==========================================================================
+   2. ベーススタイル
+   ========================================================================== */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
 body {
-    font-family: sans-serif;
-    margin: 0;
-    background-color: #f4f4f4;
-    color: #333;
+    font-family: "Inter", "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--dashboard-bg-primary);
+    color: var(--dashboard-text-primary);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
 }
 
-header {
-    background-color: #333;
-    color: #fff;
-    padding: 1em 0;
-    text-align: center;
-}
+/* ==========================================================================
+   3. ダッシュボードレイアウト
+   ========================================================================== */
 
-header h1 {
-    margin: 0;
-}
-
-header nav button {
-    background: #555;
-    color: #fff;
-    border: none;
-    padding: 0.5em 1em;
-    margin: 0 0.5em;
-    cursor: pointer;
-}
-
-header nav button:hover {
-    background: #777;
-}
-
-main {
-    padding: 1em;
-    max-width: 900px;
-    margin: auto;
-}
-
-h2 {
-    color: #333;
-    border-bottom: 2px solid #333;
-    padding-bottom: 0.3em;
-}
-
-#slideList {
+.dashboard-container {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 1em;
+    grid-template-columns: var(--sidebar-width) 1fr;
+    min-height: 100vh;
+    background: var(--dashboard-bg-primary);
 }
 
-.slide-item {
-    border: 1px solid #ddd;
-    padding: 1em;
-    background-color: #fff;
-    border-radius: 5px;
+/* ==========================================================================
+   4. サイドバー
+   ========================================================================== */
+
+.sidebar {
+    background: var(--dashboard-sidebar-bg);
+    padding: 2rem 1.5rem;
+    border-right: 1px solid var(--dashboard-border);
+    box-shadow: var(--dashboard-shadow);
 }
 
-.slide-item h3 {
-    margin-top: 0;
+.sidebar h1 {
+    color: var(--dashboard-sidebar-text-active);
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 2.5rem;
 }
 
-/* モーダルスタイル */
-.modal {
-    display: none; /* 初期状態では非表示 */
-    position: fixed;
-    z-index: 1;
-    left: 0;
+.create-new-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 1rem 1.25rem;
+    background: var(--dashboard-primary);
+    border: none;
+    border-radius: var(--border-radius-md);
+    color: white;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    box-shadow: var(--dashboard-shadow);
+}
+
+.create-new-btn:hover {
+    background: var(--dashboard-primary-hover);
+    transform: translateY(-2px);
+    box-shadow: var(--dashboard-shadow-lg);
+}
+
+.create-new-btn:active {
+    transform: translateY(0);
+}
+
+.create-new-btn i {
+    font-size: 1.1rem;
+}
+
+/* ==========================================================================
+   5. メインコンテンツエリア
+   ========================================================================== */
+
+.main-content {
+    display: flex;
+    flex-direction: column;
+    background: var(--dashboard-bg-primary);
+    position: relative;
+}
+
+.header {
+    height: var(--header-height);
+    background: var(--dashboard-bg-secondary);
+    border-bottom: 1px solid var(--dashboard-border);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 2rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(8px);
+    position: sticky;
     top: 0;
+    z-index: 100;
+}
+
+#auth-area {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* 認証エリア - ログイン前 */
+.auth-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.auth-buttons button {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--dashboard-border);
+    border-radius: var(--border-radius-sm);
+    background: var(--dashboard-bg-secondary);
+    color: var(--dashboard-text-primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.auth-buttons button:hover {
+    background: var(--dashboard-primary);
+    color: white;
+    border-color: var(--dashboard-primary);
+    transform: translateY(-1px);
+}
+
+.auth-buttons button#show-login-btn {
+    background: var(--dashboard-primary);
+    color: white;
+    border-color: var(--dashboard-primary);
+}
+
+.auth-buttons button#show-login-btn:hover {
+    background: var(--dashboard-primary-hover);
+    border-color: var(--dashboard-primary-hover);
+}
+
+/* 認証エリア - ログイン後 */
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    color: var(--dashboard-text-primary);
+}
+
+.user-info span {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.user-info button {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--dashboard-border);
+    border-radius: var(--border-radius-sm);
+    background: var(--dashboard-bg-secondary);
+    color: var(--dashboard-text-primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.user-info button:hover {
+    background: var(--danger-color);
+    color: white;
+    border-color: var(--danger-color);
+    transform: translateY(-1px);
+}
+
+/* 設定ボタン */
+.settings-btn {
+    padding: 0.5rem !important;
+    border-radius: 50% !important;
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: var(--dashboard-bg-primary) !important;
+    border: 1px solid var(--dashboard-border) !important;
+    color: var(--dashboard-text-secondary) !important;
+    transition: var(--transition-smooth) !important;
+}
+
+.settings-btn:hover {
+    background: var(--dashboard-primary) !important;
+    color: white !important;
+    border-color: var(--dashboard-primary) !important;
+    transform: translateY(-1px) rotate(90deg) !important;
+}
+
+.settings-btn i {
+    font-size: 1rem;
+}
+
+.content-area {
+    flex: 1;
+    padding: 2.5rem;
+    overflow-y: auto;
+}
+
+.content-area h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--dashboard-text-primary);
+    margin-bottom: 2rem;
+    position: relative;
+}
+
+.content-area h2::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    width: 60px;
+    height: 4px;
+    background: var(--dashboard-primary);
+    border-radius: 2px;
+}
+
+/* ==========================================================================
+   6. スライドリスト
+   ========================================================================== */
+
+.slide-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+/* スライドカード（動的に追加される想定） */
+.slide-card {
+    background: var(--dashboard-bg-secondary);
+    border: 1px solid var(--dashboard-border);
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem;
+    transition: var(--transition-smooth);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.slide-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--dashboard-primary);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+}
+
+.slide-card:hover::before {
+    transform: scaleX(1);
+}
+
+.slide-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--dashboard-shadow-lg);
+    border-color: var(--dashboard-primary);
+}
+
+/* スライドカード内のコンテンツ */
+.slide-thumbnail-placeholder {
+    text-align: center;
+    padding: 2rem 0;
+    color: var(--dashboard-text-muted);
+    margin-bottom: 1rem;
+}
+
+.slide-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.slide-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--dashboard-text-primary);
+}
+
+.slide-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.slide-actions button {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--dashboard-border);
+    border-radius: var(--border-radius-sm);
+    background: var(--dashboard-bg-primary);
+    color: var(--dashboard-text-primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.slide-actions .edit-btn:hover {
+    background: var(--dashboard-primary);
+    color: white;
+    border-color: var(--dashboard-primary);
+}
+
+.slide-actions .delete-btn:hover {
+    background: var(--danger-color);
+    color: white;
+    border-color: var(--danger-color);
+}
+
+/* ==========================================================================
+   7. モーダル
+   ========================================================================== */
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
-    overflow: auto;
-    background-color: rgba(0,0,0,0.4);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    animation: fadeIn 0.3s ease;
+}
+
+.modal.show,
+.modal.is-open {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 .modal-content {
-    background-color: #fefefe;
-    margin: 15% auto;
-    padding: 20px;
-    border: 1px solid #888;
-    width: 80%;
+    background: var(--dashboard-bg-secondary);
+    padding: 2.5rem;
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--dashboard-shadow-lg);
+    width: 90%;
     max-width: 400px;
-    border-radius: 5px;
+    position: relative;
+    animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(50px) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-content h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--dashboard-text-primary);
+    margin-bottom: 1.5rem;
     text-align: center;
+}
+
+.modal-content form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
 }
 
 .modal-content input {
-    width: calc(100% - 22px);
-    padding: 10px;
-    margin: 10px 0;
-    border: 1px solid #ddd;
-    border-radius: 4px;
+    padding: 0.875rem 1rem;
+    border: 2px solid var(--dashboard-border);
+    border-radius: var(--border-radius-sm);
+    background: var(--dashboard-bg-primary);
+    color: var(--dashboard-text-primary);
+    font-size: 0.95rem;
+    transition: var(--transition-smooth);
 }
 
-.modal-content button {
-    background-color: #333;
-    color: white;
-    padding: 10px 15px;
+.modal-content input:focus {
+    outline: none;
+    border-color: var(--dashboard-primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    transform: translateY(-1px);
+}
+
+.modal-content input::placeholder {
+    color: var(--dashboard-text-muted);
+}
+
+.modal-content button[type="submit"] {
+    padding: 0.875rem 1.5rem;
+    background: var(--dashboard-primary);
     border: none;
-    border-radius: 4px;
+    border-radius: var(--border-radius-sm);
+    color: white;
+    font-weight: 600;
+    font-size: 0.95rem;
     cursor: pointer;
+    transition: var(--transition-smooth);
 }
 
-.modal-content button:hover {
-    background-color: #555;
+.modal-content button[type="submit"]:hover {
+    background: var(--dashboard-primary-hover);
+    transform: translateY(-2px);
+    box-shadow: var(--dashboard-shadow-lg);
 }
 
-.close-button {
-    color: #aaa;
-    float: right;
-    font-size: 28px;
-    font-weight: bold;
-}
-
-.close-button:hover,
-.close-button:focus {
-    color: black;
-    text-decoration: none;
-    cursor: pointer;
-}
-
-footer {
+.modal-switch {
     text-align: center;
-    padding: 1em 0;
-    background-color: #333;
-    color: #fff;
-    position: fixed;
-    bottom: 0;
-    width: 100%;
+    color: var(--dashboard-text-secondary);
+    font-size: 0.9rem;
 }
 
-/* ファイルアップロードとスライド作成セクションのスタイル */
-div > label, div > input, div > textarea, div > button {
-    margin-bottom: 10px;
-    display: block; /* 要素をブロックレベルにして縦に並べる */
-}
-
-input[type="file"], textarea {
-    width: calc(100% - 22px); /* paddingを考慮 */
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-}
-
-textarea {
-    min-height: 100px;
-    resize: vertical;
-}
-
-button {
-    background-color: #007bff;
-    color: white;
-    padding: 10px 15px;
-    border: none;
-    border-radius: 4px;
+.modal-switch a {
+    color: var(--dashboard-primary);
+    text-decoration: none;
+    font-weight: 600;
     cursor: pointer;
-    font-size: 1em;
+    transition: var(--transition-smooth);
 }
 
-button:hover {
-    background-color: #0056b3;
+.modal-switch a:hover {
+    color: var(--dashboard-primary-hover);
+    text-decoration: underline;
 }
 
-#aiResponse {
-    margin-top: 10px;
-    padding: 10px;
-    border: 1px solid #eee;
-    background-color: #f9f9f9;
-    min-height: 30px;
+/* ==========================================================================
+   設定モーダル専用スタイル
+   ========================================================================== */
+
+.settings-section {
+    margin-bottom: 1.5rem;
+}
+
+.settings-section label {
+    display: block;
+    font-weight: 600;
+    color: var(--dashboard-text-primary);
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.settings-section select {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 2px solid var(--dashboard-border);
+    border-radius: var(--border-radius-sm);
+    background: var(--dashboard-bg-primary);
+    color: var(--dashboard-text-primary);
+    font-size: 0.95rem;
+    transition: var(--transition-smooth);
+    cursor: pointer;
+}
+
+.settings-section select:focus {
+    outline: none;
+    border-color: var(--dashboard-primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.settings-section select:hover {
+    border-color: var(--dashboard-primary);
+}
+
+.settings-buttons {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--dashboard-border);
+}
+
+.settings-button {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: var(--border-radius-sm);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    min-width: 100px;
+}
+
+.settings-button.primary {
+    background: var(--dashboard-primary);
+    color: white;
+}
+
+.settings-button.primary:hover {
+    background: var(--dashboard-primary-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--dashboard-shadow);
+}
+
+.settings-button.secondary {
+    background: var(--dashboard-bg-primary);
+    color: var(--dashboard-text-primary);
+    border: 1px solid var(--dashboard-border);
+}
+
+.settings-button.secondary:hover {
+    background: var(--dashboard-bg-secondary);
+    border-color: var(--dashboard-text-muted);
+    transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   8. レスポンシブデザイン
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+    :root {
+        --sidebar-width: 240px;
+    }
+    
+    .content-area {
+        padding: 2rem;
+    }
+    
+    .slide-list {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1.25rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: -100%;
+        width: var(--sidebar-width);
+        height: 100vh;
+        z-index: 200;
+        transition: left var(--transition-smooth);
+    }
+    
+    .sidebar.mobile-open {
+        left: 0;
+        box-shadow: var(--dashboard-shadow-lg);
+    }
+    
+    .content-area {
+        padding: 1.5rem;
+    }
+    
+    .content-area h2 {
+        font-size: 1.75rem;
+    }
+    
+    .slide-list {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .modal-content {
+        margin: 1rem;
+        padding: 2rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .header {
+        padding: 0 1rem;
+    }
+    
+    .content-area {
+        padding: 1rem;
+    }
+    
+    .content-area h2 {
+        font-size: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .modal-content {
+        padding: 1.5rem;
+    }
+    
+    .create-new-btn {
+        padding: 0.875rem 1rem;
+        font-size: 0.9rem;
+    }
+}
+
+/* ==========================================================================
+   9. スクロールバー カスタマイズ
+   ========================================================================== */
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--dashboard-bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--dashboard-border);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--dashboard-text-muted);
+}
+
+/* ==========================================================================
+   10. アクセシビリティ
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ==========================================================================
+   10.1 ページ遷移（フルリロード向けフェード/スライド）
+   ========================================================================== */
+html, body {
+    height: 100%;
+}
+
+.page-transition {
+    will-change: opacity, transform;
+    transition: opacity 320ms cubic-bezier(0.4, 0, 0.2, 1), transform 320ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* プリロード中のスタイル（任意） */
+.link-prefetching {
+    cursor: progress;
+}
+
+/* 入場時（フェードイン＋軽い上方向からのスライド） */
+.page-enter {
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+.page-enter-active {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* 離脱時（フェードアウト＋軽い下方向スライド） */
+.page-exit {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.page-exit-active {
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+/* 低視差環境向けの最小遷移（prefers-reduced-motion は上で包括済み） */
+@media (prefers-reduced-motion: reduce) {
+    .page-transition {
+        transition: opacity 0.01ms linear !important, transform 0.01ms linear !important;
+    }
+}
+}
+
+/* フォーカス可視化 */
+button:focus-visible,
+input:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--dashboard-primary);
+    outline-offset: 2px;
+}
+
+/* ダークモード preference 対応 */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+        --dashboard-bg-primary: #0f172a;
+        --dashboard-bg-secondary: #1e293b;
+        --dashboard-sidebar-bg: #020617;
+        --dashboard-text-primary: #f1f5f9;
+        --dashboard-text-secondary: #cbd5e1;
+        --dashboard-text-muted: #64748b;
+        --dashboard-border: #334155;
+    }
+}
+
+/* ==========================================================================
+   11. カスタムアラート
+   ========================================================================== */
+
+.custom-alert {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 2000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.custom-alert.show {
+    display: flex;
+}
+
+.alert-content {
+    background: var(--dashboard-bg-secondary);
+    border-radius: var(--border-radius-lg);
+    padding: 2rem;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: var(--dashboard-shadow-lg);
+    animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    text-align: center;
+}
+
+.alert-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    display: block;
+}
+
+.alert-icon.success {
+    color: var(--dashboard-accent);
+}
+
+.alert-icon.error {
+    color: var(--danger-color);
+}
+
+.alert-icon.info {
+    color: var(--dashboard-primary);
+}
+
+.alert-icon.warning {
+    color: #f59e0b;
+}
+
+.alert-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--dashboard-text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.alert-message {
+    color: var(--dashboard-text-secondary);
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+}
+
+.alert-buttons {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+}
+
+.alert-button {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: var(--border-radius-sm);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    min-width: 80px;
+}
+
+.alert-button.primary {
+    background: var(--dashboard-primary);
+    color: white;
+}
+
+.alert-button.primary:hover {
+    background: var(--dashboard-primary-hover);
+    transform: translateY(-1px);
+}
+
+.alert-button.secondary {
+    background: var(--dashboard-bg-primary);
+    color: var(--dashboard-text-primary);
+    border: 1px solid var(--dashboard-border);
+}
+
+.alert-button.secondary:hover {
+    background: var(--dashboard-bg-secondary);
+    transform: translateY(-1px);
+}
+
+.alert-button.danger {
+    background: var(--danger-color);
+    color: white;
+}
+
+.alert-button.danger:hover {
+    background: var(--danger-color-hover);
+    transform: translateY(-1px);
+}
+
+/* トースト通知 */
+.toast-container {
+    position: fixed;
+    top: 2rem;
+    right: 2rem;
+    z-index: 3000;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    pointer-events: none;
+}
+
+.toast {
+    background: var(--dashboard-bg-secondary);
+    border: 1px solid var(--dashboard-border);
+    border-left: 4px solid var(--dashboard-primary);
+    border-radius: var(--border-radius-sm);
+    padding: 1rem 1.25rem;
+    box-shadow: var(--dashboard-shadow-lg);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    max-width: 350px;
+    animation: slideInRight 0.3s ease, fadeOut 0.3s ease 2.7s;
+    pointer-events: auto;
+}
+
+.toast.success {
+    border-left-color: var(--dashboard-accent);
+}
+
+.toast.error {
+    border-left-color: var(--danger-color);
+}
+
+.toast.warning {
+    border-left-color: #f59e0b;
+}
+
+.toast-icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.toast-icon.success {
+    color: var(--dashboard-accent);
+}
+
+.toast-icon.error {
+    color: var(--danger-color);
+}
+
+.toast-icon.info {
+    color: var(--dashboard-primary);
+}
+
+.toast-icon.warning {
+    color: #f59e0b;
+}
+
+.toast-content {
+    flex: 1;
+}
+
+.toast-title {
+    font-weight: 600;
+    color: var(--dashboard-text-primary);
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+}
+
+.toast-message {
+    color: var(--dashboard-text-secondary);
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    color: var(--dashboard-text-muted);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 50%;
+    transition: var(--transition-smooth);
+    flex-shrink: 0;
+}
+
+.toast-close:hover {
+    background: var(--dashboard-border);
+    color: var(--dashboard-text-primary);
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+}
+
+/* ==========================================================================
+   12. ユーティリティクラス
+   ========================================================================== */
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.text-gradient {
+    background: var(--dashboard-gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.fade-in {
+    animation: fadeIn 0.6s ease-out;
+}
+
+.slide-up {
+    animation: slideUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 }

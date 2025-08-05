@@ -1,4 +1,3 @@
-import { produce } from 'https://cdn.jsdelivr.net/npm/immer@10.1.1/+esm';
 import { ColorPicker } from './ColorPicker.js';
 
         // =================================================================
@@ -439,19 +438,19 @@ import { ColorPicker } from './ColorPicker.js';
 
                     const oldValue = this.get(path);
 
-                    this.state = produce(this.state, draft => {
-                        const keys = path.split('.');
-                        const lastKey = keys.pop();
-                        let current = draft;
+                    const newState = Utils.deepClone(this.state);
+                    let current = newState;
+                    const keys = path.split('.');
+                    const lastKey = keys.pop();
 
-                        for (const key of keys) {
-                            if (!(key in current)) {
-                                current[key] = {};
-                            }
-                            current = current[key];
+                    for (const key of keys) {
+                        if (!(key in current)) {
+                            current[key] = {};
                         }
-                        current[lastKey] = value;
-                    });
+                        current = current[key];
+                    }
+                    current[lastKey] = value;
+                    this.state = newState;
 
                     if (!silent) {
                         this._notifyListeners(path, value, oldValue);
@@ -591,6 +590,32 @@ import { ColorPicker } from './ColorPicker.js';
         // =================================================================
         const Utils = window.Utils = { // Utilsオブジェクトをグローバルに公開
             generateId: (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            
+            // URL安全性チェック（サーバーの /api/url/safe-check を利用）
+            checkUrlSafety: async (url, { signal } = {}) => {
+                if (!url || typeof url !== 'string') {
+                    return { safe: false, reason: 'invalid_url' };
+                }
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 8000);
+                    const res = await fetch('/api/url/safe-check', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url }),
+                        signal: signal ?? controller.signal
+                    });
+                    clearTimeout(timeoutId);
+                    if (!res.ok) {
+                        return { safe: false, reason: 'error' };
+                    }
+                    const data = await res.json();
+                    // 期待返却: { safe, reason, matched_domain?, source? }
+                    return data;
+                } catch (e) {
+                    return { safe: false, reason: 'error' };
+                }
+            },
             
             debounce: (func, wait = CONFIG.DEBOUNCE_DELAY) => {
                 let timeout;
@@ -897,26 +922,54 @@ import { ColorPicker } from './ColorPicker.js';
                 
                 return this._createErrorPlaceholder('icon');
             }
+static _createIframe(elData) {
+    const container = document.createDocumentFragment();
+    const content = elData.content || {};
+    
+    const iframe = document.createElement('iframe');
+    // サーバの安全リダイレクト経由で埋め込み
+    if (content.url && typeof content.url === 'string') {
+        try {
+            const u = new URL(content.url, window.location.href);
+            // /redirect?url=... に委譲（サーバ側でブロック／許可を判断）
+            const redirectUrl = `/redirect?url=${encodeURIComponent(u.toString())}`;
+            iframe.src = redirectUrl;
+        } catch {
+            // URLが不正なら空にする（後続のエラーハンドリングへ）
+            iframe.src = '';
+        }
+    } else {
+        iframe.src = '';
+    }
+    Object.assign(iframe.style, {
+        width: '100%',
+        height: '100%',
+        border: 'none'
+    });
+    iframe.sandbox = content.sandbox || 'allow-scripts allow-same-origin';
 
-            static _createIframe(elData) {
-                const container = document.createDocumentFragment();
-                const content = elData.content || {};
-                
-                const iframe = document.createElement('iframe');
-                iframe.src = content.url || '';
-                Object.assign(iframe.style, {
-                    width: '100%',
-                    height: '100%',
-                    border: 'none'
-                });
-                iframe.sandbox = content.sandbox || 'allow-scripts allow-same-origin';
-                
-                const overlay = this._createIframeOverlay();
-                
-                container.appendChild(iframe);
-                container.appendChild(overlay);
-                return container;
+    // 読み込み失敗・ブロック時に簡易メッセージを表示（451/4xx想定）
+    iframe.addEventListener('load', () => {
+        try {
+            // ブロック時のページは同一オリジンのため、titleなど取得できる可能性が高い
+            const doc = iframe.contentDocument;
+            if (!doc) return;
+            const title = (doc.querySelector('title')?.textContent || '').toLowerCase();
+            if (title.includes('ブロック') || title.includes('blocked')) {
+                // 視覚的にわかるよう軽い枠線を付与
+                iframe.style.outline = '2px solid #b00020';
             }
+        } catch (_) {
+            // クロスオリジン時はアクセス不可のため無視
+        }
+    });
+
+    const overlay = this._createIframeOverlay();
+    
+    container.appendChild(iframe);
+    container.appendChild(overlay);
+    return container;
+}
 
             static _createShape(elData) {
                 const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -944,8 +997,13 @@ import { ColorPicker } from './ColorPicker.js';
                             if (elWidthPx > 0 && elHeightPx > 0) {
                                 const rx = (style.borderRadius / elWidthPx) * 100;
                                 const ry = (style.borderRadius / elHeightPx) * 100;
-                                shape.setAttribute('rx', rx);
-                                shape.setAttribute('ry', ry);
+                                const safeRx = Number.isFinite(rx) && rx >= 0 ? rx : 0;
+                                const safeRy = Number.isFinite(ry) && ry >= 0 ? ry : 0;
+                                shape.setAttribute('rx', safeRx);
+                                shape.setAttribute('ry', safeRy);
+                            } else {
+                                shape.setAttribute('rx', 0);
+                                shape.setAttribute('ry', 0);
                             }
                         }
                         break;
@@ -1167,6 +1225,10 @@ import { ColorPicker } from './ColorPicker.js';
                     this.inspectorManager.render(); // 初期ロード時にインスペクターの表示状態を更新
                     await this.iconManager.loadIconData();
                     await this.loadCssProperties();
+                    
+                    // URL安全チェックのUIバインド
+                    this._bindQrModalUrlSafety();
+                    this._bindEmbedModalUrlSafety();
 
                     this.thumbnailObserver = new IntersectionObserver(
                         (entries, observer) => {
@@ -1183,6 +1245,8 @@ import { ColorPicker } from './ColorPicker.js';
                     
                     // bindEvents, loadState, render, initZoomControl は loadIconData() の後に実行
                     this.bindEvents();
+                    this._initPresentMenu(); // プレゼン表示方法メニュー初期化
+                    this._autoStartIfPopup(); // 新規ウィンドウでの自動開始対応
                     this.loadState();
                     this.render();
                     this.initZoomControl();
@@ -1272,6 +1336,7 @@ import { ColorPicker } from './ColorPicker.js';
                     presentBtn: document.getElementById('present-btn'),
                     exportBtn: document.getElementById('export-btn'),
                     exportMenu: document.getElementById('export-menu'),
+                    presentMenu: document.getElementById('present-menu'),
                     
                     // 要素追加ボタン
                     addTextBtn: document.getElementById('add-text-btn'),
@@ -1327,6 +1392,12 @@ import { ColorPicker } from './ColorPicker.js';
                     gradientAngle: document.getElementById('gradient-angle'),
                     gradientAngleValue: document.getElementById('gradient-angle-value'),
                     pageBgColorPickerContainer: document.getElementById('page-bg-color-picker-container'),
+
+                    // Wikipedia Image Search
+                    wikiImageSearchInput: document.getElementById('wiki-image-search-input'),
+                    wikiImageSearchBtn: document.getElementById('wiki-image-search-btn'),
+                    wikiImageResultsContainer: document.getElementById('wiki-image-results-container'),
+                    wikiImageLoading: document.getElementById('wiki-image-loading'),
                 };
             },
 
@@ -1542,6 +1613,350 @@ import { ColorPicker } from './ColorPicker.js';
                         }
                     }
                 }
+            },
+
+            // --- URL安全チェック: QRモーダル/埋め込みモーダル連携 ---
+            _bindQrModalUrlSafety() {
+                const input = document.getElementById('qr-text');
+                const warning = document.getElementById('qr-warning');
+                const form = document.getElementById('qr-create-form');
+                if (!input || !warning || !form) return;
+                
+                let lastChecked = '';
+                let controller = null;
+                
+                const setState = (status, detail) => {
+                    // status: 'safe' | 'blocked' | 'invalid' | 'error'
+                    const color = status === 'safe' ? '#155724'
+                                : status === 'blocked' ? '#721c24'
+                                : status === 'invalid' ? '#721c24'
+                                : '#856404';
+                    const bg = status === 'safe' ? '#d4edda'
+                              : status === 'blocked' ? '#f8d7da'
+                              : status === 'invalid' ? '#f8d7da'
+                              : '#fff3cd';
+                    warning.style.padding = '8px 10px';
+                    warning.style.borderRadius = '6px';
+                    warning.style.border = '1px solid rgba(0,0,0,0.08)';
+                    warning.style.background = bg;
+                    warning.style.color = color;
+                    warning.innerHTML = detail || '';
+                    const submitBtn = form.querySelector('.qr-submit-btn');
+                    if (submitBtn) {
+                        submitBtn.disabled = (status !== 'safe') && input.value.trim().startsWith('http');
+                    }
+                };
+                
+                const evaluate = Utils.debounce(async () => {
+                    const val = input.value.trim();
+                    if (!val) { warning.innerHTML = ''; return; }
+                    // URLでない任意文字列はQR生成OK（安全チェック対象はURLのみ）
+                    let urlCandidate = null;
+                    try {
+                        if (/^https?:/i.test(val)) {
+                            urlCandidate = new URL(val).toString();
+                        }
+                    } catch (_) {}
+                    
+                    if (!urlCandidate) {
+                        setState('safe', 'テキストとしてQRを生成します。');
+                        return;
+                    }
+                    
+                    // キャンセル制御
+                    if (controller) controller.abort();
+                    controller = new AbortController();
+                    lastChecked = urlCandidate;
+                    
+                    setState('error', '安全性を確認しています...');
+                    const result = await Utils.checkUrlSafety(urlCandidate, { signal: controller.signal });
+                    if (lastChecked !== urlCandidate) return; // outdated
+                    
+                    if (result.safe) {
+                        setState('safe', '安全なURLです。');
+                    } else if (result.reason === 'invalid_url') {
+                        setState('invalid', '無効なURLです。');
+                    } else if (result.reason === 'matched') {
+                        const md = result.matched_domain ? `（${result.matched_domain} / ${result.source}）` : '';
+                        setState('blocked', `危険なURLとしてブロックリストに一致しました ${md}`);
+                    } else {
+                        setState('error', '安全性の確認に失敗しました。時間をおいて再試行してください。');
+                    }
+                }, 400);
+                
+                input.addEventListener('input', evaluate);
+                
+                form.addEventListener('submit', async (e) => {
+                    const val = input.value.trim();
+                    let urlCandidate = null;
+                    try { if (/^https?:/i.test(val)) urlCandidate = new URL(val).toString(); } catch(_){}
+                    if (!urlCandidate) return; // テキストQRは許可
+                    
+                    const submitBtn = form.querySelector('.qr-submit-btn');
+                    if (submitBtn) submitBtn.disabled = true;
+                    const result = await Utils.checkUrlSafety(urlCandidate);
+                    if (!result.safe) {
+                        e.preventDefault();
+                        if (result.reason === 'matched') {
+                            const md = result.matched_domain ? `（${result.matched_domain} / ${result.source}）` : '';
+                            setState('blocked', `危険なURLとしてブロックリストに一致しました ${md}`);
+                        } else if (result.reason === 'invalid_url') {
+                            setState('invalid', '無効なURLです。');
+                        } else {
+                            setState('error', '安全性の確認に失敗しました。');
+                        }
+                        if (submitBtn) submitBtn.disabled = false;
+                    } else {
+                        if (submitBtn) submitBtn.disabled = false;
+                    }
+                });
+            },
+            
+            _bindEmbedModalUrlSafety() {
+                // 簡易版
+                const simple = {
+                    input: document.getElementById('embed-url-input-simple'),
+                    preview: document.getElementById('embed-preview-simple'),
+                    insertBtn: document.getElementById('embed-insert-btn-simple')
+                };
+                // 上級版
+                const adv = {
+                    input: document.getElementById('embed-url-input-advanced'),
+                    preview: document.getElementById('embed-preview-advanced'),
+                    insertBtn: document.getElementById('embed-insert-btn-advanced')
+                };
+                
+                const bind = ({ input, preview, insertBtn }) => {
+                    if (!input || !preview || !insertBtn) return;
+                    let lastChecked = '';
+                    let controller = null;
+                    const msgId = input.id + '-safety-msg';
+                    let msg = document.getElementById(msgId);
+                    if (!msg) {
+                        msg = document.createElement('div');
+                        msg.id = msgId;
+                        msg.style.marginTop = '6px';
+                        msg.style.fontSize = '13px';
+                        input.insertAdjacentElement('afterend', msg);
+                    }
+                    
+                    const setMsg = (status, text) => {
+                        const color = status === 'safe' ? '#155724'
+                                    : status === 'blocked' ? '#721c24'
+                                    : status === 'invalid' ? '#721c24'
+                                    : '#856404';
+                        const bg = status === 'safe' ? '#d4edda'
+                                  : status === 'blocked' ? '#f8d7da'
+                                  : status === 'invalid' ? '#f8d7da'
+                                  : '#fff3cd';
+                        msg.style.padding = '6px 8px';
+                        msg.style.borderRadius = '6px';
+                        msg.style.border = '1px solid rgba(0,0,0,0.08)';
+                        msg.style.background = bg;
+                        msg.style.color = color;
+                        msg.textContent = text;
+                    };
+                    
+                    const setPreviewSrc = (url) => {
+                        try {
+                            const u = new URL(url, window.location.href);
+                            const redirectUrl = `/redirect?url=${encodeURIComponent(u.toString())}`;
+                            preview.src = redirectUrl;
+                        } catch {
+                            preview.src = '';
+                        }
+                    };
+                    
+                    const evaluate = Utils.debounce(async () => {
+                        const val = input.value.trim();
+                        if (!val) { msg.textContent = ''; preview.src=''; insertBtn.disabled = true; return; }
+                        let urlCandidate = null;
+                        try { if (/^https?:/i.test(val)) urlCandidate = new URL(val).toString(); } catch(_){}
+                        if (!urlCandidate) {
+                            setMsg('invalid', '有効なURLを入力してください。');
+                            preview.src = '';
+                            insertBtn.disabled = true;
+                            return;
+                        }
+                        
+                        if (controller) controller.abort();
+                        controller = new AbortController();
+                        lastChecked = urlCandidate;
+                        setMsg('error', '安全性を確認しています...');
+                        
+                        const result = await Utils.checkUrlSafety(urlCandidate, { signal: controller.signal });
+                        if (lastChecked !== urlCandidate) return;
+                        
+                        if (result.safe) {
+                            setMsg('safe', '安全なURLです。プレビューを表示します。');
+                            setPreviewSrc(urlCandidate);
+                            insertBtn.disabled = false;
+                        } else if (result.reason === 'invalid_url') {
+                            setMsg('invalid', '無効なURLです。');
+                            preview.src = '';
+                            insertBtn.disabled = true;
+                        } else if (result.reason === 'matched') {
+                            const md = result.matched_domain ? `（${result.matched_domain} / ${result.source}）` : '';
+                            setMsg('blocked', `危険なURLとしてブロックリストに一致しました ${md}`);
+                            preview.src = '';
+                            insertBtn.disabled = true;
+                        } else {
+                            setMsg('error', '安全性の確認に失敗しました。時間をおいて再試行してください。');
+                            preview.src = '';
+                            insertBtn.disabled = true;
+                        }
+                    }, 400);
+                    
+                    input.addEventListener('input', evaluate);
+                    
+                    insertBtn.addEventListener('click', async (e) => {
+                        const val = input.value.trim();
+                        let urlCandidate = null;
+                        try { if (/^https?:/i.test(val)) urlCandidate = new URL(val).toString(); } catch(_){}
+                        if (!urlCandidate) {
+                            e.preventDefault();
+                            setMsg('invalid', '無効なURLです。');
+                            return;
+                        }
+                        insertBtn.disabled = true;
+                        const result = await Utils.checkUrlSafety(urlCandidate);
+                        if (!result.safe) {
+                            e.preventDefault();
+                            if (result.reason === 'matched') {
+                                const md = result.matched_domain ? `（${result.matched_domain} / ${result.source}）` : '';
+                                setMsg('blocked', `危険なURLとしてブロックリストに一致しました ${md}`);
+                            } else if (result.reason === 'invalid_url') {
+                                setMsg('invalid', '無効なURLです。');
+                            } else {
+                                setMsg('error', '安全性の確認に失敗しました。');
+                            }
+                            insertBtn.disabled = false;
+                        } else {
+                            insertBtn.disabled = false;
+                        }
+                    });
+                };
+                
+                bind(simple);
+                bind(adv);
+            },
+            
+            _initPresentMenu() {
+                const btn = this.elements.presentBtn;
+                const menu = this.elements.presentMenu;
+                if (!btn || !menu) return;
+
+                // Presentation API 対応可否で項目表示を切替
+                const hasPresentationApi = ('presentation' in navigator) &&
+                    !!(navigator.presentation && (typeof navigator.presentation.requestStart === 'function' || typeof navigator.presentation.requestSession === 'function'));
+                const apiItem = menu.querySelector('.present-api-only');
+                if (apiItem) apiItem.style.display = hasPresentationApi ? '' : 'none';
+
+                const toggleMenu = (e) => {
+                    e.stopPropagation();
+                    const rect = btn.getBoundingClientRect();
+                    menu.style.left = `${rect.left}px`;
+                    menu.style.top = `${rect.bottom + 6}px`;
+                    menu.style.display = (menu.style.display === 'none' || !menu.style.display) ? 'block' : 'none';
+                };
+
+                const hideMenu = () => { if (menu.style.display === 'block') menu.style.display = 'none'; };
+
+                // 既存のpresentBtnに紐づく「即座にstartPresentationを呼ぶ」ハンドラがあれば抑止するため、既存clickは一旦無効化
+                // addEventListenerで積まれている可能性はあるが、ここではデフォルト動作をpreventする専用ハンドラを先に登録
+                btn.addEventListener('click', (ev) => {
+                    // 既存のinline onClick等をブロック
+                    ev.preventDefault();
+                    ev.stopImmediatePropagation();
+                    toggleMenu(ev);
+                }, { capture: true });
+
+                // 通常の外側クリックで閉じる
+                document.addEventListener('click', (e) => {
+                    if (!menu.contains(e.target) && e.target !== btn) hideMenu();
+                });
+
+                // メニュー項目クリック
+                menu.addEventListener('click', async (e) => {
+                    const item = e.target.closest('.present-menu-item');
+                    if (!item) return;
+                    hideMenu();
+                    const mode = item.dataset.mode;
+                    try {
+                        if (mode === 'fullscreen') {
+                            this.presentationManager.startPresentation();
+                        } else if (mode === 'popup') {
+                            // 新規ウィンドウを開き、子ウィンドウ側で自動開始（postMessage 併用で堅牢化）
+                            const url = new URL(window.location.href);
+                            url.hash = 'present';
+                            const child = window.open(url.toString(), 'presentation', 'popup=1,width=1280,height=720');
+                            if (!child) {
+                                ErrorHandler.showNotification('ポップアップがブロックされました。ブラウザのポップアップ許可を有効にしてください。', 'error');
+                                return;
+                            }
+                            // 子の ready を待って開始指示を送る（5秒タイムアウト）
+                            const origin = window.location.origin;
+                            let resolved = false;
+                            const onReady = (ev) => {
+                                try {
+                                    if (ev.source === child && ev.data === 'PRESENT_WINDOW_READY') {
+                                        resolved = true;
+                                        window.removeEventListener('message', onReady);
+                                        child.postMessage('START_PRESENTATION', origin);
+                                    }
+                                } catch(_) {}
+                            };
+                            window.addEventListener('message', onReady);
+                            setTimeout(() => {
+                                if (!resolved) {
+                                    window.removeEventListener('message', onReady);
+                                    ErrorHandler.showNotification('新しいウィンドウの起動に時間がかかっています。ウィンドウが表示されたら再試行してください。', 'warning');
+                                }
+                            }, 5000);
+                        } else if (mode === 'external') {
+                            if (!hasPresentationApi) {
+                                ErrorHandler.showNotification('このブラウザはPresentation APIに対応していません', 'error');
+                                return;
+                            }
+                            await this.presentationManager.startExternalDisplay();
+                        }
+                    } catch (err) {
+                        ErrorHandler.handle(err, 'presentation_start');
+                    }
+                });
+
+                // Presentation API セッション断のリカバリ監視（簡易）
+                if (hasPresentationApi && navigator.presentation && navigator.presentation.defaultRequest) {
+                    try {
+                        navigator.presentation.defaultRequest.onconnectionavailable = (event) => {
+                            // 接続が復帰した時のハンドリング（必要なら同期メッセージ）
+                            if (window.developmentMode) console.log('Presentation connection available', event);
+                        };
+                    } catch (_) {}
+                }
+            },
+
+            _autoStartIfPopup() {
+                // 子ウィンドウ: 親へ READY 通知
+                try {
+                    window.opener && window.opener.postMessage('PRESENT_WINDOW_READY', window.location.origin);
+                } catch(_) {}
+                // ハッシュが付いていれば従来通り自動開始
+                if (window.location.hash === '#present') {
+                    try {
+                        this.presentationManager.startPresentation();
+                    } catch (err) {
+                        ErrorHandler.handle(err, 'presentation_autostart');
+                    }
+                }
+                // 親からの開始指示を待ち受け（postMessage 経由のフォールバック）
+                window.addEventListener('message', (ev) => {
+                    try {
+                        if (ev.source === window.opener && ev.data === 'START_PRESENTATION') {
+                            this.presentationManager.startPresentation();
+                        }
+                    } catch(_) {}
+                });
             },
 
             updateToolbarState() {
@@ -1893,6 +2308,13 @@ import { ColorPicker } from './ColorPicker.js';
                         el.innerText = content;
                     }
                 }
+
+                // 既存データからiframeが描画されるケースでも警告を出す
+                if (elData.type === 'iframe' && elData.content && elData.content.url) {
+                    App.showEmbedWarning(`スライドに埋め込みが含まれています: ${elData.content.url}
+外部サイトのスクリプトが実行される可能性があります。信頼できる提供元か確認してください。`, { oncePerSession: true });
+                }
+
                 return el;
             },
 
@@ -1916,6 +2338,7 @@ import { ColorPicker } from './ColorPicker.js';
                     this._bindGroupEvents();
                     this._bindInspectorEvents();
                     this._bindGlobalEvents();
+                   this._bindWikiImageSearchEvents();
                 } catch (error) {
                     ErrorHandler.handle(error, 'bind_events');
                 }
@@ -1939,6 +2362,7 @@ import { ColorPicker } from './ColorPicker.js';
                 // 要素追加ボタン
                 this.elements.addTextBtn.addEventListener('click', () => this.addElement('text'));
                 this.elements.addChartBtn.addEventListener('click', () => this.addChart());
+                // iframeは専用モーダルを起動（URL追加前に警告＆プレビュー）
                 this.elements.addIframeBtn.addEventListener('click', () => this.addElement('iframe'));
                 this.elements.addShapeBtn.addEventListener('click', () => MicroModal.show('shape-modal'));
                 
@@ -1962,6 +2386,16 @@ import { ColorPicker } from './ColorPicker.js';
                 this.elements.saveBtn.addEventListener('click', () => this.saveState());
                 this.elements.presentBtn.addEventListener('click', () => this.presentationManager.startPresentation());
                 this.elements.exportBtn.addEventListener('click', (e) => this.showExportMenu(e));
+
+                // 台本パネル表示/非表示ボタン
+                const toggleScriptPanelBtn = document.getElementById('toggle-script-panel-btn');
+                if (toggleScriptPanelBtn) {
+                    toggleScriptPanelBtn.addEventListener('click', () => {
+                        const rightSidebar = this.elements.rightSidebar;
+                        const isDisplayed = rightSidebar.style.display === 'flex';
+                        rightSidebar.style.display = isDisplayed ? 'none' : 'flex';
+                    });
+                }
             },
 
             _bindQRCodeButton() {
@@ -2506,6 +2940,10 @@ import { ColorPicker } from './ColorPicker.js';
                 // Get all elements' pixel rects at the beginning of interaction
                 const allElementsPixelRects = this.getActiveSlide().elements.map(elData => {
                     const domEl = this.elements.slideCanvas.querySelector(`[data-id="${elData.id}"]`);
+                    if (!domEl) {
+                        const rect = { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0, centerX: 0, centerY: 0 };
+                        return { id: elData.id, rect };
+                    }
                     const rect = { left: domEl.offsetLeft, top: domEl.offsetTop, width: domEl.offsetWidth, height: domEl.offsetHeight };
                     rect.right = rect.left + rect.width;
                     rect.bottom = rect.top + rect.height;
@@ -2516,7 +2954,9 @@ import { ColorPicker } from './ColorPicker.js';
 
                 const initialStates = elementsToTrack.map(elData => {
                     const domEl = this.elements.slideCanvas.querySelector(`[data-id="${elData.id}"]`);
-                    if (domEl) domEl.style.willChange = 'transform, width, height';
+                    if (!domEl) return null;
+                    
+                    domEl.style.willChange = 'transform, width, height';
                     
                     // iframe pointer events
                     if (elData.type === 'iframe') {
@@ -2526,16 +2966,17 @@ import { ColorPicker } from './ColorPicker.js';
                         }
                     }
                     
+                    const foundRect = allElementsPixelRects.find(r => r.id === elData.id);
                     return {
                         id: elData.id,
                         startX: elData.style.left,
                         startY: elData.style.top,
                         startW: elData.style.width,
                         startH: elData.style.height ?? (domEl.offsetHeight / canvasRect.height * 100),
-                        initialRect: allElementsPixelRects.find(r => r.id === elData.id).rect,
+                        initialRect: foundRect ? foundRect.rect : { left: 0, top: 0, width: 0, height: 0 },
                         _initialFontSize: elData.style.fontSize
                     };
-                });
+                }).filter(Boolean);
 
                 this.batchUpdateState({
                     'interaction.initialStates': initialStates,
@@ -3000,9 +3441,8 @@ import { ColorPicker } from './ColorPicker.js';
                 const activeIndex = this.state.presentation.slides.findIndex(s => s.id === this.state.activeSlideId);
                 const insertionIndex = activeIndex === -1 ? this.state.presentation.slides.length : activeIndex + 1;
                 
-                const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
-                    draftSlides.splice(insertionIndex, 0, newSlide);
-                });
+                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
+                updatedSlides.splice(insertionIndex, 0, newSlide);
 
                 this.updateState('presentation.slides', updatedSlides, { skipHistory: true });
 
@@ -3033,9 +3473,8 @@ import { ColorPicker } from './ColorPicker.js';
                     return { success: false, message: `スライド(ID: ${targetId})が見つかりません。` };
                 }
                 
-                const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
-                    draftSlides.splice(idx, 1);
-                });
+                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
+                updatedSlides.splice(idx, 1);
                 this.updateState('presentation.slides', updatedSlides, { skipHistory: true });
                 
                 if (this.getState('activeSlideId') === targetId) {
@@ -3067,9 +3506,8 @@ import { ColorPicker } from './ColorPicker.js';
                 if (type === 'text' && !style?.fontSize) newEl.style.fontSize = 24;
                 if (type === 'image' && style.height === undefined) newEl.style.height = 30;
 
-                const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
-                    draftSlides[activeSlideIndex].elements.push(newEl);
-                });
+                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
+                updatedSlides[activeSlideIndex].elements.push(newEl);
                 this.updateState('presentation.slides', updatedSlides, { silent: true });
                 return newEl;
             },
@@ -3111,11 +3549,9 @@ import { ColorPicker } from './ColorPicker.js';
                     };
                     newEl.style.height = 30;
                 } else if (type === 'iframe') {
-                    const url = prompt('埋め込みたいコンテンツのURLを入力してください:');
-                    if (!url) return;
-                    newEl.content = { url: url, sandbox: 'allow-scripts allow-same-origin allow-popups' }; // デフォルトのsandbox属性
-                    newEl.style.width = 50;
-                    newEl.style.height = 50;
+                    // 専用モーダルを開いて、URL追加前に警告とプレビューを表示
+                    App.openEmbedModal();
+                    return;
                 } else if (type === 'shape') {
                     if (!content || !content.shapeType) {
                         console.error('図形タイプが指定されていません。');
@@ -3136,9 +3572,8 @@ import { ColorPicker } from './ColorPicker.js';
                         delete newEl.style.fill; // 線はfill不要
                     }
                 }
-                const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
-                    draftSlides[activeSlideIndex].elements.push(newEl);
-                });
+                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
+                updatedSlides[activeSlideIndex].elements.push(newEl);
                 this.updateState('presentation.slides', updatedSlides);
 
                 this.updateState('selectedElementIds', [newEl.id]);
@@ -3388,19 +3823,18 @@ import { ColorPicker } from './ColorPicker.js';
                 if (activeSlideIndex === -1 || this.getState('selectedElementIds').length === 0) return;
 
                 const newIds = [];
-                const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
-                    const currentSlide = draftSlides[activeSlideIndex];
-                    this.getState('selectedElementIds').forEach(id => {
-                        const idx = currentSlide.elements.findIndex(el => el.id === id);
-                        if (idx === -1) return;
-                        const newEl = Utils.deepClone(currentSlide.elements[idx]); // deepCloneを使用
-                        newEl.id = this.generateId('el');
-                        newEl.style.left = (newEl.style.left || 0) + 2;
-                        newEl.style.top = (newEl.style.top || 0) + 2;
-                        newEl.style.zIndex = currentSlide.elements.length + 1;
-                        currentSlide.elements.push(newEl);
-                        newIds.push(newEl.id);
-                    });
+                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
+                const currentSlide = updatedSlides[activeSlideIndex];
+                this.getState('selectedElementIds').forEach(id => {
+                    const idx = currentSlide.elements.findIndex(el => el.id === id);
+                    if (idx === -1) return;
+                    const newEl = Utils.deepClone(currentSlide.elements[idx]); // deepCloneを使用
+                    newEl.id = this.generateId('el');
+                    newEl.style.left = (newEl.style.left || 0) + 2;
+                    newEl.style.top = (newEl.style.top || 0) + 2;
+                    newEl.style.zIndex = currentSlide.elements.length + 1;
+                    currentSlide.elements.push(newEl);
+                    newIds.push(newEl.id);
                 });
                 this.updateState('presentation.slides', updatedSlides);
                 this.updateState('selectedElementIds', newIds);
@@ -3647,14 +4081,13 @@ import { ColorPicker } from './ColorPicker.js';
             },
             moveSlide(fromId, toId) {
                 this.stateManager._saveToHistory();
-                const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
-                    const fromIndex = draftSlides.findIndex(s => s.id === fromId);
-                    const toIndex = draftSlides.findIndex(s => s.id === toId);
-                    if (fromIndex !== -1 && toIndex !== -1) {
-                        const [moved] = draftSlides.splice(fromIndex, 1);
-                        draftSlides.splice(toIndex, 0, moved);
-                    }
-                });
+                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
+                const fromIndex = updatedSlides.findIndex(s => s.id === fromId);
+                const toIndex = updatedSlides.findIndex(s => s.id === toId);
+                if (fromIndex !== -1 && toIndex !== -1) {
+                    const [moved] = updatedSlides.splice(fromIndex, 1);
+                    updatedSlides.splice(toIndex, 0, moved);
+                }
                 this.updateState('presentation.slides', updatedSlides);
                 this.render();
                 this.saveState();
@@ -3664,13 +4097,12 @@ import { ColorPicker } from './ColorPicker.js';
                 const slideIndex = this.state.presentation.slides.findIndex(s => s.id === slideId);
                 if (slideIndex === -1) return;
 
-                const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
-                    const originalSlide = draftSlides[slideIndex];
-                    const newSlide = Utils.deepClone(originalSlide); // deepCloneを使用
-                    newSlide.id = this.generateId('slide');
-                    newSlide.elements.forEach(el => el.id = this.generateId('el'));
-                    draftSlides.splice(slideIndex + 1, 0, newSlide);
-                });
+                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
+                const originalSlide = updatedSlides[slideIndex];
+                const newSlide = Utils.deepClone(originalSlide); // deepCloneを使用
+                newSlide.id = this.generateId('slide');
+                newSlide.elements.forEach(el => el.id = this.generateId('el'));
+                updatedSlides.splice(slideIndex + 1, 0, newSlide);
                 this.updateState('presentation.slides', updatedSlides);
                 this.batchUpdateState({ activeSlideId: updatedSlides[slideIndex + 1].id, selectedElementIds: [] });
                 this.render();
@@ -3837,11 +4269,10 @@ import { ColorPicker } from './ColorPicker.js';
             
                 let newElId = null;
             
-                const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
-                    const currentSlide = draftSlides[activeSlideIndex];
-                    const originalElementIndex = currentSlide.elements.findIndex(el => el.id === elId);
-                    if (originalElementIndex === -1) return;
-            
+                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
+                const currentSlide = updatedSlides[activeSlideIndex];
+                const originalElementIndex = currentSlide.elements.findIndex(el => el.id === elId);
+                if (originalElementIndex !== -1) {
                     const newEl = JSON.parse(JSON.stringify(currentSlide.elements[originalElementIndex]));
                     newEl.id = this.generateId('el');
                     newEl.style.left = (newEl.style.left || 0) + 2;
@@ -3850,7 +4281,7 @@ import { ColorPicker } from './ColorPicker.js';
                     
                     currentSlide.elements.push(newEl);
                     newElId = newEl.id;
-                });
+                }
             
                 if (newElId) {
                     this.updateState('presentation.slides', updatedSlides);
@@ -3875,16 +4306,15 @@ import { ColorPicker } from './ColorPicker.js';
                 if (activeSlideIndex === -1 || !window._slideClipboard) return;
 
                 let newElId = null;
-                const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
-                    const slide = draftSlides[activeSlideIndex];
-                    const newEl = JSON.parse(JSON.stringify(window._slideClipboard));
-                    newEl.id = this.generateId('el');
-                    newEl.style.left = (newEl.style.left || 0) + 4;
-                    newEl.style.top = (newEl.style.top || 0) + 4;
-                    newEl.style.zIndex = slide.elements.length + 1;
-                    slide.elements.push(newEl);
-                    newElId = newEl.id;
-                });
+                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
+                const slide = updatedSlides[activeSlideIndex];
+                const newEl = JSON.parse(JSON.stringify(window._slideClipboard));
+                newEl.id = this.generateId('el');
+                newEl.style.left = (newEl.style.left || 0) + 4;
+                newEl.style.top = (newEl.style.top || 0) + 4;
+                newEl.style.zIndex = slide.elements.length + 1;
+                slide.elements.push(newEl);
+                newElId = newEl.id;
 
                 if (newElId) {
                     this.updateState('presentation.slides', updatedSlides);
@@ -4010,43 +4440,42 @@ import { ColorPicker } from './ColorPicker.js';
                 
                 let newElId = null;
 
-                const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
-                    const slide = draftSlides[activeSlideIndex];
-                    const defaultFontSize = 48;
-                    const fontSize = style.fontSize || defaultFontSize;
-                    const canvasWidth = this.state.presentation.settings.width || CANVAS_WIDTH;
-                    const canvasHeight = this.state.presentation.settings.height || CANVAS_HEIGHT;
+                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
+                const slide = updatedSlides[activeSlideIndex];
+                const defaultFontSize = 48;
+                const fontSize = style.fontSize || defaultFontSize;
+                const canvasWidth = this.state.presentation.settings.width || CANVAS_WIDTH;
+                const canvasHeight = this.state.presentation.settings.height || CANVAS_HEIGHT;
 
-                    const newEl = {
-                        id: this.generateId('el'),
-                        type: 'icon',
-                        iconType: iconType, // Store icon type (fa or mi)
-                        content: iconClass, // Class string for FA, class name for MI
-                        style: {
-                            top: 20,
-                            left: 20,
-                            width: (fontSize / canvasWidth) * 100,
-                            height: (fontSize / canvasHeight) * 100,
-                            rotation: 0,
-                            color: '#212529',
-                            fontSize: fontSize,
-                            animation: '',
-                            zIndex: slide.elements.length + 1,
-                            ...style // 渡されたスタイルで上書き
-                        }
-                    };
-
-                    if (iconType === 'mi') {
-                        newEl.miContent = iconClass;
-                        const miStyleSelect = document.getElementById('mi-style-select');
-                        if (miStyleSelect) {
-                            newEl.content = miStyleSelect.value;
-                        }
+                const newEl = {
+                    id: this.generateId('el'),
+                    type: 'icon',
+                    iconType: iconType, // Store icon type (fa or mi)
+                    content: iconClass, // Class string for FA, class name for MI
+                    style: {
+                        top: 20,
+                        left: 20,
+                        width: (fontSize / canvasWidth) * 100,
+                        height: (fontSize / canvasHeight) * 100,
+                        rotation: 0,
+                        color: '#212529',
+                        fontSize: fontSize,
+                        animation: '',
+                        zIndex: slide.elements.length + 1,
+                        ...style // 渡されたスタイルで上書き
                     }
+                };
 
-                    slide.elements.push(newEl);
-                    newElId = newEl.id;
-                });
+                if (iconType === 'mi') {
+                    newEl.miContent = iconClass;
+                    const miStyleSelect = document.getElementById('mi-style-select');
+                    if (miStyleSelect) {
+                        newEl.content = miStyleSelect.value;
+                    }
+                }
+
+                slide.elements.push(newEl);
+                newElId = newEl.id;
 
                 if(newElId) {
                     this.updateState('presentation.slides', updatedSlides);
@@ -4076,21 +4505,20 @@ import { ColorPicker } from './ColorPicker.js';
         bringElementToFront(elId) {
             this.stateManager._saveToHistory();
             const activeSlideId = this.state.activeSlideId;
-            const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
-                const currentSlide = draftSlides.find(s => s.id === activeSlideId);
-                if (currentSlide) {
-                    const fromIndex = currentSlide.elements.findIndex(el => el.id === elId);
-                    if (fromIndex !== -1) {
-                        const element = currentSlide.elements[fromIndex];
-                        currentSlide.elements.splice(fromIndex, 1);
-                        currentSlide.elements.push(element);
-                        // zIndex をここで更新する
-                        currentSlide.elements.forEach((el, idx) => {
-                            el.style.zIndex = idx + 1;
-                        });
-                    }
+            const updatedSlides = Utils.deepClone(this.state.presentation.slides);
+            const currentSlide = updatedSlides.find(s => s.id === activeSlideId);
+            if (currentSlide) {
+                const fromIndex = currentSlide.elements.findIndex(el => el.id === elId);
+                if (fromIndex !== -1) {
+                    const element = currentSlide.elements[fromIndex];
+                    currentSlide.elements.splice(fromIndex, 1);
+                    currentSlide.elements.push(element);
+                    // zIndex をここで更新する
+                    currentSlide.elements.forEach((el, idx) => {
+                        el.style.zIndex = idx + 1;
+                    });
                 }
-            });
+            }
             this.updateState('presentation.slides', updatedSlides);
             this.saveState();
             this.render();
@@ -4099,21 +4527,20 @@ import { ColorPicker } from './ColorPicker.js';
         sendElementToBack(elId) {
             this.stateManager._saveToHistory();
             const activeSlideId = this.state.activeSlideId;
-            const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
-                const currentSlide = draftSlides.find(s => s.id === activeSlideId);
-                if (currentSlide) {
-                    const fromIndex = currentSlide.elements.findIndex(el => el.id === elId);
-                    if (fromIndex !== -1) {
-                        const element = currentSlide.elements[fromIndex];
-                        currentSlide.elements.splice(fromIndex, 1);
-                        currentSlide.elements.unshift(element); // unshift で先頭に移動
-                        // zIndex をここで更新する
-                        currentSlide.elements.forEach((el, idx) => {
-                            el.style.zIndex = idx + 1;
-                        });
-                    }
+            const updatedSlides = Utils.deepClone(this.state.presentation.slides);
+            const currentSlide = updatedSlides.find(s => s.id === activeSlideId);
+            if (currentSlide) {
+                const fromIndex = currentSlide.elements.findIndex(el => el.id === elId);
+                if (fromIndex !== -1) {
+                    const element = currentSlide.elements[fromIndex];
+                    currentSlide.elements.splice(fromIndex, 1);
+                    currentSlide.elements.unshift(element); // unshift で先頭に移動
+                    // zIndex をここで更新する
+                    currentSlide.elements.forEach((el, idx) => {
+                        el.style.zIndex = idx + 1;
+                    });
                 }
-            });
+            }
             this.updateState('presentation.slides', updatedSlides);
             this.saveState();
             this.render();
@@ -4123,21 +4550,20 @@ import { ColorPicker } from './ColorPicker.js';
         bringElementForward(elId) {
             this.stateManager._saveToHistory();
             const activeSlideId = this.state.activeSlideId;
-            const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
-                const currentSlide = draftSlides.find(s => s.id === activeSlideId);
-                if (currentSlide) {
-                    const fromIndex = currentSlide.elements.findIndex(el => el.id === elId);
-                    if (fromIndex !== -1 && fromIndex < currentSlide.elements.length - 1) {
-                        const element = currentSlide.elements[fromIndex];
-                        currentSlide.elements.splice(fromIndex, 1);
-                        currentSlide.elements.splice(fromIndex + 1, 0, element);
-                        // zIndex をここで更新する
-                        currentSlide.elements.forEach((el, idx) => {
-                            el.style.zIndex = idx + 1;
-                        });
-                    }
+            const updatedSlides = Utils.deepClone(this.state.presentation.slides);
+            const currentSlide = updatedSlides.find(s => s.id === activeSlideId);
+            if (currentSlide) {
+                const fromIndex = currentSlide.elements.findIndex(el => el.id === elId);
+                if (fromIndex !== -1 && fromIndex < currentSlide.elements.length - 1) {
+                    const element = currentSlide.elements[fromIndex];
+                    currentSlide.elements.splice(fromIndex, 1);
+                    currentSlide.elements.splice(fromIndex + 1, 0, element);
+                    // zIndex をここで更新する
+                    currentSlide.elements.forEach((el, idx) => {
+                        el.style.zIndex = idx + 1;
+                    });
                 }
-            });
+            }
             this.updateState('presentation.slides', updatedSlides);
             this.saveState();
             this.render();
@@ -4147,21 +4573,20 @@ import { ColorPicker } from './ColorPicker.js';
         sendElementBackward(elId) {
             this.stateManager._saveToHistory();
             const activeSlideId = this.state.activeSlideId;
-            const updatedSlides = produce(this.state.presentation.slides, draftSlides => {
-                const currentSlide = draftSlides.find(s => s.id === activeSlideId);
-                if (currentSlide) {
-                    const fromIndex = currentSlide.elements.findIndex(el => el.id === elId);
-                    if (fromIndex !== -1 && fromIndex > 0) {
-                        const element = currentSlide.elements[fromIndex];
-                        currentSlide.elements.splice(fromIndex, 1);
-                        currentSlide.elements.splice(fromIndex - 1, 0, element);
-                        // zIndex をここで更新する
-                        currentSlide.elements.forEach((el, idx) => {
-                            el.style.zIndex = idx + 1;
-                        });
-                    }
+            const updatedSlides = Utils.deepClone(this.state.presentation.slides);
+            const currentSlide = updatedSlides.find(s => s.id === activeSlideId);
+            if (currentSlide) {
+                const fromIndex = currentSlide.elements.findIndex(el => el.id === elId);
+                if (fromIndex !== -1 && fromIndex > 0) {
+                    const element = currentSlide.elements[fromIndex];
+                    currentSlide.elements.splice(fromIndex, 1);
+                    currentSlide.elements.splice(fromIndex - 1, 0, element);
+                    // zIndex をここで更新する
+                    currentSlide.elements.forEach((el, idx) => {
+                        el.style.zIndex = idx + 1;
+                    });
                 }
-            });
+            }
             this.updateState('presentation.slides', updatedSlides);
             this.saveState();
             this.render();
@@ -4867,9 +5292,350 @@ import { ColorPicker } from './ColorPicker.js';
                         this.pageBgColorPicker.setColor(backgroundColor);
                     }
                 }
-            }
-        }
-    };
+           }
+        },
+        _bindWikiImageSearchEvents() {
+               if (this.elements.wikiImageSearchBtn) {
+                   this.elements.wikiImageSearchBtn.addEventListener('click', () => this.handleWikiImageSearch());
+               }
+               if (this.elements.wikiImageSearchInput) {
+                   this.elements.wikiImageSearchInput.addEventListener('keydown', (e) => {
+                       if (e.key === 'Enter') {
+                           e.preventDefault();
+                           this.handleWikiImageSearch();
+                       }
+                   });
+               }
+               if (this.elements.wikiImageResultsContainer) {
+                   this.elements.wikiImageResultsContainer.addEventListener('click', (e) => {
+                       const item = e.target.closest('.wiki-image-item');
+                       if (item && item.dataset.imageUrl) {
+                           // 画像追加時、Base64ではなくURLを直接渡す
+                           this.addElement('image', item.dataset.imageUrl);
+                       }
+                   });
+               }
+           }, // ここにカンマを追加
+
+           async handleWikiImageSearch() {
+               const keyword = this.elements.wikiImageSearchInput.value.trim();
+               if (!keyword) return;
+
+               this.elements.wikiImageLoading.style.display = 'block';
+               this.elements.wikiImageResultsContainer.innerHTML = '';
+
+               try {
+                   const response = await fetch(`/wiki/image/${encodeURIComponent(keyword)}`);
+                   if (!response.ok) {
+                       const errorData = await response.json().catch(() => ({ detail: 'Server error' }));
+                       throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                   }
+                   const data = await response.json();
+
+                   if (data.image_urls && data.image_urls.length > 0) {
+                       data.image_urls.forEach(url => {
+                           const item = document.createElement('div');
+                           item.className = 'wiki-image-item';
+                           item.dataset.imageUrl = url;
+                           
+                           const img = document.createElement('img');
+                           img.src = url;
+                           img.alt = keyword;
+                           img.loading = 'lazy'; // Lazy loading for images
+                           
+                           item.appendChild(img);
+                           this.elements.wikiImageResultsContainer.appendChild(item);
+                       });
+                   } else {
+                       this.elements.wikiImageResultsContainer.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">画像が見つかりませんでした。</p>';
+                   }
+               } catch (error) {
+                   console.error('Wikipedia image search failed:', error);
+                   this.elements.wikiImageResultsContainer.innerHTML = `<p style="color: var(--danger-color); text-align: center;">画像の検索中にエラーが発生しました。<br>${error.message}</p>`;
+                   ErrorHandler.handle(error, 'wiki_image_search');
+               } finally {
+                   this.elements.wikiImageLoading.style.display = 'none';
+               }
+           }, // ここにカンマを追加
+       }; // ここでAppオブジェクトが閉じられる
+
+       // 埋め込み警告ユーティリティ + モーダル制御（統合版）
+       // slide.html では「簡易版(embed-modal-*)」と「上級版(embed-modal-advanced)」の2種類のIDが存在する。
+       // 本関数はまず上級版(advanced)の要素群を優先して取得し、無ければ簡易版(simple)をフォールバックとして使用する。
+       (function attachEmbedWarningAPI(){
+         let warnedUrls = new Set();
+         let warnedOnceThisSession = false;
+
+         function getWarningEl() {
+           const el = document.getElementById('embed-warning');
+           if (!el) return null;
+           const close = document.getElementById('embed-warning-close');
+           if (close && !close._bound) {
+             close._bound = true;
+             close.addEventListener('click', () => {
+               el.style.display = 'none';
+             });
+           }
+           return el;
+         }
+
+         App.showEmbedWarning = function(message, opts = {}) {
+           const { oncePerUrl = false, url = null, oncePerSession = false } = opts;
+           if (oncePerSession && warnedOnceThisSession) return;
+           if (oncePerUrl && url && warnedUrls.has(url)) return;
+
+           const warnEl = getWarningEl();
+           if (!warnEl) return;
+           const msgEl = document.getElementById('embed-warning-message');
+           if (msgEl) msgEl.textContent = message;
+
+           warnEl.style.display = 'block';
+
+           if (oncePerSession) warnedOnceThisSession = true;
+           if (oncePerUrl && url) warnedUrls.add(url);
+         };
+
+         // 埋め込みモーダルの制御（URL検証 + デバウンス + 既定 allow-scripts + 危険URLはプレビューしない/挿入禁止）
+         App.openEmbedModal = function() {
+           // 1) 上級版(advanced)を優先
+           let modalId = 'embed-modal-advanced';
+           let urlInput   = document.getElementById('embed-url-input-advanced');
+           let widthInput = document.getElementById('embed-width-input-advanced');
+           let heightInput= document.getElementById('embed-height-input-advanced');
+           let preview    = document.getElementById('embed-preview-advanced');
+           let insertBtn  = document.getElementById('embed-insert-btn-advanced');
+
+           // 2) 無ければ簡易版(simple)にフォールバック
+           if (!urlInput || !widthInput || !heightInput || !preview || !insertBtn) {
+             modalId   = 'embed-modal';
+             urlInput  = document.getElementById('embed-url-input-simple');
+             widthInput= document.getElementById('embed-width-input-simple');
+             heightInput = document.getElementById('embed-height-input-simple');
+             preview   = document.getElementById('embed-preview-simple');
+             insertBtn = document.getElementById('embed-insert-btn-simple');
+           }
+
+           if (!urlInput || !preview || !insertBtn) {
+             ErrorHandler.showNotification('埋め込みモーダルの初期化に失敗しました', 'error');
+             return;
+           }
+
+           // 初期値
+           urlInput.value = '';
+           widthInput.value = 50;
+           heightInput.value = 50;
+           preview.removeAttribute('src');
+
+           // 上級者向け: アコーディオン開閉
+           const advToggle = document.getElementById('embed-advanced-toggle');
+           const advPanel  = document.getElementById('embed-advanced-panel');
+           if (advToggle && advPanel && !advToggle._bound) {
+             advToggle._bound = true;
+             advToggle.addEventListener('click', () => {
+               const expanded = advToggle.getAttribute('aria-expanded') === 'true';
+               advToggle.setAttribute('aria-expanded', String(!expanded));
+               advPanel.hidden = expanded;
+               const icon = advToggle.querySelector('i.fas');
+               if (icon) {
+                 icon.classList.toggle('fa-chevron-right', expanded);
+                 icon.classList.toggle('fa-chevron-down', !expanded);
+               }
+             });
+           }
+
+           // デフォルト sandbox は allow-scripts のみ
+           document.querySelectorAll('.embed-sbx').forEach(cb => {
+             if (cb.value === 'allow-scripts') cb.checked = true;
+             else cb.checked = false;
+           });
+           if (preview) preview.setAttribute('sandbox', 'allow-scripts');
+
+           // URL形式チェック用ヘルパ
+           const isValidHttpUrl = (val) => {
+             try {
+               const u = new URL(val, window.location.origin);
+               if (!/^https?:$/.test(u.protocol)) return false;
+               // ドメイン風または localhost/127.0.0.1 許可
+               const hostOk = /([a-z0-9-]+\.)+[a-z]{2,}$/i.test(u.hostname) || /^localhost$/.test(u.hostname) || /^127\.0\.0\.1$/.test(u.hostname);
+               // パスは任意、ただしスキーム直後のtypoを粗検知
+               const typoLike = /https?:;\/\/|https?:\/\/\/|https?:\/\/:|https?:\/\/\s/i.test(val);
+               return hostOk && !typoLike;
+             } catch {
+               return false;
+             }
+           };
+
+           // 入力終了待ちのデバウンス
+           let embedUrlTimer = null;
+           const schedulePreview = () => {
+             clearTimeout(embedUrlTimer);
+             embedUrlTimer = setTimeout(updatePreview, 500);
+           };
+
+           // プレビュー更新関数（安全チェック結果に応じて厳格制御）
+           const updatePreview = async () => {
+             const url = urlInput.value.trim();
+
+             // sandboxの組み立て（デフォルト allow-scripts）
+             const sbx = (() => {
+               const selected = Array.from(document.querySelectorAll('.embed-sbx:checked')).map(i => i.value);
+               if (selected.length === 0) return 'allow-scripts';
+               return selected.join(' ');
+             })();
+             if (preview) preview.setAttribute('sandbox', sbx);
+
+             // 入力なしならクリア
+             if (!url) {
+               if (preview) {
+                 preview.removeAttribute('src');
+                 preview.title = '';
+               }
+               urlInput.setCustomValidity('');
+               urlInput.reportValidity();
+               // 追加ボタンの存在チェック（両モーダル対応）
+               const insertBtn = document.getElementById('embed-insert-btn-advanced') || document.getElementById('embed-insert-btn-simple');
+               if (insertBtn) insertBtn.disabled = true;
+               return;
+             }
+
+             // URL形式検証
+             if (!isValidHttpUrl(url)) {
+               if (preview) {
+                 preview.removeAttribute('src');
+                 preview.title = '';
+               }
+               urlInput.setCustomValidity('有効な http/https のURLを入力してください。例: https://example.com/page');
+               urlInput.reportValidity();
+               const insertBtn = document.getElementById('embed-insert-btn-advanced') || document.getElementById('embed-insert-btn-simple');
+               if (insertBtn) insertBtn.disabled = true;
+               return;
+             }
+
+             // 一旦バリデーションOK
+             urlInput.setCustomValidity('');
+             urlInput.reportValidity();
+
+             // ここでサーバの安全チェックを実施。安全でなければプレビューしない
+             let safeCheck = { safe: false, reason: 'error' };
+             try {
+               const uTmp = new URL(url, window.location.origin);
+               safeCheck = await Utils.checkUrlSafety(uTmp.toString());
+             } catch (_) {
+               safeCheck = { safe: false, reason: 'invalid_url' };
+             }
+
+             const insertBtn = document.getElementById('embed-insert-btn-advanced') || document.getElementById('embed-insert-btn-simple');
+             if (!safeCheck.safe) {
+               // 危険/不正/エラー時はプレビューをロードしない
+               if (preview) {
+                 preview.removeAttribute('src');
+                 preview.title = '';
+               }
+               if (insertBtn) insertBtn.disabled = true;
+
+               // 既存の警告バナーを使用してユーザーに通知
+               const reason = safeCheck.reason || 'error';
+               if (reason === 'matched') {
+                 const matched = (safeCheck.matched_domain || '');
+                 const srcName = (safeCheck.source || '');
+                 App.showEmbedWarning(`危険なURLとしてブロックリストに一致しました（${matched} / ${srcName}）。このURLはプレビューできません。`, { oncePerUrl: false, url });
+               } else if (reason === 'invalid_url') {
+                 App.showEmbedWarning('URLが正しくありません。プレビューできません。', { oncePerUrl: false, url });
+               } else {
+                 App.showEmbedWarning('安全性チェックで問題が検出されました。プレビューできません。', { oncePerUrl: false, url });
+               }
+               return;
+             }
+
+             // 安全な場合のみプレビューを表示
+             try {
+               const u = new URL(url, window.location.origin);
+               if (preview) {
+                 preview.src = u.toString();
+                 preview.title = u.toString();
+               }
+               if (insertBtn) insertBtn.disabled = false;
+             } catch {
+               if (preview) {
+                 preview.removeAttribute('src');
+                 preview.title = '';
+               }
+               if (insertBtn) insertBtn.disabled = true;
+             }
+           };
+
+           // デバウンスを適用
+           if (urlInput) urlInput.oninput = schedulePreview;
+           document.querySelectorAll('.embed-sbx').forEach(cb => cb.onchange = updatePreview);
+
+           // URL入力前に注意喚起（モーダルオープン時に一度）
+           App.showEmbedWarning('外部サイトのコンテンツを埋め込む前に、提供元が信頼できることを確認してください。', { oncePerSession: true });
+
+           // 追加ボタン
+           if (!insertBtn._bound) {
+             insertBtn._bound = true;
+             insertBtn.addEventListener('click', () => {
+               const url = (urlInput?.value || '').trim();
+               if (!url) {
+                 alert('URLを入力してください');
+                 return;
+               }
+               if (!isValidHttpUrl(url)) {
+                 alert('http/https の正しいURLを入力してください。');
+                 return;
+               }
+               let u;
+               try {
+                 u = new URL(url, window.location.origin);
+                 if (!/^https?:$/.test(u.protocol)) {
+                   alert('http/https のURLのみ許可されます。');
+                   return;
+                 }
+               } catch {
+                 alert('不正なURLです。正しいURLを入力してください。');
+                 return;
+               }
+
+               // 追加前に警告（ここで必ず表示）
+               App.showEmbedWarning(`以下のURLを埋め込みます: ${u.toString()}
+ 外部サイトのスクリプトが実行される可能性があります。信頼できる提供元か確認してください。`, { oncePerUrl: false, url: u.toString() });
+
+               // sandbox属性（未選択時でも allow-scripts を強制）
+               const selectedSbx = Array.from(document.querySelectorAll('.embed-sbx:checked')).map(i => i.value);
+               const sandbox = (selectedSbx.length ? selectedSbx.join(' ') : 'allow-scripts');
+               // サイズ
+               const w = Math.max(10, Math.min(100, Number(widthInput?.value) || 50));
+               const h = Math.max(10, Math.min(100, Number(heightInput?.value) || 50));
+
+               // 実際に要素を追加
+               const slide = App.getActiveSlide();
+               if (!slide) return;
+
+               const newElStyle = { top: 20, left: 20, width: w, height: h, zIndex: slide.elements.length + 1, rotation: 0, animation: '' };
+               const content = { url: u.toString(), sandbox: sandbox || 'allow-scripts allow-same-origin' };
+               const added = App.addElementToSlide(slide.id, 'iframe', content, newElStyle);
+               if (added) {
+                 App.updateState('selectedElementIds', [added.id]);
+                 App.saveState();
+                 App.render();
+                 if (typeof MicroModal !== 'undefined') MicroModal.close(modalId);
+               }
+             });
+           }
+
+           // モーダルを開く
+           if (typeof MicroModal !== 'undefined') {
+             MicroModal.show(modalId, {
+               awaitCloseAnimation: true,
+               disableScroll: true
+             });
+           } else {
+             ErrorHandler.showNotification('モーダルライブラリが読み込まれていません', 'error');
+           }
+         };
+       })();
+
+
 
         // 画像編集モーダルを開く関数
         App.openImageEditor = function(imageDataURL, callback) {
@@ -4932,14 +5698,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     let selectedDotStyle = 'square';
     let selectedCornerStyle = 'square';
 
-    function updateQRPreview() {
+    async function updateQRPreview() {
         const text = qrTextInput.value;
         const size = parseInt(qrSizeInput.value) || 256;
         const color = qrColorPicker ? qrColorPicker.currentColorString : '#000000FF';
         const bgColor = qrBgColorPicker ? qrBgColorPicker.currentColorString : '#FFFFFFFF';
         const preview = document.getElementById('qr-preview');
         const warning = document.getElementById('qr-warning');
-        
+        const form = document.getElementById('qr-create-form');
+
         preview.innerHTML = '';
 
         if (!text) {
@@ -4947,6 +5714,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             preview.style.alignItems = 'center';
             preview.style.justifyContent = 'center';
             preview.innerHTML = '<span style="color: #6c757d;">QRコード内容を入力してください</span>';
+            if (warning) {
+                warning.style.display = 'none';
+                warning.textContent = '';
+            }
+            // 入力空時は枠線をリセット
+            const inputEl = document.getElementById('qr-text');
+            if (inputEl) inputEl.style.outline = '';
             return;
         }
 
@@ -4954,19 +5728,96 @@ document.addEventListener('DOMContentLoaded', async () => {
         const correctPattern = /^https?:\/\/[a-zA-Z0-9]/;
 
         if (typoPattern.test(text) && !correctPattern.test(text.trim())) {
-            // 実際の入力から正しくない部分を抽出
             const typoMatch = text.match(/(h{1,2}t{1,2}p[s]?:\/\/|ttp[s]?:\/\/|https?:;\/\/|https?:\/\/\/|https?:\/\/$|https?:\/\/:|https?:\/\/\s|https?:\/\/\W|https?:\/{1,2}[^a-zA-Z0-9])/i);
             let typoExample = '';
             if (typoMatch && typoMatch[0]) {
-            typoExample = `（${typoMatch[0]}...）`;
+              typoExample = `（${typoMatch[0]}...）`;
             }
-            warning.style.display = 'block';
-            warning.innerHTML = `URLにタイプミスがあります${typoExample}<br><span style="font-size:90%;">（例: hhtps://, https;//, https:/, http;//, ttp://, https::// など）<br>正しいURLか確認してください。</span>`;
+            if (warning) {
+                warning.style.display = 'block';
+                warning.style.background = '#fff8e1';
+                warning.style.border = '1px solid #ffe58f';
+                warning.style.color = '#664d03';
+                warning.innerHTML = `URLにタイプミスがあります${typoExample}<br><span style="font-size:90%;">（例: hhtps://, https;//, https:/, http;//, ttp://, https::// など）<br>正しいURLか確認してください。</span>`;
+            }
+            const inputEl = document.getElementById('qr-text');
+            if (inputEl) inputEl.style.outline = '2px solid #ff9f1a'; // タイプミスは黄色系
         } else {
-            warning.style.display = 'none';
-            warning.textContent = '';
+            if (warning) {
+                warning.style.display = 'none';
+                warning.textContent = '';
+            }
         }
 
+        // URL候補か判定
+        let urlCandidate = null;
+        try {
+            if (/^https?:/i.test(text)) {
+                const u = new URL(text);
+                urlCandidate = u.toString();
+            }
+        } catch(_){}
+
+        // URLでない純テキストは赤枠不要
+        if (!urlCandidate) {
+            const inputEl = document.getElementById('qr-text');
+            if (inputEl) inputEl.style.outline = '';
+        } else {
+            // 危険URLのときの赤枠と明確な警告文を追加
+            try {
+                const result = await Utils.checkUrlSafety(urlCandidate);
+                if (!result.safe) {
+                    const inputEl = document.getElementById('qr-text');
+                    if (inputEl) inputEl.style.outline = '2px solid #b00020'; // 危険は赤枠
+                    if (warning) {
+                        if (result.reason === 'matched') {
+                            warning.style.display = 'block';
+                            warning.style.background = '#fff4f4';
+                            warning.style.border = '1px solid #ff9aa2';
+                            warning.style.color = '#b00020';
+                            const matched = Utils.sanitizeHtml(result.matched_domain || '');
+                            const source = Utils.sanitizeHtml(result.source || '');
+                            warning.innerHTML = `危険なURLとして検出されました。<br>一致ドメイン: <code>${matched}</code>（${source}）<br><strong>この内容ではQRを作成できません。</strong>`;
+                        } else if (result.reason === 'invalid_url') {
+                            warning.style.display = 'block';
+                            warning.style.background = '#fff8e1';
+                            warning.style.border = '1px solid #ffe58f';
+                            warning.style.color = '#664d03';
+                            warning.innerHTML = 'URLの形式が正しくありません。<br><span style="font-size:90%;">URLを修正するか、テキストに変更してください。</span>';
+                        } else {
+                            warning.style.display = 'block';
+                            warning.style.background = '#fff8e1';
+                            warning.style.border = '1px solid #ffe58f';
+                            warning.style.color = '#664d03';
+                            warning.textContent = '安全性チェックでエラーが発生しました。';
+                        }
+                    }
+                } else {
+                    // 安全なURLは緑系アウトラインでフィードバック
+                    const inputEl = document.getElementById('qr-text');
+                    if (inputEl) inputEl.style.outline = '2px solid #0f5132';
+                    if (warning) {
+                        warning.style.display = 'block';
+                        warning.style.background = '#e7f7ee';
+                        warning.style.border = '1px solid #b7ebd1';
+                        warning.style.color = '#0f5132';
+                        warning.textContent = '安全なURLです。';
+                    }
+                }
+            } catch {
+                const inputEl = document.getElementById('qr-text');
+                if (inputEl) inputEl.style.outline = '2px solid #ff9f1a';
+                if (warning) {
+                    warning.style.display = 'block';
+                    warning.style.background = '#fff8e1';
+                    warning.style.border = '1px solid #ffe58f';
+                    warning.style.color = '#664d03';
+                    warning.textContent = '安全性チェック中にエラーが発生しました。';
+                }
+            }
+        }
+
+        // プレビュー描画（ローカル生成）
         preview.style.display = 'block';
         qrStylingInstance = new window.QRCodeStyling({
             width: size,
@@ -5034,7 +5885,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     [qrTextInput].forEach(input => {
-        if (input) input.addEventListener('input', updateQRPreview);
+        if (input) {
+            input.addEventListener('input', updateQRPreview);
+            // URL安全チェック結果に応じた視覚的フィードバック（赤枠）を同期
+            const warning = document.getElementById('qr-warning');
+            input.addEventListener('input', () => {
+                if (!warning) return;
+                // warning の色に応じて枠色変更
+                if (warning.style.color === 'rgb(176, 0, 32)' || warning.style.color.toLowerCase().includes('#b00020')) {
+                    input.style.outline = '2px solid #b00020';
+                } else if (warning.style.color === 'rgb(15, 81, 50)' || warning.style.color.toLowerCase().includes('#0f5132')) {
+                    input.style.outline = '2px solid #0f5132';
+                } else {
+                    input.style.outline = '';
+                }
+            });
+        }
     });
 
     // QRコードカラーピッカーの初期化
@@ -5058,8 +5924,43 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (qrForm) {
         qrForm.onsubmit = async function(ev) {
             ev.preventDefault();
+            const inputEl = document.getElementById('qr-text');
+            const val = (inputEl?.value || '').trim();
+
+            // URL風の文字列なら念のため最終チェック（_bindQrModalUrlSafety と同等）
+            let urlCandidate = null;
+            try { if (/^https?:/i.test(val)) urlCandidate = new URL(val).toString(); } catch(_){}
+            if (urlCandidate) {
+                const result = await Utils.checkUrlSafety(urlCandidate);
+                if (!result.safe) {
+                    const warning = document.getElementById('qr-warning');
+                    if (warning) {
+                        if (result.reason === 'matched') {
+                            warning.style.display = 'block';
+                            warning.style.background = '#fff4f4';
+                            warning.style.border = '1px solid #ff9aa2';
+                            warning.style.color = '#b00020';
+                            warning.innerHTML = `ブロックリストに一致しました。<br>一致ドメイン: <code>${Utils.sanitizeHtml(result.matched_domain || '')}</code>（${Utils.sanitizeHtml(result.source || '')}）`;
+                        } else if (result.reason === 'invalid_url') {
+                            warning.style.display = 'block';
+                            warning.style.background = '#fff8e1';
+                            warning.style.border = '1px solid #ffe58f';
+                            warning.style.color = '#664d03';
+                            warning.textContent = 'URLの形式が正しくありません。';
+                        } else {
+                            warning.style.display = 'block';
+                            warning.style.background = '#fff8e1';
+                            warning.style.border = '1px solid #ffe58f';
+                            warning.style.color = '#664d03';
+                            warning.textContent = '安全性チェックでエラーが発生しました。';
+                        }
+                    }
+                    // 危険/不正はここで中断
+                    return;
+                }
+            }
+
             if (!qrStylingInstance) return;
-            
             const blob = await qrStylingInstance.getRawData("png");
             if (blob) {
                 const reader = new FileReader();
@@ -5272,7 +6173,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const labelInput = document.createElement('input');
         labelInput.type = 'text';
         labelInput.dataset.type = 'label';
-        labelInput.value = label.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // Escape HTML
+        labelInput.value = label.replace(/</g, "<").replace(/>/g, ">"); // Escape HTML
         labelInput.style.cssText = 'width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;';
         labelCell.appendChild(labelInput);
 
@@ -5281,7 +6182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const valueInput = document.createElement('input');
         valueInput.type = 'number';
         valueInput.dataset.type = 'value';
-        valueInput.value = value.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // Escape HTML
+        valueInput.value = value.replace(/</g, "<").replace(/>/g, ">"); // Escape HTML
         valueInput.style.cssText = 'width: 100%; padding: 6px; border: 1px solid #ced4da; border-radius: 4px;';
         valueCell.appendChild(valueInput);
 
@@ -5341,6 +6242,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         csvPasteArea.style.display = 'none';
         csvPasteArea.value = '';
     });
+
+    // 「埋め込み」ボタンにモーダル起動をバインド（重複バインド防止付き）
+    const addIframeBtn = document.getElementById('add-iframe-btn');
+    if (addIframeBtn && !addIframeBtn._embedBound) {
+        addIframeBtn._embedBound = true;
+        addIframeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (typeof App.openEmbedModal === 'function') {
+                App.openEmbedModal();
+            } else {
+                // フォールバック: 直接の注意喚起のみ
+                App.showEmbedWarning('外部サイトのコンテンツを埋め込む前に、提供元が信頼できることを確認してください。', { oncePerSession: true });
+            }
+        });
+    }
 
     // 5. Appの初期化
     await App.init();

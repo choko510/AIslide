@@ -946,8 +946,15 @@ class InspectorManager {
                         if (elWidthPx > 0 && elHeightPx > 0) {
                             const rx = (value / elWidthPx) * 100;
                             const ry = (value / elHeightPx) * 100;
-                            shapeSvg.setAttribute('rx', ry);
-                            shapeSvg.setAttribute('ry', ry);
+                            // 数値ガードとクランプ（NaN/Infinity/負値を防止）
+                            const safeRx = Number.isFinite(rx) && rx >= 0 ? rx : 0;
+                            const safeRy = Number.isFinite(ry) && ry >= 0 ? ry : 0;
+                            shapeSvg.setAttribute('rx', safeRx);
+                            shapeSvg.setAttribute('ry', safeRy);
+                        } else {
+                            // サイズ未定義時は0にフォールバック
+                            shapeSvg.setAttribute('rx', 0);
+                            shapeSvg.setAttribute('ry', 0);
                         }
                     }
                 }

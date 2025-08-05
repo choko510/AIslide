@@ -1,3 +1,30 @@
+/* Navigation enhancements: back and skip */
+document.addEventListener('DOMContentLoaded', () => {
+  const prevBtn = document.getElementById('prev-button');
+  const skipBtn = document.getElementById('skip-button');
+
+  // 既存のグローバル関数があれば利用、無ければ no-op
+  const goPrev = (window.planGoPrev || window.goPrev || function(){});
+  const skipCurrent = (window.planSkip || window.skipQuestion || function(){
+    // フォールバック: 次へ進む関数があればスキップ扱いで進む
+    if (typeof window.planGoNext === 'function') window.planGoNext(true);
+    else if (typeof window.goNext === 'function') window.goNext(true);
+  });
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      goPrev();
+    });
+  }
+
+  if (skipBtn) {
+    skipBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      skipCurrent();
+    });
+  }
+});
 document.addEventListener('DOMContentLoaded', () => {
     const questions = [
         {

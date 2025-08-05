@@ -483,7 +483,17 @@ ${result.message}
         const contentDiv = document.createElement('div');
         contentDiv.className = 'msg-content';
 
-        if (window.DOMPurify && (type === 'ai' || (type === 'system' && subTitle !== '') || type === 'checkpoint' || type === 'error')) {
+        // Markdownを適用したいメッセージタイプ
+        const markdownEnabledTypes = ['ai', 'system', 'checkpoint', 'error', 'loading'];
+
+        if (window.marked && window.DOMPurify && markdownEnabledTypes.includes(type)) {
+            // loadingメッセージはtextContentで更新されるため、innerHTMLを使う
+            if (type === 'loading') {
+                contentDiv.textContent = content;
+            } else {
+                contentDiv.innerHTML = DOMPurify.sanitize(marked.parse(content));
+            }
+        } else if (window.DOMPurify && (type === 'ai' || (type === 'system' && subTitle !== '') || type === 'checkpoint' || type === 'error')) {
             contentDiv.innerHTML = DOMPurify.sanitize(content);
         } else {
             contentDiv.textContent = content;
@@ -556,14 +566,11 @@ ${result.message}
             const completeMessage = completeNode.textContent.trim();
             const completeDiv = document.createElement('div');
             completeDiv.className = 'complete-msg-container';
-            const icon = document.createElement('i');
-            icon.className = 'fas fa-check-circle';
-            const strong = document.createElement('strong');
-            strong.textContent = 'タスク完了:';
-            completeDiv.appendChild(icon);
-            completeDiv.appendChild(document.createTextNode(' '));
-            completeDiv.appendChild(strong);
-            completeDiv.appendChild(document.createTextNode(` ${this.escapeHTML(completeMessage)}`));
+            if (window.marked && window.DOMPurify) {
+                completeDiv.innerHTML = DOMPurify.sanitize(marked.parse(`✅ **タスク完了:** ${completeMessage}`));
+            } else {
+                completeDiv.textContent = `✅ タスク完了: ${completeMessage}`;
+            }
             contentDiv.appendChild(completeDiv);
         } else {
             const comments = [];
@@ -581,16 +588,27 @@ ${result.message}
                 thoughtHeader.innerHTML = '<i class="fas fa-brain"></i> AIの思考プロセス';
                 thoughtProcessContainer.appendChild(thoughtHeader);
 
-                const planList = document.createElement('ol');
-                planList.className = 'thought-process-list';
+                const thoughtContent = document.createElement('div');
+                thoughtContent.className = 'thought-process-content';
                 
-                comments.forEach(commentText => {
-                    const listItem = document.createElement('li');
-                    listItem.textContent = this.escapeHTML(commentText);
-                    planList.appendChild(listItem);
-                });
-                thoughtProcessContainer.appendChild(planList);
+                // コメントをMarkdownリストとして結合
+                const markdownText = comments.map(c => `- ${c}`).join('\n');
+                
+                if (window.marked && window.DOMPurify) {
+                    thoughtContent.innerHTML = DOMPurify.sanitize(marked.parse(markdownText));
+                } else {
+                    const planList = document.createElement('ol');
+                    planList.className = 'thought-process-list';
+                    comments.forEach(commentText => {
+                        const listItem = document.createElement('li');
+                        listItem.textContent = this.escapeHTML(commentText);
+                        planList.appendChild(listItem);
+                    });
+                    thoughtContent.appendChild(planList);
+                }
+                thoughtProcessContainer.appendChild(thoughtContent);
                 contentDiv.appendChild(thoughtProcessContainer);
+
             } else {
                 const pre = document.createElement('pre');
                 pre.textContent = xmlCommand;
@@ -802,7 +820,8 @@ ${result.message}
                             fullResponse += chunk;
 
                             if (contentDiv) {
-                                contentDiv.textContent = fullResponse; // リアルタイムでUIを更新
+                                // ストリーミング中はtextContentで高速に更新し、最後にmarkedを適用する
+                                contentDiv.textContent = fullResponse;
                             }
                         }
                     } finally {
@@ -842,66 +861,77 @@ ${result.message}
     }
     
     _extractAndValidateCommand(rawResponse) {
-        // 質問タグを優先的にチェック
+        // 1) 質問タグを優先的に返す
         const questionMatch = rawResponse.match(/<question[\s\S]*?<\/question>/s);
         if (questionMatch) {
             return { type: 'xml', content: questionMatch[0] };
         }
 
-        // 応答からXMLコメントや前後のテキストを除いた、最初のXML要素を抽出する
-        let startIndex = -1;
-        let currentIndex = 0;
-        while (currentIndex < rawResponse.length) {
-            const i = rawResponse.indexOf('<', currentIndex);
-            if (i === -1) break;
-            if (rawResponse.substring(i, i + 4) !== '<!--') {
-                startIndex = i;
-                break;
+        // 2) 既知のルートコマンドのみを対象に抽出（複数返っても最初の1ブロックのみ）
+        const known = [
+            'sequence','create_slide','complete','edit_element','delete_slide','view_slide',
+            'switch_ai_mode','add_element','add_shape','add_chart','add_icon','add_qrcode',
+            'view_slide_as_image','reorder_slides','align_to_slide','set_background','research'
+        ];
+        const cmdRegex = new RegExp(
+            `<(${known.join('|')})[\\s\\S]*?>[\\s\\S]*?<\\/\\1>|<(${known.join('|')})[\\s\\S]*?\\/>`,
+            's'
+        );
+        let match = rawResponse.match(cmdRegex);
+
+        // 3) フォールバック: 先頭タグ探索（コメントはスキップ）
+        if (!match) {
+            let startIndex = -1;
+            let currentIndex = 0;
+            while (currentIndex < rawResponse.length) {
+                const i = rawResponse.indexOf('<', currentIndex);
+                if (i === -1) break;
+                if (rawResponse.substring(i, i + 4) !== '<!--') {
+                    startIndex = i;
+                    break;
+                }
+                const commentEndIndex = rawResponse.indexOf('-->', i);
+                currentIndex = (commentEndIndex !== -1) ? commentEndIndex + 3 : i + 4;
             }
-            const commentEndIndex = rawResponse.indexOf('-->', i);
-            currentIndex = (commentEndIndex !== -1) ? commentEndIndex + 3 : i + 4;
+
+            if (startIndex === -1) {
+                // タグが全くない → テキストとして返す
+                return { type: 'text', content: rawResponse.trim() };
+            }
+
+            const potentialXml = rawResponse.substring(startIndex);
+            const xmlMatch = potentialXml.match(/<(\w+)(?:[\s\S]*?)>[\s\S]*?<\/\1>|<(\w+)(?:[\s\S]*?)\/>/s);
+            if (!xmlMatch) {
+                // タグはあるが有効なルートではない
+                throw new Error(`AIからの応答に有効なXMLコマンドが含まれていませんでした。\n抽出試行ブロック:\n${potentialXml}\n\n元のAIの応答:\n${rawResponse}`);
+            }
+            match = xmlMatch;
         }
 
-        if (startIndex === -1) {
-            // No XML tag found at all, treat as plain text
-            return { type: 'text', content: rawResponse.trim() };
-        }
+        let xmlCommand = match[0].trim();
 
-        const potentialXml = rawResponse.substring(startIndex);
-        // ルート要素にマッチさせるための正規表現
-        const xmlMatch = potentialXml.match(/<(\w+)(?:[\s\S]*?)>[\s\S]*?<\/\1>|<(\w+)(?:[\s\S]*?)\/>/s);
-
-        if (!xmlMatch) {
-            // Found a '<' but it's not a valid XML root element. This is a malformed XML command.
-            throw new Error(`AIからの応答に有効なXMLコマンドが含まれていませんでした。\n抽出試行ブロック:\n${potentialXml}\n\n元のAIの応答:\n${rawResponse}`);
-        }
-        
-        let xmlCommand = xmlMatch[0].trim();
-
-        // 応急処置: XML属性値内の '&' を '&' に置換する。ただし、既存の文字実体参照は除く。
-        xmlCommand = xmlCommand.replace(/="([^"]*)"/g, (match, content) => {
-            const newContent = content.replace(/&(?![a-zA-Z]{2,5};|#\d{2,5};)/g, '&amp;');
+        // 4) 属性値内の未エスケープ & を & に統一（既存の実体参照は維持）
+        xmlCommand = xmlCommand.replace(/="([^"]*)"/g, (m, content) => {
+            const newContent = content.replace(/&(?![a-zA-Z]{2,10};|#\d{2,6};)/g, '&');
             return `="${newContent}"`;
         });
 
-        // 応急処置: AIが誤って content="<![CDATA[...]]>" という属性を生成した場合、
-        // これを <content><![CDATA[...]]></content> という子要素に変換する。
-        const regex = /(<add_element[^>]*?)(\s*content="<!\[CDATA\[([\s\S]*?)\]\]>")(.*?)(\/?>)/g;
-        xmlCommand = xmlCommand.replace(regex, (match, start, attr, cdata, rest, end) => {
-            const restoredEnd = end || ''; // endがundefinedの場合に備える
+        // 5) content="<![CDATA[...]]>" を子要素 <content><![CDATA[...]]></content> に移行
+        const cdataRegex = /(<add_element[^>]*?)(\s*content="<!\[CDATA\[([\s\S]*?)\]\]>")(.*?)(\/?>)/g;
+        xmlCommand = xmlCommand.replace(cdataRegex, (m, start, attr, cdata, rest, end) => {
+            const restoredEnd = end || '';
             if (restoredEnd === '/>') {
-                // 自己完結タグ <add_element ... /> を <add_element ...><content>...</content></add_element> に変換
                 return `${start}${rest}><content><![CDATA[${cdata}]]></content></add_element>`;
             }
-            // 通常の開始タグ <add_element ...> を <add_element ...><content>...</content> に変換
             return `${start}${rest}${restoredEnd}<content><![CDATA[${cdata}]]></content>`;
         });
 
+        // 6) 検証
         const validation = this.validateCommand(xmlCommand);
         if (!validation.isValid) {
             throw new Error(`生成されたコマンドの検証に失敗しました: ${validation.error}\n抽出されたコマンド:\n${xmlCommand}\n\n元のAIの応答:\n${rawResponse}`);
         }
-        
+
         return { type: 'xml', content: xmlCommand };
     }
 
@@ -1621,8 +1651,8 @@ ${result.message}
                     const chunk = decoder.decode(value, { stream: true });
                     resultText += chunk;
     
-                    if (contentDiv && window.DOMPurify) {
-                        contentDiv.innerHTML = DOMPurify.sanitize(resultText.replace(/\n/g, '<br>'));
+                    if (contentDiv && window.marked && window.DOMPurify) {
+                        contentDiv.innerHTML = DOMPurify.sanitize(marked.parse(resultText));
                         contentDiv.scrollTop = contentDiv.scrollHeight;
                     } else if (contentDiv) {
                         contentDiv.textContent = resultText;
@@ -2098,8 +2128,8 @@ class AutonomousAgent {
             throw new Error('計画の立案に失敗しました。');
         }
 
-        const planHtml = '<ul>' + this.plan.map(step => `<li>${this.handler.escapeHTML(step)}</li>`).join('') + '</ul>';
-        this.handler.displayMessage(planHtml, 'system', '計画を立案しました');
+        const planMarkdown = this.plan.map((step, index) => `${index + 1}. ${step}`).join('\n');
+        this.handler.displayMessage(planMarkdown, 'system', '計画を立案しました');
     }
 
     async executePlan() {

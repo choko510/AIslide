@@ -22,9 +22,11 @@
             const next = current === 'true' ? 'false' : 'true';
             localStorage.setItem(key, next);
 
-            // 内部UI状態にも保持（なければ作成）
-            this.state.ui = this.state.ui || {};
-            this.state.ui.scriptPanelVisible = (next === 'true');
+            // Immer管理stateを破壊せず更新
+            this.updateState('ui', {
+                ...(this.state.ui || {}),
+                scriptPanelVisible: (next === 'true')
+            }, { silent: true });
 
             // 即時反映
             this.render();
@@ -34,8 +36,11 @@
         _loadScriptPanelState() {
             const saved = localStorage.getItem('webSlideMakerScriptPanelVisible');
             const visible = saved === null ? true : (saved === 'true');
-            this.state.ui = this.state.ui || {};
-            this.state.ui.scriptPanelVisible = visible;
+            // Immer管理stateを破壊せず更新
+            this.updateState('ui', {
+                ...(this.state.ui || {}),
+                scriptPanelVisible: visible
+            }, { silent: true });
         },
 
         // 台本エリアをレンダリング
@@ -54,10 +59,10 @@
                 const noteLines = lines.join('\n');
                 const slideMarkerMatch = markerLine.match(/^\[スライド(\d+)\]$/);
                 if (!slideMarkerMatch) return;
-
+ 
                 const slideIndex = parseInt(slideMarkerMatch[1]) - 1;
                 const isActiveSlide = presentation.slides[slideIndex]?.id === activeSlideId;
-
+ 
                 const scriptBlockContainer = document.createElement('div');
                 scriptBlockContainer.className = 'script-block';
                 if (isActiveSlide) {
@@ -67,7 +72,7 @@
                     scriptBlockContainer.style.padding = '8px';
                     scriptBlockContainer.style.margin = '8px 0';
                 }
-
+ 
                 const markerDiv = document.createElement('div');
                 markerDiv.className = 'script-marker';
                 markerDiv.textContent = markerLine;
@@ -79,19 +84,81 @@
                     markerDiv.classList.add('active-slide-marker');
                 }
                 scriptBlockContainer.appendChild(markerDiv);
-
+ 
+                // 単一ビューエディタ: 編集も表示も同一要素
                 const noteDiv = document.createElement('div');
-                noteDiv.className = 'script-note';
+                noteDiv.className = 'script-note script-note-unified';
                 noteDiv.contentEditable = 'true';
                 noteDiv.dataset.slideIndex = slideIndex;
-                noteDiv.textContent = noteLines;
-                noteDiv.style.minHeight = '1.2em';
-                noteDiv.style.padding = '5px 0';
+                noteDiv.textContent = noteLines; // stateはMarkdownプレーンテキストを保持
+                Object.assign(noteDiv.style, {
+                    minHeight: '1.2em',
+                    padding: '6px 8px',
+                    border: '1px solid var(--border-color, #e9ecef)',
+                    borderRadius: '6px',
+                    background: 'var(--bg-soft, #fff)',
+                    whiteSpace: 'pre-wrap'
+                });
+
+                // 描画モード切替: 未フォーカス時はMarkdownをHTMLレンダ、フォーカス時はMarkdown編集
+                const renderViewMode = () => {
+                    // 表示モード: HTMLプレビュー
+                    const md = noteDiv.dataset.rawMarkdown ?? noteDiv.textContent;
+                    // dataset.rawMarkdownを優先（編集時に保持）
+                    this._renderMarkdownPreview(md || '', noteDiv);
+                    noteDiv.contentEditable = 'false';
+                    noteDiv.dataset.view = 'preview';
+                };
+                const renderEditMode = () => {
+                    // 編集モード: プレーンテキスト表示＋編集可能
+                    const currentMd = noteDiv.dataset.rawMarkdown ?? noteDiv.textContent;
+                    noteDiv.textContent = currentMd || '';
+                    noteDiv.contentEditable = 'true';
+                    noteDiv.dataset.view = 'edit';
+                };
+
+                // 初期はプレビューモード
+                noteDiv.dataset.rawMarkdown = noteLines;
+             renderViewMode();
+ 
+                // クリックで編集開始、フォーカスアウトでプレビューに戻す
+                const enterEdit = () => {
+                    renderEditMode();
+                    // キャレットを末尾に
+                    const range = document.createRange();
+                    range.selectNodeContents(noteDiv);
+                    range.collapse(false);
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                    noteDiv.focus();
+                };
+                noteDiv.addEventListener('click', (e) => {
+                    // 既に編集モードなら何もしない
+                    if (noteDiv.dataset.view === 'edit') return;
+                    // マーカーや他の領域クリック誤反応を避けるため自身のみ
+                    if (e.target !== noteDiv) return enterEdit();
+                    enterEdit();
+                });
+ 
+                noteDiv.addEventListener('focusout', () => {
+                    // DOM保存（従来処理）
+                    this._saveScriptFromDOMImmediately();
+                    // 最新のMarkdown原文を保持
+                    noteDiv.dataset.rawMarkdown = noteDiv.textContent;
+                    // ビューモードに戻す
+                    renderViewMode();
+                });
+ 
+                // 入力時: state更新はdebounce、rawMarkdown更新は即時
+                noteDiv.addEventListener('input', () => {
+                    noteDiv.dataset.rawMarkdown = noteDiv.textContent;
+                });
                 noteDiv.addEventListener('input', Utils.debounce(() => {
                     this._updateScriptFromDOM();
                 }, 500));
+ 
                 scriptBlockContainer.appendChild(noteDiv);
-
                 scriptDisplay.appendChild(scriptBlockContainer);
             });
 
@@ -111,7 +178,11 @@
                 const marker = block.querySelector('.script-marker');
                 const note = block.querySelector('.script-note');
                 if (marker) newScriptContent.push(marker.textContent);
-                if (note) newScriptContent.push(note.textContent);
+                if (note) {
+                    // 編集モード/表示モードを問わず、Markdown原文を優先的に収集
+                    const md = note.dataset.rawMarkdown ?? note.textContent;
+                    newScriptContent.push(md);
+                }
             });
             const updatedScript = newScriptContent.join('\n');
             const currentScript = this.state.presentation.script || '';
@@ -131,7 +202,10 @@
                 const marker = block.querySelector('.script-marker');
                 const note = block.querySelector('.script-note');
                 if (marker) newScriptContent.push(marker.textContent);
-                if (note) newScriptContent.push(note.textContent);
+                if (note) {
+                    const md = note.dataset.rawMarkdown ?? note.textContent;
+                    newScriptContent.push(md);
+                }
             });
             const updatedScript = newScriptContent.join('\n');
             const currentScript = this.state.presentation.script || '';
@@ -241,6 +315,33 @@
             });
             this.updateState('presentation.script', reindexedLines.join('\n'));
             this.renderScript(); // ★ 修正点: 台本エリアを再描画
+        },
+
+        // Markdown をプレビュー用にHTMLへ変換し安全に挿入
+        _renderMarkdownPreview(markdownText, targetDiv) {
+            try {
+                const hasMarked = typeof window.marked !== 'undefined' && window.marked && typeof window.marked.parse === 'function';
+                const hasDOMPurify = typeof window.DOMPurify !== 'undefined' && window.DOMPurify && typeof window.DOMPurify.sanitize === 'function';
+
+                if (!targetDiv) return;
+
+                if (!markdownText) {
+                    targetDiv.innerHTML = '';
+                    return;
+                }
+
+                if (hasMarked) {
+                    const rawHtml = window.marked.parse(markdownText);
+                    const safeHtml = hasDOMPurify ? window.DOMPurify.sanitize(rawHtml, { USE_PROFILES: { html: true } }) : rawHtml;
+                    targetDiv.innerHTML = safeHtml;
+                } else {
+                    // フォールバック: プレーンテキストとして表示
+                    targetDiv.textContent = markdownText;
+                }
+            } catch (e) {
+                console.error('Markdown preview render failed:', e);
+                targetDiv.textContent = markdownText || '';
+            }
         }
     });
 

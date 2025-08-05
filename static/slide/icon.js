@@ -400,12 +400,52 @@ class IconManager {
 
         // サイドバー幅変化に応じて再レイアウト（統合描画を再実行）
         if (!this._iconResizeObserver) {
+            this._iconResizeScheduled = false;
+            this._iconResizeInRender = false;
+            this._lastIconContainerSize = { w: iconListContainer.clientWidth, h: iconListContainer.clientHeight };
+
             this._iconResizeObserver = new ResizeObserver(() => {
-                const term = document.getElementById('icon-search-input')?.value || '';
-                const select = document.getElementById('icon-category-select');
-                const category = select?.value || 'すべて';
-                this.renderUnifiedIconList(term, category, { reset: false });
+                const curW = iconListContainer.clientWidth;
+                const curH = iconListContainer.clientHeight;
+                // 直近と同一サイズならスキップ（自身のDOM更新での振動を止める）
+                if (this._lastIconContainerSize &&
+                    this._lastIconContainerSize.w === curW &&
+                    this._lastIconContainerSize.h === curH) {
+                    return;
+                }
+                if (this._iconResizeInRender) return; // 再描画中の自己再起を抑止
+                if (this._iconResizeScheduled) return;
+
+                this._iconResizeScheduled = true;
+                this._iconResizeRAF = requestAnimationFrame(() => {
+                    this._iconResizeScheduled = false;
+                    // 再描画直前に最新サイズを記録
+                    this._lastIconContainerSize = { w: iconListContainer.clientWidth, h: iconListContainer.clientHeight };
+                    const term = document.getElementById('icon-search-input')?.value || '';
+                    const select = document.getElementById('icon-category-select');
+                    const category = select?.value || 'すべて';
+
+                    // 再描画中フラグON
+                    this._iconResizeInRender = true;
+                    try {
+                        // 一時的に監視解除してから再描画（無駄な発火を避ける）
+                        try { this._iconResizeObserver.unobserve(iconListContainer); } catch(e) {}
+                        this.renderUnifiedIconList(term, category, { reset: false });
+                    } finally {
+                        // 再監視
+                        try { this._iconResizeObserver.observe(iconListContainer); } catch(e) {}
+                        this._iconResizeInRender = false;
+                        // 再描画後の実サイズを保存（この値と一致する限り以降は発火しない）
+                        this._lastIconContainerSize = { w: iconListContainer.clientWidth, h: iconListContainer.clientHeight };
+                    }
+                });
             });
+        } else {
+            // 既存rAFが残っていればキャンセルして最新イベントで上書き
+            if (this._iconResizeRAF) {
+                cancelAnimationFrame(this._iconResizeRAF);
+                this._iconResizeRAF = null;
+            }
         }
         // 重複 observe を避けるため一旦 unobserve してから observe
         try { this._iconResizeObserver.unobserve(iconListContainer); } catch(e) {}

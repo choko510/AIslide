@@ -689,13 +689,59 @@ body {
 /* ==========================================================================
    10. アクセシビリティ
    ========================================================================== */
-
 @media (prefers-reduced-motion: reduce) {
     * {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
     }
+}
+
+/* ==========================================================================
+   10.1 ページ遷移（フルリロード向けフェード/スライド）
+   ========================================================================== */
+html, body {
+    height: 100%;
+}
+
+.page-transition {
+    will-change: opacity, transform;
+    transition: opacity 320ms cubic-bezier(0.4, 0, 0.2, 1), transform 320ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* プリロード中のスタイル（任意） */
+.link-prefetching {
+    cursor: progress;
+}
+
+/* 入場時（フェードイン＋軽い上方向からのスライド） */
+.page-enter {
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+.page-enter-active {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* 離脱時（フェードアウト＋軽い下方向スライド） */
+.page-exit {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.page-exit-active {
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+/* 低視差環境向けの最小遷移（prefers-reduced-motion は上で包括済み） */
+@media (prefers-reduced-motion: reduce) {
+    .page-transition {
+        transition: opacity 0.01ms linear !important, transform 0.01ms linear !important;
+    }
+}
 }
 
 /* フォーカス可視化 */

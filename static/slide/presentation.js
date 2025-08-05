@@ -50,8 +50,7 @@ class PresentationManager {
     }
 
     startPresentation() {
-        // 事前にユーザーが明示選択したモードでのみフルスクリーンへ入るようにする。
-        // ここではフルスクリーン要求の失敗時は通知し、プレゼンモード状態は戻す。
+        // まずはフルスクリーンを試さずに「プレゼンモード」へ入って描画を行う（ポップアップで失敗しやすいため）
         document.body.classList.add('presentation-mode');
 
         // キーボード操作: Space/Enter/→/↓ 次、←/↑ 前、Esc 終了
@@ -59,7 +58,7 @@ class PresentationManager {
             const code = e.code || e.key;
             if (['Space', 'Enter', 'ArrowRight', 'ArrowDown'].includes(code)) {
                 e.preventDefault();
-                this._pauseAllMedia(); // 次へ行く前に現スライドのメディアを止める
+                this._pauseAllMedia();
                 this.changePresentationSlide(1);
             } else if (['ArrowLeft', 'ArrowUp'].includes(code)) {
                 e.preventDefault();
@@ -72,30 +71,64 @@ class PresentationManager {
         };
         document.addEventListener('keydown', this._keyHandler, { capture: true });
 
-        // フルスクリーン要求はユーザー操作直後でないと拒否され得るため、Promiseを確実に扱う
-        this.app.elements.presentationView.requestFullscreen()
-            .then(() => {
-                this.renderPresentationSlide();
-                window.addEventListener('resize', this.renderPresentationSlide.bind(this));
-                // クリックで次のスライド
-                this._presentationClickHandler = (e) => {
-                    const rect = this.app.elements.presentationView.getBoundingClientRect();
-                    const x = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
-                    if (x < rect.left + rect.width / 2) {
-                        this._pauseAllMedia();
-                        this.changePresentationSlide(-1);
-                    } else {
-                        this._pauseAllMedia();
-                        this.changePresentationSlide(1);
-                    }
-                };
-                this.app.elements.presentationView.addEventListener('click', this._presentationClickHandler);
-            })
-            .catch(() => {
-                // フルスクリーンが拒否された場合はモード解除
-                ErrorHandler.showNotification('フルスクリーンの開始に失敗しました。', 'error');
-                this.stopPresentation();
-            });
+        // まずはスライド描画とクリックハンドラを設定
+        this.renderPresentationSlide();
+        window.addEventListener('resize', this.renderPresentationSlide.bind(this));
+        this._presentationClickHandler = (e) => {
+            const rect = this.app.elements.presentationView.getBoundingClientRect();
+            const x = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+            if (x < rect.left + rect.width / 2) {
+                this._pauseAllMedia();
+                this.changePresentationSlide(-1);
+            } else {
+                this._pauseAllMedia();
+                this.changePresentationSlide(1);
+            }
+        };
+        this.app.elements.presentationView.addEventListener('click', this._presentationClickHandler);
+
+        // フルスクリーンは「同一ユーザー操作直後」のみ有効なブラウザが多い。
+        // 親ウインドウのクリック由来でないポップアップでは拒否されやすいため、
+        // 以下のフォールバック: 1) まずは非フルスクリーンで開始 2) 画面上に「全画面にする」ボタンを表示し、ユーザー操作で再試行
+        const tryFullscreen = async () => {
+            try {
+                if (!document.fullscreenElement) {
+                    await this.app.elements.presentationView.requestFullscreen();
+                }
+                // 成功時は案内ボタンを隠す
+                const btn = document.getElementById('enter-fullscreen-hint');
+                if (btn) btn.remove();
+            } catch (e) {
+                // 失敗してもプレゼンは継続。エラー通知は出し過ぎないためログのみ
+                if (window.developmentMode) console.warn('Fullscreen request rejected in popup:', e);
+            }
+        };
+
+        // ヒントボタンを動的に用意（存在しなければ作る）
+        const ensureHintButton = () => {
+            let btn = document.getElementById('enter-fullscreen-hint');
+            if (!btn) {
+                btn = document.createElement('button');
+                btn.id = 'enter-fullscreen-hint';
+                btn.textContent = '全画面にする';
+                Object.assign(btn.style, {
+                    position: 'fixed',
+                    right: '16px',
+                    top: '16px',
+                    zIndex: 99999,
+                    padding: '8px 12px'
+                });
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    tryFullscreen();
+                });
+                document.body.appendChild(btn);
+            }
+        };
+
+        // 親ウインドウ由来の「ユーザー操作直後」であればここで試行、それ以外はヒントボタンを表示してユーザーに委ねる
+        // ポップアップ文脈では多くのブラウザで拒否されるため、常にボタンを出す運用に寄せる
+        ensureHintButton();
     }
 
     stopPresentation() {
@@ -168,6 +201,38 @@ class PresentationManager {
         // ただし、DOM要素自体はキャッシュされないため、App.domElementCacheに依存する
         // App.domElementCacheはrenderSlideCanvasで管理されているため、ここではDOMから削除するだけで良い
         document.body.removeChild(tempContainer);
+    }
+
+    // 現在のプレゼン表示領域内のすべてのメディアを一時停止する
+    _pauseAllMedia() {
+        try {
+            const container = this.app?.elements?.presentationSlideContainer || document;
+            const medias = container.querySelectorAll('video, audio');
+            medias.forEach(m => {
+                try {
+                    if (typeof m.pause === 'function') m.pause();
+                    // 停止時に位置は維持（必要なら 0 に戻す場合は次行を有効化）
+                    // m.currentTime = 0;
+                } catch (_) {}
+            });
+        } catch (_) {}
+    }
+
+    // autoplay 指定のメディアのみ再生する（存在しなければ何もしない）
+    _playAutoplayMedia() {
+        try {
+            const container = this.app?.elements?.presentationSlideContainer || document;
+            const medias = container.querySelectorAll('video[autoplay], audio[autoplay]');
+            medias.forEach(m => {
+                try {
+                    // ミュートされていないと自動再生がブロックされる場合があるため条件付きで再生
+                    const playPromise = m.play?.();
+                    if (playPromise && typeof playPromise.catch === 'function') {
+                        playPromise.catch(() => {/* ブロックされても握りつぶし */});
+                    }
+                } catch (_) {}
+            });
+        } catch (_) {}
     }
 
     renderPresentationSlide() {

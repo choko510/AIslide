@@ -1,4 +1,160 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // ---- ページ遷移（フルリロード向け）初期化 ----
+    (function setupFullReloadTransition() {
+        const doc = document;
+        const body = document.body;
+
+        // ---- 軽量プリフェッチ（先読み）機能 ----
+        // 目的: ホバー/タッチ開始で対象ページを fetch してブラウザHTTPキャッシュへ格納し、実遷移を高速化
+        // 対象: data-prefetch または data-transition を持つ a/button/要素（/plan/ を含む）
+        const prefetchCache = new Set();
+        const PREFETCH_TIMEOUT = 4000;
+
+        function canPrefetch(url) {
+            try {
+                const u = new URL(url, window.location.href);
+                if (u.origin !== window.location.origin) return false;
+                // GETのみ、拡張子付き静的資産は除外（htmlルート想定を優先）
+                const path = u.pathname;
+                const ext = path.split('.').pop();
+                const blockList = ['png','jpg','jpeg','gif','webp','svg','pdf','zip','rar','css','js','map','ico','json'];
+                if (blockList.includes(ext)) return false;
+                return true;
+            } catch {
+                return false;
+            }
+        }
+
+        function prefetch(url) {
+            if (!canPrefetch(url)) return;
+            const abs = new URL(url, window.location.href).href;
+            if (prefetchCache.has(abs)) return;
+            prefetchCache.add(abs);
+
+            // fetch を使って HTML を先読み（no-cors ではなく same-origin）
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), PREFETCH_TIMEOUT);
+            fetch(abs, {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: { 'X-Prefetch': '1' },
+                signal: controller.signal
+            }).catch(() => {
+                // 失敗は無視（本番遷移時は通常ロードされる）
+            }).finally(() => {
+                clearTimeout(id);
+            });
+        }
+
+        function findHrefFromElement(el) {
+            // a 要素: href
+            const a = el.closest('a[href]');
+            if (a) return a.getAttribute('href');
+
+            // data-href（button等）に対応（main.htmlのAIボタンなど）
+            const btn = el.closest('[data-href]');
+            if (btn) return btn.getAttribute('data-href');
+
+            // 特定IDのフォールバック
+            const aiBtn = el.closest('#create-with-ai');
+            if (aiBtn) return '/plan/';
+
+            return null;
+        }
+
+        // マウスオーバー/タッチ開始でプリフェッチ
+        doc.addEventListener('mouseover', (e) => {
+            const href = findHrefFromElement(e.target);
+            if (!href) return;
+            // 遷移アニメ対象のヒューリスティック: data-transition or /plan/
+            const targetEl = e.target.closest('[data-transition], #create-with-ai, a[href*="/plan/"], a[href="/plan/"]');
+            if (!targetEl) return;
+
+            prefetch(href);
+            targetEl.classList.add('link-prefetching');
+        }, { passive: true });
+
+        doc.addEventListener('touchstart', (e) => {
+            const href = findHrefFromElement(e.target);
+            if (!href) return;
+            const targetEl = e.target.closest('[data-transition], #create-with-ai, a[href*="/plan/"], a[href="/plan/"]');
+            if (!targetEl) return;
+
+            prefetch(href);
+            targetEl.classList.add('link-prefetching');
+        }, { passive: true });
+
+        // 離脱時クラス除去（見た目用）
+        doc.addEventListener('mouseout', (e) => {
+            const el = e.target.closest('.link-prefetching');
+            if (el) el.classList.remove('link-prefetching');
+        }, { passive: true });
+
+        // 初回入場アニメーション
+        body.classList.add('page-transition', 'page-enter');
+        // 次フレームで enter-active に変更
+        requestAnimationFrame(() => {
+            body.classList.add('page-enter-active');
+            // トランジション終了でクリーンアップ
+            const onEnterEnd = (e) => {
+                if (e.target !== body) return;
+                body.classList.remove('page-enter', 'page-enter-active');
+                body.removeEventListener('transitionend', onEnterEnd);
+            };
+            body.addEventListener('transitionend', onEnterEnd);
+        });
+
+        // 同一タブ通常リンクのクリックで離脱アニメーション
+        doc.addEventListener('click', (ev) => {
+            // 修飾キーや中クリック、ダウンロード、外部、#アンカーは除外
+            if (ev.defaultPrevented) return;
+            const a = ev.target.closest('a');
+            if (!a) return;
+            if (a.target && a.target !== '_self') return;
+            if (a.hasAttribute('download')) return;
+            const href = a.getAttribute('href');
+            if (!href || href.startsWith('#')) return;
+
+            // 同一オリジンのみ
+            const url = new URL(href, window.location.href);
+            if (url.origin !== window.location.origin) return;
+
+            // ファイル拡張子が .pdf 等の直接ダウンロード/外部資産でないことを軽くチェック
+            const path = url.pathname;
+            const ext = path.split('.').pop();
+            const blockList = ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'zip', 'rar'];
+            if (blockList.includes(ext)) return;
+
+            // data-no-transition が付与されている場合はスキップ
+            if (a.dataset.noTransition === 'true') return;
+
+            // ここまで来たら遷移をアニメーション付きで実行
+            ev.preventDefault();
+
+            // 離脱アニメーション開始
+            // 既存の enter 系があれば除去
+            body.classList.remove('page-enter', 'page-enter-active');
+            body.classList.add('page-transition', 'page-exit');
+            // 次フレームで exit-active へ
+            requestAnimationFrame(() => {
+                body.classList.add('page-exit-active');
+                const MAX_WAIT = 450; // フォールバック
+                let navigated = false;
+                const go = () => {
+                    if (navigated) return;
+                    navigated = true;
+                    window.location.href = url.href;
+                };
+                const onExitEnd = (e) => {
+                    if (e.target !== body) return;
+                    body.removeEventListener('transitionend', onExitEnd);
+                    go();
+                };
+                body.addEventListener('transitionend', onExitEnd);
+                setTimeout(go, MAX_WAIT);
+            });
+        }, true);
+    })();
     const authArea = document.getElementById('auth-area');
     const loginModal = document.getElementById('login-modal');
     const registerModal = document.getElementById('register-modal');
@@ -7,6 +163,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const showRegisterModalBtn = document.getElementById('show-register-modal');
     const showLoginModalBtn = document.getElementById('show-login-modal');
     const createNewSlideBtn = document.getElementById('create-new-slide-btn');
+    const newPresentationModal = document.getElementById('new-presentation-modal');
+    const createWithAIBtn = document.getElementById('create-with-ai');
+    const createFromScratchBtn = document.getElementById('create-from-scratch');
+    const newPresentationCancelBtn = document.getElementById('new-presentation-cancel');
     const slideListContainer = document.getElementById('slide-list');
 
     const API_BASE_URL = ''; // FastAPIが同じオリジンで提供されるため空文字列
@@ -331,6 +491,12 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.classList.add('is-open');
     }
 
+    // 新規作成の選択ダイアログを開く
+    function openNewPresentationChoice() {
+        if (!newPresentationModal) return;
+        openModal(newPresentationModal);
+    }
+
     function closeModal(modal) {
         modal.classList.remove('is-open');
     }
@@ -446,9 +612,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`${API_BASE_URL}/auth/login`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/x-www-form-urlencoded'
                 },
-                body: JSON.stringify({ username, password })
+                body: new URLSearchParams({ username, password })
             });
 
             if (response.ok) {
@@ -605,6 +771,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // 既存: 直接スライドを作成する関数（必要時に使用）
     async function handleCreateNewSlide() {
         const token = getToken();
         if (!token) {
@@ -614,17 +781,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            // ローディング通知
             showToast(getMessage('processing'), '', 'info', 2000);
-            
-            // FastAPIのSlideCreateスキーマに合わせて空のslide_dataを送信
             const response = await fetch(`${API_BASE_URL}/slides`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ slide_data: "{}" }) // 空のJSONオブジェクトを送信
+                body: JSON.stringify({ slide_data: "{}" })
             });
 
             if (response.ok) {
@@ -642,6 +806,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 getMessage('slide_create_error');
             await showCustomAlert(errorMessage, getMessage('slide_error_title'), 'error');
         }
+    }
+
+    // 新しいプレゼンテーションの選択肢ボタン動作
+    if (newPresentationModal) {
+        newPresentationModal.addEventListener('click', (e) => {
+            if (e.target === newPresentationModal) closeModal(newPresentationModal);
+        });
+    }
+    // ヘッダーXボタン
+    if (newPresentationCancelBtn) {
+        newPresentationCancelBtn.addEventListener('click', () => {
+            if (newPresentationModal) closeModal(newPresentationModal);
+        });
+    }
+    // フッターのキャンセル（存在すれば）
+    const newPresentationCancelFooter = document.getElementById('new-presentation-cancel-footer');
+    if (newPresentationCancelFooter) {
+        newPresentationCancelFooter.addEventListener('click', () => {
+            if (newPresentationModal) closeModal(newPresentationModal);
+        });
+    }
+    if (createWithAIBtn) {
+                // プリフェッチ対象として data-href をセット（上部のプリフェッチが参照）
+                createWithAIBtn.setAttribute('data-href', '/plan/');
+                // 直接の location.href 遷移は main.html 側のフォールバックで a に変換して実行
+            }
+    if (createFromScratchBtn) {
+        createFromScratchBtn.addEventListener('click', async () => {
+            // 0から作成: 既存のスライド作成API呼び出し後、slide.htmlへ
+            await handleCreateNewSlide();
+        });
     }
 
     function handleEditSlide(slideId) {
@@ -691,7 +886,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- イベントリスナー登録 ---
     loginForm.addEventListener('submit', handleLogin);
     registerForm.addEventListener('submit', handleRegister);
-    createNewSlideBtn.addEventListener('click', handleCreateNewSlide);
+    // クリック時はまず選択モーダルを開く
+    if (createNewSlideBtn) {
+        createNewSlideBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            openNewPresentationChoice();
+        });
+    }
 
     // 設定モーダルのイベントリスナー
     const settingsModal = document.getElementById('settings-modal');

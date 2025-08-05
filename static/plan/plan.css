@@ -1,108 +1,179 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap');
+/* AIslide Plan page - align with dashboard design (style.css) */
+/* ダークモード依存を排除し、常にライトテーマの色で固定する */
 
+/* 固定ライトテーマの疑似トークン（style.cssの値を参照して固定色に展開） */
+:root {
+    --fixed-bg-primary: #ffffff;
+    --fixed-bg-secondary: #f8fafc;
+    --fixed-text-primary: #1e293b;
+    --fixed-text-secondary: #64748b;
+    --fixed-text-muted: #94a3b8;
+    --fixed-border: #e2e8f0;
+    --fixed-primary: #2563eb;
+    --fixed-primary-hover: #1d4ed8;
+    --fixed-shadow: 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -2px rgba(0,0,0,.05);
+
+    --plan-max-width: 760px;
+}
+
+/* Full-height layout like dashboard main area */
 body {
-    font-family: 'Noto Sans JP', sans-serif;
-    background-color: #f0f2f5;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
+    background: var(--fixed-bg-primary);
+    color: var(--fixed-text-primary);
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
     margin: 0;
-    color: #333;
+    font-family: "Inter", "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+/* Container */
 .planner-container {
-    width: 100%;
-    max-width: 600px;
-    padding: 20px;
+    width: min(var(--plan-max-width), 92vw);
+    padding: 28px 20px 24px;
 }
 
+/* Progress bar aligned with theme */
 #progress-bar-container {
     width: 100%;
-    background-color: #e0e0e0;
-    border-radius: 5px;
-    margin-bottom: 20px;
+    height: 10px;
+    background: var(--fixed-bg-secondary);
+    border: 1px solid var(--fixed-border);
+    border-radius: 999px;
+    margin: 4px 0 18px;
+    overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.04);
 }
 
 #progress-bar {
     width: 0%;
-    height: 10px;
-    background-color: #4CAF50;
-    border-radius: 5px;
+    height: 100%;
+    background: linear-gradient(90deg, var(--fixed-primary) 0%, #60a5fa 100%);
+    border-radius: inherit;
     transition: width 0.3s ease-in-out;
 }
 
+/* Card */
 #card {
-    background-color: white;
-    padding: 40px;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    text-align: center;
+    background: var(--fixed-bg-secondary);
+    padding: 28px 24px;
+    border-radius: 16px;
+    border: 1px solid var(--fixed-border);
+    box-shadow: var(--fixed-shadow);
 }
 
 #question-container h2 {
-    margin-top: 0;
-    margin-bottom: 30px;
-    font-size: 1.5em;
+    margin: 0 0 18px;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--fixed-text-primary);
+    text-align: left;
 }
 
+/* Input */
 #question-container input[type="text"] {
-    width: calc(100% - 24px);
-    padding: 12px;
-    margin-bottom: 20px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    font-size: 1em;
+    width: 100%;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    border: 2px solid var(--fixed-border);
+    border-radius: 8px;
+    background: var(--fixed-bg-primary);
+    color: var(--fixed-text-primary);
+    font-size: 1rem;
+    transition: var(--transition-smooth);
 }
 
+#question-container input[type="text"]::placeholder {
+    color: var(--fixed-text-muted);
+}
+
+#question-container input[type="text"]:focus {
+    outline: none;
+    border-color: var(--fixed-primary);
+    box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+}
+
+/* Options (buttons as cards) */
 .option-button {
-    display: block;
+    display: flex;
     width: 100%;
-    padding: 15px;
+    padding: 14px 14px;
     margin: 10px 0;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    background-color: #f9f9f9;
+    border: 1px solid var(--fixed-border);
+    border-radius: 12px;
+    background: var(--fixed-bg-primary);
+    color: var(--fixed-text-primary);
     cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s;
-    font-size: 1em;
+    transition: var(--transition-smooth);
+    font-size: 0.98rem;
+    align-items: center;
+    gap: 10px;
 }
 
 .option-button:hover {
-    background-color: #f0f0f0;
-    border-color: #aaa;
+    background: var(--fixed-bg-secondary);
+    border-color: var(--fixed-primary);
+    transform: translateY(-1px);
+    box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
 }
 
+/* Navigation */
 #navigation-container {
     display: flex;
     justify-content: space-between;
-    margin-top: 30px;
+    align-items: center;
+    gap: 10px;
+    margin-top: 20px;
+}
+#navigation-container .nav-left,
+#navigation-container .nav-right{
+    display: flex;
+    gap: 10px;
+    align-items: center;
 }
 
 .nav-button, #next-button {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 5px;
+    padding: 10px 16px;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 1em;
-    font-weight: bold;
-    transition: background-color 0.2s;
-}
-
-#prev-button {
-    background-color: #ddd;
-    color: #333;
+    font-size: 0.95rem;
+    font-weight: 600;
+    transition: all .3s cubic-bezier(.4,0,.2,1);
+    border: 1px solid var(--fixed-border);
+    background: var(--fixed-bg-primary);
+    color: var(--fixed-text-primary);
+    min-width: 120px;
 }
 
 #prev-button:hover {
-    background-color: #ccc;
+    background: var(--fixed-bg-secondary);
+}
+#skip-button{
+    background: var(--fixed-bg-primary);
+    color: var(--fixed-text-secondary);
+    border: 1px dashed var(--fixed-border);
+}
+#skip-button:hover{
+    background: var(--fixed-bg-secondary);
+    color: var(--fixed-text-primary);
+    border-style: solid;
 }
 
 #next-button {
-    background-color: #007bff;
-    color: white;
+    background: var(--fixed-primary);
+    border-color: var(--fixed-primary);
+    color: #fff;
 }
 
 #next-button:hover {
-    background-color: #0056b3;
+    background: var(--fixed-primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+}
+
+/* Responsive */
+@media (max-width: 520px){
+    .planner-container{ padding: 18px 14px; }
+    #card{ padding: 20px 16px; }
+    #question-container h2{ font-size: 1.2rem; }
 }

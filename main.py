@@ -201,8 +201,15 @@ client_timeout = httpx.Timeout(connect=1.0, read=5.0, write=5.0, pool=2.0)
 shared_http_client = httpx.AsyncClient(http2=True, timeout=client_timeout, headers={"Accept-Encoding": "gzip, deflate"})
 
 # --- URL Safety (Blocklist) Utilities ---
-PHISHING_LIST_URL = "https://malware-filter.gitlab.io/malware-filter/phishing-filter-domains.txt"
-URLHAUS_LIST_URL = "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-domains-online.txt"
+BLOCK_LIST = [
+    "https://phishing.army/download/phishing_army_blocklist.txt",
+    "https://malware-filter.gitlab.io/malware-filter/phishing-filter-domains.txt",
+    "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-domains-online.txt",
+]
+# 追加の外部ブロックリストは別配列で管理（存在しないインデックス参照を避ける）
+EXTRA_BLOCKLISTS = [
+    "https://raw.githubusercontent.com/Spam404/lists/master/main-blacklist.txt",
+]
 
 # メモリキャッシュ（アプリ存続期間内）
 _blocklist_cache: dict[str, set[str]] = {"phishing": set(), "urlhaus": set()}
@@ -211,6 +218,85 @@ _blocklist_lock = asyncio.Lock()
 # 1日(24h)に1回の更新
 _BLOCKLIST_TTL = 24 * 60 * 60.0  # 86400秒
 _blocklist_expire_at: float = 0.0
+
+async def _ensure_blocklists_loaded(*, force: bool = False) -> None:
+    """
+    ブロックリストを一度だけ（もしくはTTL切れ/強制時）読み込み、アプリ内メモリにキャッシュする。
+    - force=True のとき: TTLに関係なく再取得を試みる
+    - TTL切れ: 最終取得時刻から24時間経過で更新
+    失敗しても既存のキャッシュは保持する（フォールバック）。
+    """
+    global _blocklist_loaded, _blocklist_expire_at, _blocklist_cache
+
+    now = asyncio.get_event_loop().time()
+    if not force and _blocklist_loaded and _blocklist_expire_at > now:
+        # 既にロード済みかつTTL内
+        return
+
+    async with _blocklist_lock:
+        # ダブルチェック（同時呼び出し対策）
+        now = asyncio.get_event_loop().time()
+        if not force and _blocklist_loaded and _blocklist_expire_at > now:
+            return
+
+        # 並列ダウンロード
+        try:
+            # BLOCK_LIST は 0..2 の3件構成。0/1 が phishing、2 が urlhaus。
+            # EXTRA_BLOCKLISTS は任意個。全て phishing 側として取り扱う。
+            core_tasks = [
+                _download_blocklist(BLOCK_LIST[0]),  # phishing.army (phishing)
+                _download_blocklist(BLOCK_LIST[1]),  # malware-filter phishing (phishing)
+                _download_blocklist(BLOCK_LIST[2]),  # urlhaus online (urlhaus)
+            ]
+            extra_tasks = [_download_blocklist(url) for url in EXTRA_BLOCKLISTS]  # Spam404 など
+            tasks = core_tasks + extra_tasks
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            phishing_sets: list[set[str]] = []
+            urlhaus_sets: list[set[str]] = []
+
+            # マッピング:
+            #  - phishing: core indices 0,1 + all extras (idx >= len(core_tasks))
+            #  - urlhaus : core index 2
+            for idx, res in enumerate(results):
+                if isinstance(res, Exception):
+                    logger.error(f"Blocklist task {idx} failed: {res}", exc_info=True)
+                    continue
+                if idx in (0, 1) or idx >= len(core_tasks):
+                    phishing_sets.append(res)
+                elif idx == 2:
+                    urlhaus_sets.append(res)
+
+            # old mirror.cedia はドメインリスト形式だが品質不確実のため現状は未使用
+            # 必要になれば以下の通りで追加可能:
+            # cedia = await _download_blocklist(BLOCK_LIST[1])
+            # phishing_sets.append(cedia)
+
+            # 集約してセット化
+            phishing = set().union(*phishing_sets) if phishing_sets else set()
+            urlhaus = set().union(*urlhaus_sets) if urlhaus_sets else set()
+
+
+            common = phishing & urlhaus
+            if common:
+                urlhaus = urlhaus - common
+
+            # 最低限の正規化（空要素は _download_blocklist 側で排除済み）
+            # キャッシュに反映（全置換）
+            _blocklist_cache["phishing"] = phishing
+            _blocklist_cache["urlhaus"] = urlhaus
+
+            _blocklist_loaded = True
+            _blocklist_expire_at = asyncio.get_event_loop().time() + _BLOCKLIST_TTL
+
+            logger.info(
+                f"Blocklists loaded: phishing={len(phishing)}, urlhaus={len(urlhaus)}, ttl={_BLOCKLIST_TTL}s, extras={len(EXTRA_BLOCKLISTS)}"
+            )
+        except Exception as e:
+            # 失敗時はロードフラグやTTLは更新しない（既存キャッシュを維持）
+            logger.error(f"Failed to load blocklists: {e}", exc_info=True)
+            # 起動時強制プリフェッチが失敗した場合でもアプリは動作継続する
+            return
 
 def _extract_domain_from_url(url: str) -> Optional[str]:
     """
@@ -227,15 +313,25 @@ def _extract_domain_from_url(url: str) -> Optional[str]:
     except Exception:
         return None
 
-def _domain_matches(blocked: str, target: str) -> bool:
+def _check_domain_safety(domain: str) -> Optional[Dict[str, str]]:
     """
-    サブドメインも含めて一致判定。
-    blocked: example.com
-    target:  a.b.example.com -> True,  example.net -> False
+    ドメインがブロックリストに含まれるかチェックする。高速なセット検索を利用。
+    サブドメインのマッチングも行う。
+    含まれる場合は {"matched_domain": str, "source": str} を返す。
     """
-    if target == blocked:
-        return True
-    return target.endswith("." + blocked)
+    if not domain:
+        return None
+
+    parts = domain.split('.')
+    # 少なくとも2つの部分（例: example.com）からなるドメインのみをチェック対象とする
+    # range(len(parts) - 1) は ["a.b.c", "b.c"] を生成するが "c" は生成しない
+    domain_variants = [".".join(parts[i:]) for i in range(len(parts) - 1)]
+
+    for source, blocklist in _blocklist_cache.items():
+        for variant in domain_variants:
+            if variant in blocklist:
+                return {"matched_domain": variant, "source": str(source)}
+    return None
 
 async def _download_blocklist(url: str) -> set[str]:
     """
@@ -265,23 +361,7 @@ async def _download_blocklist(url: str) -> set[str]:
         logger.error(f"Blocklist download failed: {url} : {e}", exc_info=True)
         return set()
 
-async def _ensure_blocklists_loaded(force: bool = False):
-    global _blocklist_loaded, _blocklist_expire_at
-    async with _blocklist_lock:
-        now = asyncio.get_event_loop().time()
-        if not force and _blocklist_loaded and now < _blocklist_expire_at:
-            return
-        phishing, urlhaus = await asyncio.gather(
-            _download_blocklist(PHISHING_LIST_URL),
-            _download_blocklist(URLHAUS_LIST_URL),
-        )
-        if phishing:
-            _blocklist_cache["phishing"] = phishing
-        if urlhaus:
-            _blocklist_cache["urlhaus"] = urlhaus
-        _blocklist_loaded = True
-        _blocklist_expire_at = now + _BLOCKLIST_TTL
-        logger.info(f"Blocklists loaded (TTL={int(_BLOCKLIST_TTL)}s). phishing={len(_blocklist_cache['phishing'])}, urlhaus={len(_blocklist_cache['urlhaus'])}")
+
 
 # Simple in-memory TTL cache
 # key: str -> (expires_epoch: float, value: Any)
@@ -332,16 +412,11 @@ async def url_safe_check(payload: URLRequest):
     if not domain:
         return URLSafetyResponse(safe=False, reason="invalid_url")
 
-    # 照合（サブドメイン含む）
-    for source in ("phishing", "urlhaus"):
-        for blocked in _blocklist_cache[source]:
-            if _domain_matches(blocked, domain):
-                return URLSafetyResponse(
-                    safe=False,
-                    reason="matched",
-                    matched_domain=blocked,
-                    source=source,
-                )
+    # 高速なドメインチェック
+    match = _check_domain_safety(domain)
+    if match:
+        return URLSafetyResponse(safe=False, reason="matched", **match)
+
     return URLSafetyResponse(safe=True, reason="clean")
 
 async def _retrying_get(client: httpx.AsyncClient, url: str, *, params: dict[str, Any], max_retries: int = 2, max_backoff_sec: float = 2.0) -> httpx.Response:
@@ -889,34 +964,35 @@ async def safe_redirect(url: str):
         <html lang="ja">
         <head><meta charset="utf-8"><title>ブロックされました</title></head>
         <body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 2rem;">
-          <h1>安全でない可能性のあるURLです</h1>
-          <p>指定されたURLは不正な形式のため、リダイレクトを中止しました。</p>
+            <h1>安全でない可能性のあるURLです</h1>
+            <p>指定されたURLは不正な形式のため、リダイレクトを中止しました。</p>
         </body>
         </html>
         """
         return HTMLResponse(content=html, status_code=400)
 
     # ブロックチェック
-    for source in ("phishing", "urlhaus"):
-        for blocked in _blocklist_cache[source]:
-            if _domain_matches(blocked, domain):
-                # ブロック用の警告ページ
-                html = f"""
+    match = _check_domain_safety(domain)
+    if match:
+        # ブロック用の警告ページ
+        blocked = match['matched_domain']
+        source = match['source']
+        html = f"""
                 <!doctype html>
                 <html lang="ja">
                 <head><meta charset="utf-8"><title>ブロックされました</title></head>
                 <body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 2rem;">
-                  <h1 style="color:#b00020">危険な可能性のあるURLを検出しました</h1>
-                  <p>以下のドメインがブロックリスト（{source}）に一致しました。</p>
-                  <ul>
-                    <li>一致ドメイン: <code>{blocked}</code></li>
-                    <li>アクセス先: <code>{url}</code></li>
-                  </ul>
-                  <p>リダイレクトは中止されました。心当たりがない場合はこのページを閉じてください。</p>
+                    <h1 style="color:#b00020">危険な可能性のあるURLを検出しました</h1>
+                    <p>以下のドメインがブロックリスト（{source}）に一致しました。</p>
+                    <ul>
+                        <li>一致ドメイン: <code>{blocked}</code></li>
+                        <li>アクセス先: <code>{url}</code></li>
+                    </ul>
+                    <p>リダイレクトは中止されました。心当たりがない場合はこのページを閉じてください。</p>
                 </body>
                 </html>
                 """
-                return HTMLResponse(content=html, status_code=451)  # 451 Unavailable For Legal Reasons を流用（ブロック表示）
+        return HTMLResponse(content=html, status_code=451)  # 451 Unavailable For Legal Reasons を流用（ブロック表示）
 
     # 安全と判断 → 302 リダイレクト
     return RedirectResponse(url, status_code=302)

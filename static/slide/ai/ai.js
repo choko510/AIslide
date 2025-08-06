@@ -639,7 +639,9 @@ ${result.message}
         container.classList.add('question-container-wrapper');
 
         if (type === 'free_text') {
-            const questionText = questionNode.textContent.trim();
+            const questionText = (typeof questionNode.textContent === 'string')
+                ? questionNode.textContent.trim()
+                : '';
             const questionDiv = document.createElement('div');
             questionDiv.className = 'question-container';
             const p = document.createElement('p');
@@ -674,17 +676,45 @@ ${result.message}
             });
 
         } else if (type === 'multiple_choice') {
-            const questionText = questionNode.querySelector('text').textContent.trim();
-            const options = Array.from(questionNode.querySelectorAll('option')).map(o => o.textContent.trim());
+            // 安全に質問文と選択肢を抽出（null/欠損に耐性）
+            let questionText = '';
+            try {
+                const textNode = questionNode.querySelector && questionNode.querySelector('text');
+                if (textNode && typeof textNode.textContent === 'string') {
+                    questionText = textNode.textContent.trim();
+                }
+                if (!questionText && typeof questionNode.textContent === 'string') {
+                    // 子テキスト全体からも取得（改行やオプションを含む場合は先頭行のみ採用）
+                    const raw = questionNode.textContent.trim();
+                    questionText = raw.split('\n')[0].trim();
+                }
+            } catch (_) {
+                questionText = '';
+            }
+
+            // 選択肢抽出（空配列は後でフォールバック）
+            let options = [];
+            try {
+                options = Array.from(questionNode.querySelectorAll ? questionNode.querySelectorAll('option') : [])
+                    .map(o => (o && typeof o.textContent === 'string') ? o.textContent.trim() : '')
+                    .filter(t => t.length > 0);
+            } catch (_) {
+                options = [];
+            }
 
             const questionDiv = document.createElement('div');
             questionDiv.className = 'question-container';
             const p = document.createElement('p');
-            p.textContent = this.escapeHTML(questionText);
+            p.textContent = this.escapeHTML(questionText || '質問が取得できませんでした。');
             questionDiv.appendChild(p);
 
             const optionsContainer = document.createElement('div');
             optionsContainer.className = 'question-options';
+
+            // 選択肢が無い場合はフォールバック（Yes/No）
+            if (!options || options.length === 0) {
+                options = ['はい', 'いいえ'];
+            }
 
             options.forEach(optionText => {
                 const optionBtn = document.createElement('button');
@@ -692,7 +722,7 @@ ${result.message}
                 optionBtn.className = 'btn btn-secondary question-option-btn';
                 optionBtn.addEventListener('click', () => {
                     optionsContainer.querySelectorAll('button').forEach(btn => btn.disabled = true);
-                    this.handleQuestionResponse(questionText, optionText);
+                    this.handleQuestionResponse(questionText || '選択肢質問', optionText);
                 });
                 optionsContainer.appendChild(optionBtn);
             });
@@ -767,9 +797,70 @@ ${result.message}
                 // 画像の処理（失敗してもフォーム送信自体は続行する）
                 if (this.nextRequestImage) {
                     try {
-                        const res = await fetch(this.nextRequestImage);
-                        const blob = await res.blob();
-                        formData.append('image', blob, 'slide_capture.png');
+                        // 多様な入力形式(dataURL/Blob/File/URL)に耐える正規化
+                        const img = this.nextRequestImage;
+                        let blobToSend = null;
+                        let filename = 'slide_capture.png';
+
+                        const toPngBlob = async (blob) => {
+                            try {
+                                // ブラウザで PNG 化して正規化
+                                if (typeof createImageBitmap === 'function') {
+                                    const bmp = await createImageBitmap(blob);
+                                    const canvas = document.createElement('canvas');
+                                    canvas.width = bmp.width;
+                                    canvas.height = bmp.height;
+                                    const ctx = canvas.getContext('2d');
+                                    ctx.drawImage(bmp, 0, 0);
+                                    const dataUrl = canvas.toDataURL('image/png');
+                                    const b = await (await fetch(dataUrl)).blob();
+                                    return b;
+                                }
+                            } catch (e) {
+                                console.warn('画像正規化に失敗しました。フォールバックで送信します:', e);
+                            }
+                            // フォールバック: そのまま返す
+                            return blob;
+                        };
+
+                        if (typeof img === 'string') {
+                            if (img.startsWith('data:image/')) {
+                                // dataURL → Blob
+                                const dataRes = await fetch(img);
+                                let b = await dataRes.blob();
+                                b = await toPngBlob(b);
+                                blobToSend = b;
+                            } else {
+                                // 通常URL → fetchしてBlob化（CORS考慮）
+                                const res = await fetch(img, { mode: 'cors' });
+                                let b = await res.blob();
+                                b = await toPngBlob(b);
+                                blobToSend = b;
+                            }
+                        } else if (img instanceof Blob || (window.Blob && img && img.constructor && img.constructor.name === 'Blob')) {
+                            let b = img;
+                            b = await toPngBlob(b);
+                            blobToSend = b;
+                        } else if (img instanceof File || (window.File && img && img.constructor && img.constructor.name === 'File')) {
+                            let b = img;
+                            b = await toPngBlob(b);
+                            blobToSend = b;
+                            filename = img.name || filename;
+                        } else if (img && typeof img === 'object' && img.dataUrl) {
+                            // カスタムオブジェクト { dataUrl: 'data:image/...' } にも対応
+                            const dataRes = await fetch(img.dataUrl);
+                            let b = await dataRes.blob();
+                            b = await toPngBlob(b);
+                            blobToSend = b;
+                        } else {
+                            console.warn('未対応の画像入力形式。画像なしで続行します:', img);
+                        }
+
+                        if (blobToSend) {
+                            // 最終的に image/png として送る
+                            const finalBlob = blobToSend.type === 'image/png' ? blobToSend : new Blob([blobToSend], { type: 'image/png' });
+                            formData.append('image', finalBlob, filename);
+                        }
                     } catch (imgErr) {
                         console.warn('画像添付に失敗しました。画像なしで続行します:', imgErr);
                     } finally {
@@ -818,22 +909,28 @@ ${result.message}
                             
                             const chunk = decoder.decode(value, { stream: true });
                             fullResponse += chunk;
-
+    
                             if (contentDiv) {
                                 // ストリーミング中はtextContentで高速に更新し、最後にmarkedを適用する
                                 contentDiv.textContent = fullResponse;
                             }
+                        }
+                        // ストリーム完了時に既知の画像型エラーを検知してユーザに可視化
+                        if (fullResponse && /Unsupported image input type/i.test(fullResponse)) {
+                            const e = new Error('Unsupported image input type for normalization');
+                            e.isRetriable = false;
+                            throw e;
                         }
                     } finally {
                         // 読み取り中断/終了時にキャンセルを明示（Safariなどの実装差対策）
                         try { await reader.cancel(); } catch {}
                     }
                 }
-                
                 // バックエンドが "Error:" で始まるテキストを返す場合を検知
                 if (fullResponse?.trim().startsWith("Error:")) {
                     const backendErr = new Error(fullResponse.trim());
-                    backendErr.isRetriable = true; // サーバ側一時エラーの可能性
+                    // 画像型エラーは再試行しても意味がないため、非再試行に設定
+                    backendErr.isRetriable = !/Unsupported image input type/i.test(fullResponse);
                     throw backendErr;
                 }
 
@@ -851,13 +948,21 @@ ${result.message}
 
             } catch (error) {
                 console.error(`AI API呼び出しエラー (試行 ${attempt + 1}):`, error);
+                // 画像型エラーは再試行しても改善しないため即座にブレーク
+                if (/Unsupported image input type/i.test((error && error.message) ? error.message : '')) {
+                    lastError = error;
+                    break;
+                }
                 lastError = error;
             }
         }
         
-        const finalError = new Error(`AIコマンドの生成に失敗しました: ${lastError?.message || '不明なエラー'}`);
-        finalError.isRetriable = true;
-        throw finalError;
+        {
+            const finalError = new Error(`AIコマンドの生成に失敗しました: ${(lastError && lastError.message) ? lastError.message : '不明なエラー'}`);
+            // 非リトライ条件を踏襲（lastError.isRetriable が false の場合は非リトライ扱い）
+            finalError.isRetriable = lastError ? (lastError.isRetriable !== false) : true;
+            throw finalError;
+        }
     }
     
     _extractAndValidateCommand(rawResponse) {

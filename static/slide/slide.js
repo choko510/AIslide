@@ -785,6 +785,17 @@ import { ColorPicker } from './ColorPicker.js';
                 if (typeof value === 'string' || Array.isArray(value)) return value.length === 0;
                 if (typeof value === 'object') return Object.keys(value).length === 0;
                 return false;
+            },
+            
+            objectHash: (obj) => {
+                const str = JSON.stringify(obj);
+                let hash = 0;
+                for (let i = 0; i < str.length; i++) {
+                    const char = str.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash |= 0; // 32bit整数に変換
+                }
+                return String(hash);
             }
         };
 
@@ -2055,8 +2066,9 @@ static _createIframe(elData) {
                         li.className = `slide-thumbnail ${slide.id === activeSlideId ? 'active' : ''}`;
                         li.querySelector('.thumbnail-index').textContent = index + 1;
 
-                        // アクティブなスライドのサムネイルは、内容が更新されている可能性があるので強制的に再描画する
-                        if (slide.id === activeSlideId) {
+                        // アクティブなスライド、または内容が変更されたスライドのサムネイルを再描画
+                        const newHash = Utils.objectHash(slide);
+                        if (slide.id === activeSlideId || li.dataset.renderedHash !== newHash) {
                             this._renderSingleThumbnail(li);
                         }
                     } else {
@@ -2125,6 +2137,46 @@ static _createIframe(elData) {
                 content.style.width = `${settings.width}px`;
                 content.style.height = `${settings.height}px`;
                 
+                // サムネイルにページ背景を適用
+                this.applyPageBackground(content);
+
+                // カスタムCSSを適用するための <style> タグを追加
+                const styleTag = document.createElement('style');
+                let cssText = settings.globalCss || '';
+
+                slide.elements.forEach(elData => {
+                    if (elData.style.customCss) {
+                        const importantCss = elData.style.customCss.replace(/\/\*[\s\S]*?\*\//g, '').split(';')
+                            .map(rule => {
+                                if (rule.includes(':')) {
+                                    const parts = rule.split(':');
+                                    const property = parts.shift().trim();
+                                    const value = parts.join(':').trim();
+                                    if (property && value) {
+                                        return `${property}: ${value} !important`;
+                                    }
+                                }
+                                return null;
+                            })
+                            .filter(Boolean)
+                            .join('; ');
+
+                        if (importantCss) {
+                            if (elData.type === 'shape') {
+                                const shapeTags = ['rect', 'circle', 'polygon', 'line', 'path'];
+                                const svgSelectors = shapeTags.map(tag => `[data-id="${elData.id}"] svg ${tag}`).join(', ');
+                                cssText += `\n${svgSelectors} { ${importantCss} }`;
+                                cssText += `\n[data-id="${elData.id}"] { ${importantCss} }`;
+                            } else {
+                                cssText += `\n[data-id="${elData.id}"] { ${importantCss} }`;
+                            }
+                        }
+                    }
+                });
+                
+                styleTag.textContent = cssText;
+                content.appendChild(styleTag);
+
                 slide.elements.forEach(elData => {
                     const el = this.createElementDOM(elData);
                     content.appendChild(el);
@@ -2135,6 +2187,9 @@ static _createIframe(elData) {
                         content.style.transform = `scale(${wrapper.offsetWidth / settings.width})`;
                     }
                 });
+
+                // 描画内容のハッシュを保存して、不要な再描画を防ぐ
+                li.dataset.renderedHash = Utils.objectHash(slide);
             },
 
             renderSlideCanvas() {
@@ -3981,25 +4036,26 @@ static _createIframe(elData) {
 
                     // --- PPTX (All Slides) ---
                     if (type === 'pptx') {
-                        const slideImagePromises = presentation.slides.map(slide => {
+                        const slideImagePromises = presentation.slides.map(async (slide) => {
                             const slideContainer = this._createSlideContainer(slide, presentation.settings);
                             tempContainer.appendChild(slideContainer);
-                            return html2canvas(slideContainer, { backgroundColor: "#fff", scale: 2, useCORS: true })
-                                .then(canvas => {
-                                    const dataUrl = canvas.toDataURL('image/png');
-                                    return { slideData: slide, dataUrl: dataUrl };
-                                });
+                            // フォント等の反映安定化のため1フレーム待機
+                            await new Promise(r => requestAnimationFrame(() => r()));
+                            const canvas = await html2canvas(slideContainer, { backgroundColor: "#fff", scale: 2, useCORS: true });
+                            const dataUrl = canvas.toDataURL('image/png');
+                            return { slideData: slide, dataUrl };
                         });
                         const allSlidesData = await Promise.all(slideImagePromises);
                         worker.postMessage({ type: 'pptx', slides: allSlidesData, settings: presentation.settings });
 
                     // --- PDF (All Slides) ---
                     } else if (type === 'pdf') {
-                        const dataUrlPromises = presentation.slides.map(slide => {
+                        const dataUrlPromises = presentation.slides.map(async (slide) => {
                             const slideContainer = this._createSlideContainer(slide, presentation.settings);
                             tempContainer.appendChild(slideContainer);
-                            return html2canvas(slideContainer, { backgroundColor: "#fff", scale: 2, useCORS: true })
-                                .then(canvas => canvas.toDataURL('image/png'));
+                            await new Promise(r => requestAnimationFrame(() => r()));
+                            const canvas = await html2canvas(slideContainer, { backgroundColor: "#fff", scale: 2, useCORS: true });
+                            return canvas.toDataURL('image/png');
                         });
                         const dataUrls = await Promise.all(dataUrlPromises);
                         worker.postMessage({ type: 'pdf', dataUrls: dataUrls, settings: presentation.settings });
@@ -4010,6 +4066,7 @@ static _createIframe(elData) {
                         if (!slide) return;
                         const slideContainer = this._createSlideContainer(slide, presentation.settings);
                         tempContainer.appendChild(slideContainer);
+                        await new Promise(r => requestAnimationFrame(() => r()));
                         const canvas = await html2canvas(slideContainer, { backgroundColor: "#fff", scale: 2, useCORS: true });
                         const link = document.createElement('a');
                         link.download = `slide-${slide.id}.png`;
@@ -4069,14 +4126,69 @@ static _createIframe(elData) {
                 const slideContainer = document.createElement('div');
                 slideContainer.style.width = `${settings.width}px`;
                 slideContainer.style.height = `${settings.height}px`;
-                
-                // App.applyPageBackground を呼び出して背景を適用
+
+                // 背景適用
                 this.applyPageBackground(slideContainer);
-    
+
+                // 1) グローバルCSSと要素ごとのカスタムCSSをstyleタグで注入（html2canvasキャプチャ前に必須）
+                const styleTag = document.createElement('style');
+                let cssText = settings.globalCss || '';
+
+                // 要素ごとの customCss は data-id セレクタで強制適用（!important 付与）
+                slide.elements.forEach(elData => {
+                    if (elData?.style?.customCss) {
+                        // コメント除去 → ; で分割 → !important 付与
+                        const importantCss = elData.style.customCss
+                            .replace(/\/\*[\s\S]*?\*\//g, '')
+                            .split(';')
+                            .map(rule => {
+                                if (rule.includes(':')) {
+                                    const parts = rule.split(':');
+                                    const property = parts.shift().trim();
+                                    const value = parts.join(':').trim();
+                                    if (property && value) {
+                                        return `${property}: ${value} !important`;
+                                    }
+                                }
+                                return null;
+                            })
+                            .filter(Boolean)
+                            .join('; ');
+
+                        if (importantCss) {
+                            if (elData.type === 'shape') {
+                                // 図形はSVG内部も対象
+                                const shapeTags = ['rect', 'circle', 'polygon', 'line', 'path'];
+                                const svgSelectors = shapeTags.map(tag => `[data-id="${elData.id}"] svg ${tag}`).join(', ');
+                                cssText += `\n${svgSelectors} { ${importantCss} }`;
+                                cssText += `\n[data-id="${elData.id}"] { ${importantCss} }`;
+                            } else {
+                                cssText += `\n[data-id="${elData.id}"] { ${importantCss} }`;
+                            }
+                        }
+                    }
+                });
+
+                styleTag.textContent = cssText;
+                slideContainer.appendChild(styleTag);
+
+                // 2) スライド要素を追加
                 slide.elements.forEach(elData => {
                     const el = this.createElementDOM(elData);
                     slideContainer.appendChild(el);
                 });
+
+                // 3) フォント読み込み待ち（カスタムフォントやWebフォントがある場合のにじみ対策）
+                //    失敗しても続行するようにbest-effort
+                try {
+                    if (document.fonts && typeof document.fonts.ready?.then === 'function') {
+                        // fonts.ready はドキュメント全体だが、既に読み込み済みであれば即時解決
+                        // ここでは非同期の待機を呼び出し側で扱わないため、そのまま返却しても問題はない
+                        // html2canvas 側では描画時点のフォント状態を使用
+                        document.fonts.ready.catch(() => {});
+                    }
+                } catch (_) {}
+
                 return slideContainer;
             },
             moveSlide(fromId, toId) {

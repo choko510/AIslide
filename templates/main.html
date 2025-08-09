@@ -39,6 +39,7 @@
     <!-- Login Modal -->
     <div id="login-modal" class="modal">
         <div class="modal-content">
+            <button class="modal-close" aria-label="閉じる"><i class="fas fa-times"></i></button>
             <h2>ログイン</h2>
             <form id="login-form">
                 <input type="text" id="login-username" placeholder="ユーザー名" required>
@@ -54,6 +55,7 @@
     <!-- Register Modal -->
     <div id="register-modal" class="modal">
         <div class="modal-content">
+            <button class="modal-close" aria-label="閉じる"><i class="fas fa-times"></i></button>
             <h2>新規登録</h2>
             <form id="register-form">
                 <input type="text" id="register-username" placeholder="ユーザー名" required>
@@ -82,6 +84,7 @@
     <!-- Settings Modal -->
     <div id="settings-modal" class="modal">
         <div class="modal-content">
+            <button class="modal-close" aria-label="閉じる"><i class="fas fa-times"></i></button>
             <h2>設定</h2>
             <div class="settings-section">
                 <label for="settings-language-select">言語 / Language:</label>
@@ -99,10 +102,48 @@
                 </select>
             </div>
 
+            <div class="settings-section">
+                <h3>アカウント設定</h3>
+                <div class="account-setting">
+                    <span>ユーザー名: <span id="current-username"></span></span>
+                    <button id="update-username-btn" class="btn-link">変更</button>
+                </div>
+                <div class="account-setting">
+                    <span>パスワード</span>
+                    <button id="update-password-btn" class="btn-link">変更</button>
+                </div>
+            </div>
+
             <div class="settings-buttons">
                 <button id="settings-save-btn" class="settings-button primary">保存 / Save</button>
                 <button id="settings-cancel-btn" class="settings-button secondary">キャンセル / Cancel</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Update Username Modal -->
+    <div id="update-username-modal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" aria-label="閉じる"><i class="fas fa-times"></i></button>
+            <h2>ユーザー名の変更</h2>
+            <form id="update-username-form">
+                <input type="text" id="new-username" placeholder="新しいユーザー名" required>
+                <input type="password" id="password-for-username" placeholder="現在のパスワード" required>
+                <button type="submit">更新</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Update Password Modal -->
+    <div id="update-password-modal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" aria-label="閉じる"><i class="fas fa-times"></i></button>
+            <h2>パスワードの変更</h2>
+            <form id="update-password-form">
+                <input type="password" id="current-password" placeholder="現在のパスワード" required>
+                <input type="password" id="new-password" placeholder="新しいパスワード" required>
+                <button type="submit">更新</button>
+            </form>
         </div>
     </div>
 
@@ -148,169 +189,6 @@
     <div id="toast-container" class="toast-container"></div>
 
     <script type="module" src="{{ url_for('static', path='app.js') }}"></script>
-    <script>
-        // フォールバック: 直接 window.location.href 代入を避け、クリックで a による通常遷移に変更
-        // これにより app.js のグローバルクリックハンドラが離脱アニメーションを適用可能
-        document.addEventListener('DOMContentLoaded', () => {
-            const btn = document.getElementById('create-with-ai');
-            if (btn) {
-                // 先に <link rel="prefetch"> ヒントを付与（ブラウザ依存、効果がある場合は先読みされる）
-                const hint = document.createElement('link');
-                hint.rel = 'prefetch';
-                hint.href = '/plan/';
-                hint.as = 'document';
-                document.head.appendChild(hint);
-
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    // 動的に a 要素を作成してクリック（通常のナビゲーションにする）
-                    const a = document.createElement('a');
-                    a.href = '/plan/';
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                });
-            }
-        });
-    </script>
-    <style>
-        /* New Presentation Modal Enhancements */
-        .modal .modal-content.new-presentation {
-            position: relative;
-            width: min(640px, 92vw);
-            padding: 28px 24px 20px;
-            border-radius: 14px;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, .25);
-        }
-
-        .modal .modal-content.new-presentation .modal-title {
-            margin: 6px 0 4px;
-            font-size: 22px;
-            font-weight: 700;
-            text-align: center;
-        }
-
-        .modal .modal-content.new-presentation .modal-subtitle {
-            margin: 0 0 16px;
-            color: var(--text-muted, #667085);
-            font-size: 13px;
-            text-align: center;
-        }
-
-        .modal .modal-content.new-presentation .modal-close {
-            position: absolute;
-            right: 12px;
-            top: 12px;
-            width: 36px;
-            height: 36px;
-            border-radius: 10px;
-            border: 1px solid var(--border-color, #e5e7eb);
-            background: var(--bg, #fff);
-            display: grid;
-            place-items: center;
-            color: #6b7280;
-            transition: all .15s ease;
-        }
-
-        .modal .modal-content.new-presentation .modal-close:hover {
-            background: #f3f4f6;
-            color: #111827;
-        }
-
-        .choice-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 14px;
-            margin: 6px 0 6px;
-        }
-
-        @media (max-width: 520px) {
-            .choice-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .choice-card {
-            display: grid;
-            grid-template-columns: 48px 1fr;
-            align-items: center;
-            gap: 12px;
-            padding: 14px;
-            border-radius: 12px;
-            background: var(--surface, #fff);
-            border: 1px solid var(--border-color, #e5e7eb);
-            cursor: pointer;
-            text-align: left;
-            transition: transform .08s ease, box-shadow .2s ease, border-color .2s ease, background .2s ease;
-        }
-
-        .choice-card:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, .08);
-            border-color: #cbd5e1;
-            background: #f9fafb;
-        }
-
-        .choice-card.primary {
-            background: #eef2ff;
-            border-color: #c7d2fe;
-        }
-
-        .choice-card.primary:hover {
-            background: #e0e7ff;
-            border-color: #a5b4fc;
-        }
-
-        .choice-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 12px;
-            display: grid;
-            place-items: center;
-            color: #1f6feb;
-            background: #e8f1ff;
-            font-size: 20px;
-        }
-
-        .choice-card.primary .choice-icon {
-            color: #6d28d9;
-            background: #f0e9ff;
-        }
-
-        .choice-title {
-            font-weight: 700;
-            font-size: 15px;
-            margin-bottom: 4px;
-            color: var(--text, #111827);
-        }
-
-        .choice-desc {
-            font-size: 12px;
-            color: #6b7280;
-        }
-
-        .modal-actions {
-            margin-top: 14px;
-            display: flex;
-            justify-content: center;
-        }
-
-        .ghost-btn {
-            padding: 10px 14px;
-            border-radius: 10px;
-            border: 1px solid var(--border-color, #e5e7eb);
-            background: #fff;
-            color: #374151;
-            font-size: 14px;
-            transition: background .15s ease, color .15s ease, border-color .15s ease;
-        }
-
-        .ghost-btn:hover {
-            background: #f3f4f6;
-            border-color: #d1d5db;
-            color: #111827;
-        }
-    </style>
 </body>
 
 </html>

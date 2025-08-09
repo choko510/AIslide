@@ -19,7 +19,7 @@ class IconManager {
 
     async loadIconData() {
         try {
-            const response = await fetch('icons.json');
+            const response = await fetch('/static/slide/icons.json');
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -472,7 +472,6 @@ class IconManager {
     }
     
     updateIconStyle(element, newStylePrefix) {
-        this.app.stateManager._saveToHistory();
         if (element.iconType === 'fa') {
             // Font Awesomeの場合、クラス名を更新
             element.content = element.content.replace(/^(fas|far|fal|fat)\s/, newStylePrefix + ' ');

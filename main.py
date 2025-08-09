@@ -6,6 +6,7 @@ from datetime import timedelta
 from typing import Annotated, Optional, List, Dict, Any
 import asyncio
 import httpx
+import base64
 
 from fastapi import (
     FastAPI, Depends, HTTPException, status, UploadFile,
@@ -134,6 +135,7 @@ class UserUpdatePassword(BaseModel):
 
 class UserUpdateUsername(BaseModel):
     new_username: str
+    password: str
 
 class FileResponse(BaseModel):
     id: int
@@ -145,10 +147,12 @@ class FileResponse(BaseModel):
         from_attributes = True
 
 class SlideCreate(BaseModel):
+    # HTTP APIではBase64エンコードされた文字列としてデータを受け取る
     slide_data: str
 
 class SlideResponse(BaseModel):
     id: int
+    # HTTP APIではBase64エンコードされた文字列としてデータを返す
     slide_data: str
     owner_id: int
 
@@ -169,6 +173,42 @@ class URLSafetyResponse(BaseModel):
 
 class WordRequest(BaseModel):
     keyword: str
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, List[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, slide_id: str):
+        await websocket.accept()
+        if slide_id not in self.active_connections:
+            self.active_connections[slide_id] = []
+        self.active_connections[slide_id].append(websocket)
+
+    def disconnect(self, websocket: WebSocket, slide_id: str):
+        if slide_id in self.active_connections:
+            self.active_connections[slide_id].remove(websocket)
+            if not self.active_connections[slide_id]:
+                del self.active_connections[slide_id]
+
+    async def send_personal_message(self, message: bytes, websocket: WebSocket):
+        await websocket.send_bytes(message)
+
+    async def broadcast_bytes(self, message: bytes, slide_id: str, sender: Optional[WebSocket] = None):
+        if slide_id in self.active_connections:
+            for connection in self.active_connections[slide_id]:
+                if connection != sender:
+                    await connection.send_bytes(message)
+
+    async def broadcast_text(self, message: str, slide_id: str, sender: Optional[WebSocket] = None):
+        if slide_id in self.active_connections:
+            for connection in self.active_connections[slide_id]:
+                if connection != sender:
+                    await connection.send_text(message)
+
+manager = ConnectionManager()
+
+# In-memory storage for slides, mapping slide_id to its data (bytes)
+slides: Dict[str, bytes] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -193,6 +233,9 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Lifespan shutdown cleanup failed: {e}", exc_info=True)
 
 app = FastAPI(lifespan=lifespan)
+
+# Development flag: allow anonymous WS and auto-create slide if missing
+ALLOW_ANON_WS = True
 
 # --- HTTP client (app-scope) and utilities for Wikipedia endpoint ---
 # Shared AsyncClient with HTTP/2, connection pooling, and split timeouts
@@ -450,9 +493,9 @@ async def read_index(request: Request):
 async def read_plan(request: Request):
     return templates.TemplateResponse("plan.html", {"request": request})
 
-@app.get("/slide/", response_class=HTMLResponse)
-async def read_slide_index(request: Request, data: Optional[str] = None):
-    return templates.TemplateResponse("slide.html", {"request": request, "data": data})
+@app.get("/slide/{slide_id}", response_class=HTMLResponse)
+async def read_slide_index(request: Request, slide_id: str):
+    return templates.TemplateResponse("slide.html", {"request": request, "slide_id": slide_id})
 
 # --- User Account Endpoints ---
 @app.post("/auth/register", response_model=UserResponse)
@@ -526,6 +569,9 @@ async def update_username(
     db: Session = Depends(get_db),
     lang: str = 'ja'
 ):
+    if not auth.verify_password(user_update.password, str(current_user.hashed_password)):
+        raise create_error_response('invalid_credentials', lang, status.HTTP_400_BAD_REQUEST)
+
     if db.query(User).filter_by(username=user_update.new_username).first():
         raise create_error_response('username_already_exists', lang, status.HTTP_400_BAD_REQUEST)
     
@@ -534,7 +580,13 @@ async def update_username(
     db.refresh(current_user)
 
     log_user_action('username_updated', current_user.id, f"New username: {user_update.new_username}", lang) # type: ignore
-    return create_user_response('username_updated', lang)
+
+    # ユーザー名変更後に新しいトークンを生成して返す
+    access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = auth.create_access_token(
+        data={"sub": user_update.new_username}, expires_delta=access_token_expires
+    )
+    return {"message": get_message('username_updated', lang), "access_token": access_token, "token_type": "bearer"}
 
 
 # --- File Upload Endpoints ---
@@ -681,18 +733,35 @@ async def delete_file_endpoint(file_id: int, *, db: Session = Depends(get_db), c
 # --- Slide Endpoints ---
 @app.post("/slides", response_model=SlideResponse)
 async def create_slide_endpoint(slide: SlideCreate, *, db: Session = Depends(get_db), current_user: Annotated[User, Depends(auth.get_current_user)]):
-    db_slide = Slide(**slide.model_dump(), owner_id=current_user.id)
+    try:
+        # Base64デコードしてバイナリデータとして保存
+        decoded_data = base64.b64decode(slide.slide_data)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 data for slide_data")
+    
+    db_slide = Slide(slide_data=decoded_data, owner_id=current_user.id)
     db.add(db_slide)
     db.commit()
     db.refresh(db_slide)
-    return db_slide
+    
+    # レスポンスとして返すために再度Base64エンコード
+    encoded_data = base64.b64encode(db_slide.slide_data).decode('utf-8')
+    return SlideResponse(id=db_slide.id, slide_data=encoded_data, owner_id=db_slide.owner_id)
 
 @app.get("/slides/{slide_id}", response_model=SlideResponse)
-async def get_slide_endpoint(slide_id: int, *, db: Session = Depends(get_db), current_user: Annotated[User, Depends(auth.get_current_user)]):
-    db_slide = db.query(Slide).filter(Slide.id == slide_id, Slide.owner_id == current_user.id).first()
+async def get_slide_endpoint(slide_id: str, *, db: Session = Depends(get_db), current_user: Annotated[User, Depends(auth.get_current_user)]):
+    try:
+        slide_id_int = int(slide_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid slide ID format.")
+
+    db_slide = db.query(Slide).filter(Slide.id == slide_id_int, Slide.owner_id == current_user.id).first()
     if not db_slide:
         raise HTTPException(status_code=404, detail="Slide not found or not authorized")
-    return db_slide
+    
+    # バイナリデータをBase64エンコードして返す
+    encoded_data = base64.b64encode(db_slide.slide_data).decode('utf-8')
+    return SlideResponse(id=db_slide.id, slide_data=encoded_data, owner_id=db_slide.owner_id)
 
 @app.delete("/slides/{slide_id}", response_model=SlideResponse)
 async def delete_slide_endpoint(slide_id: int, *, db: Session = Depends(get_db), current_user: Annotated[User, Depends(auth.get_current_user)]):
@@ -704,6 +773,24 @@ async def delete_slide_endpoint(slide_id: int, *, db: Session = Depends(get_db),
     db.delete(db_slide)
     db.commit()
     return deleted_slide_details
+
+# --- New In-memory Slide Endpoints ---
+class SlideData(BaseModel):
+    data: str # Base64 encoded string
+
+@app.get("/api/slides/{slide_id}")
+async def get_slide_data(slide_id: str):
+    if slide_id not in slides:
+        raise HTTPException(status_code=404, detail="Slide not found")
+    return {"data": base64.b64encode(slides[slide_id]).decode('utf-8')}
+
+@app.put("/api/slides/{slide_id}")
+async def update_slide_data(slide_id: str, payload: SlideData):
+    try:
+        slides[slide_id] = base64.b64decode(payload.data)
+        return {"message": "Slide updated successfully"}
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 data")
 
 
 load_dotenv()
@@ -1121,24 +1208,60 @@ async def get_wiki_image(keyword: str):
 
 # --- WebSocket Endpoint ---
 @app.websocket("/ws/collaborate/{slide_id}")
-async def websocket_collaborate(websocket: WebSocket, slide_id: str, user: Optional[User] = Depends(auth.get_current_user_ws)):
-    if user is None:
+async def websocket_collaborate(
+    websocket: WebSocket,
+    slide_id: str,
+    user: Optional[User] = Depends(auth.get_current_user_ws)
+):
+    # Auth handling
+    if user is None and not ALLOW_ANON_WS:
+        logger.info(f"WS reject: unauthenticated access for slide {slide_id}")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Authentication Failed")
         return
+    elif user is None and ALLOW_ANON_WS:
+        # Mark as anonymous
+        anon_user = "anonymous"
+    else:
+        anon_user = user.username  # type: ignore
 
-    await websocket.accept()
-    logger.info(f"User {user.username} connected to WebSocket for slide {slide_id}")
+    # Slide existence handling
+    if slide_id not in slides:
+        if ALLOW_ANON_WS:
+            # Auto-create empty slide for development to avoid 403 storm
+            slides[slide_id] = b""
+            logger.info(f"WS auto-created empty slide for id={slide_id}")
+        else:
+            logger.info(f"WS reject: slide not found for id={slide_id}")
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Slide not found")
+            return
+
+    await manager.connect(websocket, slide_id)
+    logger.info(f"User {anon_user} connected to WebSocket for slide {slide_id}")
+
+    # Send current slide data on connect
+    try:
+        # スライドが存在しない、または空の場合は、空のバイト列を送信
+        slide_data = slides.get(slide_id, b"")
+        await manager.send_personal_message(slide_data, websocket)
+    except Exception as e:
+        logger.error(f"Error sending initial slide data for slide {slide_id}: {e}")
+
     try:
         while True:
-            data = await websocket.receive_text()
-            # TODO: Implement actual collaboration logic instead of echo
-            await websocket.send_text(f"User {user.username} said: {data} (slide: {slide_id})")
-    except Exception as e:
-        logger.warning(f"WebSocket connection closed for slide {slide_id}, user {user.username}: {e}")
-    finally:
-        logger.info(f"User {user.username} disconnected from slide {slide_id}")
+            # クライアントから送信される差分(JSON文字列)を待機
+            message_text = await websocket.receive_text()
+            
+            # 差分はDB/メモリに保存せず、そのまま他のクライアントにテキストとしてブロードキャスト
+            # ドキュメントの永続化はHTTP PUT /api/slides/{slide_id} で行われる
+            await manager.broadcast_text(message_text, slide_id, sender=websocket)
 
-app.mount("/", StaticFiles(directory="static"), name="static")
+    except Exception as e:
+        logger.warning(f"WebSocket connection closed for slide {slide_id}, user {anon_user}: {e}")
+    finally:
+        manager.disconnect(websocket, slide_id)
+        logger.info(f"User {anon_user} disconnected from slide {slide_id}")
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # --- Uvicorn startup ---
 if __name__ == "__main__":

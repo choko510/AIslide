@@ -168,6 +168,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const createFromScratchBtn = document.getElementById('create-from-scratch');
     const newPresentationCancelBtn = document.getElementById('new-presentation-cancel');
     const slideListContainer = document.getElementById('slide-list');
+    const updateUsernameModal = document.getElementById('update-username-modal');
+    const updatePasswordModal = document.getElementById('update-password-modal');
+    const updateUsernameForm = document.getElementById('update-username-form');
+    const updatePasswordForm = document.getElementById('update-password-form');
 
     const API_BASE_URL = ''; // FastAPIが同じオリジンで提供されるため空文字列
 
@@ -211,7 +215,16 @@ document.addEventListener('DOMContentLoaded', () => {
             'english': 'English',
             'save': '保存',
             'cancel': 'キャンセル',
-            'settings_saved': '設定を保存しました'
+            'settings_saved': '設定を保存しました',
+            'update_username': 'ユーザー名の変更',
+            'update_password': 'パスワードの変更',
+            'new_username': '新しいユーザー名',
+            'current_password': '現在のパスワード',
+            'new_password': '新しいパスワード',
+            'username_updated': 'ユーザー名を更新しました',
+            'password_updated': 'パスワードを更新しました。再度ログインしてください。',
+            'username_update_error': 'ユーザー名の更新に失敗しました',
+            'password_update_error': 'パスワードの更新に失敗しました'
         },
         'en': {
             'welcome': 'Welcome',
@@ -251,7 +264,16 @@ document.addEventListener('DOMContentLoaded', () => {
             'english': 'English',
             'save': 'Save',
             'cancel': 'Cancel',
-            'settings_saved': 'Settings saved'
+            'settings_saved': 'Settings saved',
+            'update_username': 'Update Username',
+            'update_password': 'Update Password',
+            'new_username': 'New Username',
+            'current_password': 'Current Password',
+            'new_password': 'New Password',
+            'username_updated': 'Username updated successfully',
+            'password_updated': 'Password updated successfully. Please log in again.',
+            'username_update_error': 'Failed to update username',
+            'password_update_error': 'Failed to update password'
         }
     };
 
@@ -491,6 +513,22 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.classList.add('is-open');
     }
 
+    function closeModal(modal) {
+        modal.classList.remove('is-open');
+    }
+
+    document.querySelectorAll('.modal').forEach(modal => {
+        const closeBtn = modal.querySelector('.modal-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => closeModal(modal));
+        }
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal(modal);
+            }
+        });
+    });
+
     // 新規作成の選択ダイアログを開く
     function openNewPresentationChoice() {
         if (!newPresentationModal) return;
@@ -501,12 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.classList.remove('is-open');
     }
 
-    loginModal.addEventListener('click', (e) => {
-        if (e.target === loginModal) closeModal(loginModal);
-    });
-    registerModal.addEventListener('click', (e) => {
-        if (e.target === registerModal) closeModal(registerModal);
-    });
+    
 
     showRegisterModalBtn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -580,7 +613,20 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         
         document.getElementById('logout-btn').addEventListener('click', handleLogout);
-        document.getElementById('settings-btn').addEventListener('click', openSettingsModal);
+        document.getElementById('settings-btn').addEventListener('click', () => {
+            document.getElementById('current-username').textContent = username;
+            openSettingsModal();
+        });
+
+        document.getElementById('update-username-btn').addEventListener('click', () => {
+            closeSettingsModal();
+            openModal(updateUsernameModal);
+        });
+
+        document.getElementById('update-password-btn').addEventListener('click', () => {
+            closeSettingsModal();
+            openModal(updatePasswordModal);
+        });
     }
 
     function renderLoggedOutUI() {
@@ -702,6 +748,81 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(getMessage('logout_success'), '', 'info');
     }
 
+    async function handleUpdateUsername(event) {
+        event.preventDefault();
+        const newUsername = updateUsernameForm.elements['new-username'].value;
+        const password = updateUsernameForm.elements['password-for-username'].value;
+        const token = getToken();
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/users/me/username`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ new_username: newUsername, password: password })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setToken(data.access_token);
+                closeModal(updateUsernameModal);
+                showToast(getMessage('username_updated'), '', 'success');
+                checkAuthAndRenderUI();
+            } else {
+                const errorMessage = getErrorMessage(response, 'username_update_error');
+                await showCustomAlert(errorMessage, getMessage('username_update_error'), 'error');
+            }
+        } catch (error) {
+            console.error('ユーザー名更新エラー:', error);
+            const errorMessage = isNetworkError(error) ?
+                getMessage('network_error') :
+                getMessage('username_update_error');
+            await showCustomAlert(errorMessage, getMessage('username_update_error'), 'error');
+        }
+    }
+
+    async function handleUpdatePassword(event) {
+        event.preventDefault();
+        const currentPassword = updatePasswordForm.elements['current-password'].value;
+        const newPassword = updatePasswordForm.elements['new-password'].value;
+        const token = getToken();
+
+        const passwordValidationResult = validatePassword(newPassword);
+        if (!passwordValidationResult.isValid) {
+            await showCustomAlert(passwordValidationResult.message, getMessage('password_error_title'), 'warning');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/users/me/password`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+            });
+
+            if (response.ok) {
+                closeModal(updatePasswordModal);
+                handleLogout();
+                showToast(getMessage('password_updated'), '', 'success');
+                openModal(loginModal);
+            } else {
+                const errorMessage = getErrorMessage(response, 'password_update_error');
+                await showCustomAlert(errorMessage, getMessage('password_update_error'), 'error');
+            }
+        } catch (error) {
+            console.error('パスワード更新エラー:', error);
+            const errorMessage = isNetworkError(error) ?
+                getMessage('network_error') :
+                getMessage('password_update_error');
+            await showCustomAlert(errorMessage, getMessage('password_update_error'), 'error');
+        }
+    }
+
     // --- スライド関連 ---
     async function fetchAndRenderSlides() {
         const token = getToken();
@@ -788,13 +909,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ slide_data: "{}" })
+                // 空のデータをBase64エンコードした空文字列を送信
+                body: JSON.stringify({ slide_data: "" })
             });
 
             if (response.ok) {
                 const newSlide = await response.json();
                 showToast(getMessage('slide_created'), '', 'success');
-                window.location.href = `/slide.html?slide_id=${newSlide.id}`;
+                // FastAPIのルーティングに合わせて修正
+                window.location.href = `/slide/${newSlide.id}`;
             } else {
                 const errorMessage = getErrorMessage(response, 'slide_create_error');
                 await showCustomAlert(errorMessage, getMessage('slide_error_title'), 'error');
@@ -840,7 +963,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleEditSlide(slideId) {
-        window.location.href = `/slide.html?slide_id=${slideId}`;
+        // FastAPIのルーティングに合わせて修正
+        window.location.href = `/slide/${slideId}`;
     }
 
     async function handleDeleteSlide(slideId) {
@@ -886,6 +1010,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- イベントリスナー登録 ---
     loginForm.addEventListener('submit', handleLogin);
     registerForm.addEventListener('submit', handleRegister);
+    updateUsernameForm.addEventListener('submit', handleUpdateUsername);
+    updatePasswordForm.addEventListener('submit', handleUpdatePassword);
     // クリック時はまず選択モーダルを開く
     if (createNewSlideBtn) {
         createNewSlideBtn.addEventListener('click', (e) => {
@@ -912,4 +1038,25 @@ document.addEventListener('DOMContentLoaded', () => {
     applyTheme(getCurrentTheme()); // 初期テーマ設定を適用
     checkAuthAndRenderUI();
     updateUILanguage(); // 初期言語設定を適用
+
+    // main.html から移動したフォールバック
+    const btn = document.getElementById('create-with-ai');
+    if (btn) {
+        // 先に <link rel="prefetch"> ヒントを付与（ブラウザ依存、効果がある場合は先読みされる）
+        const hint = document.createElement('link');
+        hint.rel = 'prefetch';
+        hint.href = '/plan/';
+        hint.as = 'document';
+        document.head.appendChild(hint);
+
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            // 動的に a 要素を作成してクリック（通常のナビゲーションにする）
+            const a = document.createElement('a');
+            a.href = '/plan/';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        });
+    }
 });

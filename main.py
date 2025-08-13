@@ -27,6 +27,7 @@ from google import genai
 from google.genai import types
 from PIL import Image
 import io
+import re
 
 import module.auth as auth
 from module.database import engine, get_db
@@ -244,18 +245,21 @@ client_timeout = httpx.Timeout(connect=1.0, read=5.0, write=5.0, pool=2.0)
 shared_http_client = httpx.AsyncClient(http2=True, timeout=client_timeout, headers={"Accept-Encoding": "gzip, deflate"})
 
 # --- URL Safety (Blocklist) Utilities ---
-BLOCK_LIST = [
-    "https://phishing.army/download/phishing_army_blocklist.txt",
-    "https://malware-filter.gitlab.io/malware-filter/phishing-filter-domains.txt",
-    "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-domains-online.txt",
-]
-# 追加の外部ブロックリストは別配列で管理（存在しないインデックス参照を避ける）
-EXTRA_BLOCKLISTS = [
-    "https://raw.githubusercontent.com/Spam404/lists/master/main-blacklist.txt",
+BLOCKLIST_SOURCES = [
+    {"url": "https://phishing.army/download/phishing_army_blocklist.txt", "category": "phishing", "type": "domain"},
+    {"url": "https://malware-filter.gitlab.io/malware-filter/phishing-filter-domains.txt", "category": "phishing", "type": "domain"},
+    {"url": "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-domains-online.txt", "category": "urlhaus", "type": "domain"},
+    {"url": "https://raw.githubusercontent.com/Spam404/lists/master/main-blacklist.txt", "category": "phishing", "type": "domain"},
+    {"path": "module/blocklist.txt", "category": "phishing", "type": "adblock"},
 ]
 
 # メモリキャッシュ（アプリ存続期間内）
-_blocklist_cache: dict[str, set[str]] = {"phishing": set(), "urlhaus": set()}
+_blocklist_cache: dict[str, set[str] | list[re.Pattern]] = {
+    "phishing": set(),
+    "urlhaus": set(),
+    "phishing_regex": [],
+    "urlhaus_regex": [],
+}
 _blocklist_loaded = False
 _blocklist_lock = asyncio.Lock()
 # 1日(24h)に1回の更新
@@ -282,58 +286,85 @@ async def _ensure_blocklists_loaded(*, force: bool = False) -> None:
         if not force and _blocklist_loaded and _blocklist_expire_at > now:
             return
 
-        # 並列ダウンロード
+        # 並列ダウンロードとリスト処理
         try:
-            # BLOCK_LIST は 0..2 の3件構成。0/1 が phishing、2 が urlhaus。
-            # EXTRA_BLOCKLISTS は任意個。全て phishing 側として取り扱う。
-            core_tasks = [
-                _download_blocklist(BLOCK_LIST[0]),  # phishing.army (phishing)
-                _download_blocklist(BLOCK_LIST[1]),  # malware-filter phishing (phishing)
-                _download_blocklist(BLOCK_LIST[2]),  # urlhaus online (urlhaus)
-            ]
-            extra_tasks = [_download_blocklist(url) for url in EXTRA_BLOCKLISTS]  # Spam404 など
-            tasks = core_tasks + extra_tasks
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            phishing_sets: list[set[str]] = []
-            urlhaus_sets: list[set[str]] = []
-
-            # マッピング:
-            #  - phishing: core indices 0,1 + all extras (idx >= len(core_tasks))
-            #  - urlhaus : core index 2
-            for idx, res in enumerate(results):
-                if isinstance(res, Exception):
-                    logger.error(f"Blocklist task {idx} failed: {res}", exc_info=True)
+            # URLベースのリストをダウンロードタスクに追加
+            download_tasks = []
+            for source in BLOCKLIST_SOURCES:
+                if "url" in source:
+                    download_tasks.append(_download_blocklist(source["url"]))
+            
+            download_results = await asyncio.gather(*download_tasks, return_exceptions=True)
+            
+            # 新しいキャッシュを準備
+            new_cache: dict[str, set[str] | list[re.Pattern]] = {
+                "phishing": set(), "urlhaus": set(),
+                "phishing_regex": [], "urlhaus_regex": []
+            }
+            
+            # 結果を処理
+            download_idx = 0
+            for source in BLOCKLIST_SOURCES:
+                category = source.get("category", "phishing")
+                list_type = source.get("type", "domain")
+                
+                items = []
+                if "url" in source:
+                    res = download_results[download_idx]
+                    download_idx += 1
+                    if isinstance(res, Exception):
+                        logger.error(f"Blocklist download failed for {source['url']}: {res}", exc_info=True)
+                        continue
+                    items = res
+                elif "list" in source:
+                    items = source["list"]
+                elif "path" in source:
+                    items = _read_local_blocklist(source["path"])
+                else:
                     continue
-                if idx in (0, 1) or idx >= len(core_tasks):
-                    phishing_sets.append(res)
-                elif idx == 2:
-                    urlhaus_sets.append(res)
 
-            # old mirror.cedia はドメインリスト形式だが品質不確実のため現状は未使用
-            # 必要になれば以下の通りで追加可能:
-            # cedia = await _download_blocklist(BLOCK_LIST[1])
-            # phishing_sets.append(cedia)
+                if list_type == "domain":
+                    domain_set = new_cache.get(category, set())
+                    if isinstance(domain_set, set):
+                        domain_set.update(items)
+                else: # regex or adblock
+                    regex_list = new_cache.get(f"{category}_regex", [])
+                    if isinstance(regex_list, list):
+                        for item in items:
+                            regex_str = None
+                            if list_type == "regex":
+                                regex_str = item
+                            elif list_type == "adblock":
+                                regex_str = _convert_adblock_rule_to_regex(item)
+                            
+                            if regex_str:
+                                try:
+                                    # Adblockルールは基本的に大文字小文字を区別しない
+                                    regex_list.append(re.compile(regex_str, re.IGNORECASE))
+                                except re.error as e:
+                                    logger.warning(f"Invalid regex pattern '{regex_str}' from '{item}': {e}")
 
-            # 集約してセット化
-            phishing = set().union(*phishing_sets) if phishing_sets else set()
-            urlhaus = set().union(*urlhaus_sets) if urlhaus_sets else set()
+            # phishing と urlhaus の重複を除去（urlhaus を優先）
+            phishing_set = new_cache.get("phishing")
+            urlhaus_set = new_cache.get("urlhaus")
+            if isinstance(phishing_set, set) and isinstance(urlhaus_set, set):
+                common = phishing_set & urlhaus_set
+                if common:
+                    phishing_set -= common
 
-
-            common = phishing & urlhaus
-            if common:
-                urlhaus = urlhaus - common
-
-            # 最低限の正規化（空要素は _download_blocklist 側で排除済み）
             # キャッシュに反映（全置換）
-            _blocklist_cache["phishing"] = phishing
-            _blocklist_cache["urlhaus"] = urlhaus
+            _blocklist_cache = new_cache
 
             _blocklist_loaded = True
             _blocklist_expire_at = asyncio.get_event_loop().time() + _BLOCKLIST_TTL
 
             logger.info(
-                f"Blocklists loaded: phishing={len(phishing)}, urlhaus={len(urlhaus)}, ttl={_BLOCKLIST_TTL}s, extras={len(EXTRA_BLOCKLISTS)}"
+                f"Blocklists loaded: "
+                f"phishing={len(_blocklist_cache.get('phishing', set()))}, "
+                f"urlhaus={len(_blocklist_cache.get('urlhaus', set()))}, "
+                f"phishing_regex={len(_blocklist_cache.get('phishing_regex', []))}, "
+                f"urlhaus_regex={len(_blocklist_cache.get('urlhaus_regex', []))}, "
+                f"ttl={_BLOCKLIST_TTL}s"
             )
         except Exception as e:
             # 失敗時はロードフラグやTTLは更新しない（既存キャッシュを維持）
@@ -356,24 +387,37 @@ def _extract_domain_from_url(url: str) -> Optional[str]:
     except Exception:
         return None
 
-def _check_domain_safety(domain: str) -> Optional[Dict[str, str]]:
+def _check_url_safety(url: str) -> Optional[Dict[str, str]]:
     """
-    ドメインがブロックリストに含まれるかチェックする。高速なセット検索を利用。
-    サブドメインのマッチングも行う。
+    URLがブロックリストに含まれるかチェックする。
+    1. 高速なセット検索（ドメイン完全一致/サブドメイン）
+    2. 正規表現リストでの検索（URL全体）
     含まれる場合は {"matched_domain": str, "source": str} を返す。
     """
+    domain = _extract_domain_from_url(url)
     if not domain:
         return None
 
+    # 1. 高速なセット検索 (ドメイン)
     parts = domain.split('.')
-    # 少なくとも2つの部分（例: example.com）からなるドメインのみをチェック対象とする
-    # range(len(parts) - 1) は ["a.b.c", "b.c"] を生成するが "c" は生成しない
     domain_variants = [".".join(parts[i:]) for i in range(len(parts) - 1)]
+    
+    for category in ["phishing", "urlhaus"]:
+        blocklist_set = _blocklist_cache.get(category)
+        if isinstance(blocklist_set, set):
+            for variant in domain_variants:
+                if variant in blocklist_set:
+                    return {"matched_domain": variant, "source": category}
 
-    for source, blocklist in _blocklist_cache.items():
-        for variant in domain_variants:
-            if variant in blocklist:
-                return {"matched_domain": variant, "source": str(source)}
+    # 2. 正規表現での検索 (URL全体に対して)
+    for category_key in ["phishing_regex", "urlhaus_regex"]:
+        regex_list = _blocklist_cache.get(category_key)
+        category = category_key.replace('_regex', '')
+        if isinstance(regex_list, list):
+            for pattern in regex_list:
+                if pattern.search(url):
+                    return {"matched_domain": domain, "source": category}
+    
     return None
 
 async def _download_blocklist(url: str) -> set[str]:
@@ -403,6 +447,58 @@ async def _download_blocklist(url: str) -> set[str]:
     except Exception as e:
         logger.error(f"Blocklist download failed: {url} : {e}", exc_info=True)
         return set()
+
+def _read_local_blocklist(file_path: str) -> list[str]:
+    """
+    ローカルファイルからブロックリストのルールを読み込む。
+    コメント行と空行は無視する。
+    """
+    rules = []
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and not line.startswith("!"):
+                    rules.append(line)
+    except FileNotFoundError:
+        logger.warning(f"Local blocklist file not found: {file_path}")
+    except Exception as e:
+        logger.error(f"Error reading local blocklist file {file_path}: {e}", exc_info=True)
+    return rules
+
+def _convert_adblock_rule_to_regex(rule: str) -> Optional[str]:
+    """Adblockスタイルのフィルターを正規表現文字列に変換する（簡易版）"""
+    if not rule or rule.startswith("!"):
+        return None
+    
+    # オプション($以降)は無視
+    rule = rule.split("$")[0]
+
+    # /.../ 形式はそのまま正規表現として返す
+    if rule.startswith("/") and rule.endswith("/"):
+        return rule[1:-1]
+
+    # ||domain.tld 形式
+    if rule.startswith("||"):
+        # ||example.com -> ^https?://([^/]+\.)?example\.com
+        domain_pattern = rule[2:]
+        if domain_pattern.endswith("^"):
+            domain_pattern = domain_pattern[:-1]
+        
+        # メタ文字をエスケープし、ワイルドカード(*)を正規表現に変換
+        domain_pattern = re.escape(domain_pattern).replace(r"\*", ".*")
+        return r"^https?://([a-z0-9\-]+\.)*" + domain_pattern
+
+    # |http://... 形式
+    if rule.startswith("|http"):
+        return "^" + re.escape(rule[1:])
+
+    # ...| 形式
+    if rule.endswith("|"):
+        return re.escape(rule[:-1]) + "$"
+
+    # 上記以外は、ワイルドカードを変換した部分一致として扱う
+    return re.escape(rule).replace(r"\*", ".*")
 
 
 
@@ -455,8 +551,8 @@ async def url_safe_check(payload: URLRequest):
     if not domain:
         return URLSafetyResponse(safe=False, reason="invalid_url")
 
-    # 高速なドメインチェック
-    match = _check_domain_safety(domain)
+    # 高速なURLチェック
+    match = _check_url_safety(payload.url)
     if match:
         return URLSafetyResponse(safe=False, reason="matched", **match)
 
@@ -1059,7 +1155,7 @@ async def safe_redirect(url: str):
         return HTMLResponse(content=html, status_code=400)
 
     # ブロックチェック
-    match = _check_domain_safety(domain)
+    match = _check_url_safety(url)
     if match:
         # ブロック用の警告ページ
         blocked = match['matched_domain']

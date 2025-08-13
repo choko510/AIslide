@@ -899,7 +899,7 @@ class InspectorManager {
         if (!prop || prop === 'customCss' || prop === 'color' || prop === 'backgroundColor' || prop === 'fill' || prop === 'stroke') return;
 
         if (!this._inspectorInputTimeout) {
-            this.app.stateManager._saveToHistory();
+            // this.app.stateManager._saveToHistory(); // Deprecated
         }
         if (this._inspectorInputTimeout) {
             clearTimeout(this._inspectorInputTimeout);

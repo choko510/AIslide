@@ -1,3 +1,4 @@
+import * as Automerge from "https://esm.sh/@automerge/automerge@3.1.1/slim?bundle-deps";
 import { ColorPicker } from './ColorPicker.js';
 
         // =================================================================
@@ -353,149 +354,206 @@ import { ColorPicker } from './ColorPicker.js';
         }
 
         // =================================================================
-        // 状態管理
+        // 状態管理 (Automerge版)
         // =================================================================
         class StateManager {
-            constructor() {
-                this.state = this._createInitialState();
-                this.listeners = new Map();
-                this._undoStack = [];
-                this._redoStack = [];
-            }
-
-            _createInitialState() {
-                return {
-                    presentation: {
-                        settings: {
-                            width: CANVAS_WIDTH,
-                            height: CANVAS_HEIGHT,
-                            globalCss: '',
-                            backgroundType: 'solid', // 'solid' or 'gradient'
-                            backgroundColor: '#ffffff',
-                            gradientStart: '#ffffff',
-                            gradientEnd: '#007bff',
-                            gradientAngle: 90
-                        },
-                        slides: [],
-                        groups: {} // { 'slideId': [{ id: 'group-xxx', elementIds: [...] }] }
-                    },
-                    activeSlideId: null,
-                    selectedElementIds: [],
-                    selectedGroupIds: [],
-                    isEditingText: false,
-                    
-                    interaction: {
-                        isDragging: false,
-                        isResizing: false,
-                        isCtrlPressed: false,
-                        handle: null,
-                        startX: 0,
-                        startY: 0,
-                        initialStates: [],
-                        allElementsPixelRects: [],
-                        lastDx: 0,
-                        lastDy: 0,
-                        lastSnapOffset: { x: 0, y: 0 }
-                    },
-                    
-                    canvas: {
-                        rect: null,
-                        scale: CONFIG.CANVAS_SCALE.default,
-                        pan: { x: 0, y: 0, dragging: false, startX: 0, startY: 0, originX: 0, originY: 0 }
-                    },
-
-                    ui: {
-                        sidebarWidth: 340,
-                        rightSidebarWidth: 300,
-                        leftSidebarCollapsed: false
+                    constructor() {
+                        this.slideId = null; // WebSocket連携用にSlide IDを保持
+                        // Automerge の初期化（fromは使わず init + change）
+                        this.doc = Automerge.init();
+                        this.doc = Automerge.change(this.doc, d => {
+                            d.presentation = null;
+                            d.activeSlideId = null;
+                            d.selectedElementIds = [];
+                            d.selectedGroupIds = [];
+                            d.isEditingText = false;
+                        });
+        
+                        this.listeners = new Map();
+                        this.onChangeCallback = null;
                     }
-                };
+        
+                    // 初期状態のドキュメントを生成（通知のみ、送信しない）
+                    createInitialDoc() {
+                        const firstSlideId = Utils.generateId('slide');
+                        this.doc = Automerge.change(this.doc, d => {
+                            d.presentation = {
+                                settings: {
+                                    width: CANVAS_WIDTH,
+                                    height: CANVAS_HEIGHT,
+                                    globalCss: '',
+                                    backgroundType: 'solid',
+                                    backgroundColor: '#ffffff',
+                                    gradientStart: '#ffffff',
+                                    gradientEnd: '#007bff',
+                                    gradientAngle: 90
+                                },
+                                slides: [{
+                                    id: firstSlideId,
+                                    elements: [{
+                                        id: Utils.generateId('el'),
+                                        type: 'text',
+                                        content: 'タイトル',
+                                        style: {
+                                            top: 20, left: 10, width: 80, height: null,
+                                            zIndex: 1, rotation: 0, color: '#212529',
+                                            fontSize: 60, fontFamily: 'sans-serif', animation: ''
+                                        }
+                                    }]
+                                }],
+                                groups: {}
+                            };
+                            d.activeSlideId = firstSlideId;
+                            d.selectedElementIds = [];
+                            d.selectedGroupIds = [];
+                            d.isEditingText = false;
+                        });
+                        this._notifyListeners('*', this.doc);
+                    }
+        
+                    // バイナリから完全置換でロード
+                    loadDoc(binary) {
+                        try {
+                            if (!binary || binary.length === 0) {
+                                console.log("Received empty document from server, creating a new initial document.");
+                                this.createInitialDoc();
+                                // 新規作成後、サーバーに保存して状態を同期する
+                                if (this.slideId) {
+                                    this.save(this.slideId);
+                                }
+                                return true;
+                            }
+                            const newDoc = Automerge.load(binary);
+                            this.doc = newDoc;
+                            this._notifyListeners('*', this.doc);
+                            return true;
+                        } catch (error) {
+                            ErrorHandler.handle(error, 'automerge_load');
+                            // ロードに失敗した場合、回復を試みずに新しいドキュメントを作成する
+                            console.warn("Automerge load failed. Discarding received data and creating a new initial document.");
+                            this.createInitialDoc();
+                             // 新規作成後、サーバーに保存して状態を同期する
+                            if (this.slideId) {
+                                this.save(this.slideId);
+                            }
+                            return false; // 失敗したことを示す
+                        }
+                    }
+        
+                    // Base64 -> Uint8Array（安全ループ）
+                    _base64ToBytes(b64) {
+                        const bin = atob(b64);
+                        const len = bin.length;
+                        const bytes = new Uint8Array(len);
+                        for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+                        return bytes;
+                    }
+        
+                    // Uint8Array -> Base64（安全ループ）
+                    _bytesToBase64(bytes) {
+                        let bin = '';
+                        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+                        return btoa(bin);
+                    }
+        
+                    // サーバーからスライドをロード、または新規作成
+                    async load(slideId) {
+                        try {
+                            const response = await fetch(`/api/slides/${slideId}`);
+                            if (response.ok) {
+                                const payload = await response.json();
+                                const binary = this._base64ToBytes(payload.data);
+                                this.doc = Automerge.load(binary);
+                                console.log(`Successfully loaded document for slide ${slideId}`);
+                            } else if (response.status === 404) {
+                                console.log(`No data for slide ${slideId}, creating new document.`);
+                                this.createInitialDoc();
+                                await this.save(slideId);
+                            } else {
+                                throw new Error(`Failed to load slide data: ${response.statusText}`);
+                            }
+                        } catch (error) {
+                            console.warn('Automerge load failed, recreating new doc:', error);
+                            this.doc = Automerge.init();
+                            this.createInitialDoc();
+                            await this.save(slideId);
+                        }
+                        this._notifyListeners('*', this.doc);
+                    }
+        
+                    // 現在のドキュメントをサーバーに保存
+                    async save(slideId) {
+                        try {
+                            const bytes = Automerge.save(this.doc);
+                            const base64Data = this._bytesToBase64(bytes);
+                            const response = await fetch(`/api/slides/${slideId}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ data: base64Data }),
+                            });
+                            if (!response.ok) {
+                                throw new Error(`Failed to save slide data: ${response.statusText}`);
+                            }
+                            console.log(`Successfully saved document for slide ${slideId}`);
+                        } catch (error) {
+                            ErrorHandler.handle(error, 'save_state');
+                        }
+                    }
+
+
+
+            // 変更を適用
+            applyChanges(changes) {
+                try {
+                    // v3では、applyChangesはパッチを返さない
+                    const newDoc = Automerge.applyChanges(this.doc, changes);
+                    this.doc = newDoc;
+                    // 今回はシンプルに全体通知
+                    this._notifyListeners('*', this.doc);
+                } catch (error) {
+                    ErrorHandler.handle(error, 'automerge_apply_changes');
+                    console.error("Failed to apply changes, forcing a reload to resync.");
+                    // 無限リロードを防ぐために、セッションストレージで一度だけリロードする
+                    if (!sessionStorage.getItem('automerge_reload_triggered')) {
+                        sessionStorage.setItem('automerge_reload_triggered', 'true');
+                        window.location.reload();
+                    }
+                }
             }
 
             // 状態の取得
             get(path) {
-                if (!path) return Utils.deepClone(this.state);
-                
+                if (!path) return this.doc;
                 const keys = path.split('.');
-                let current = this.state;
-                
+                let current = this.doc;
                 for (const key of keys) {
                     if (current === null || current === undefined) return undefined;
                     current = current[key];
                 }
-                
                 return current;
             }
 
-            // 状態の更新
-            set(path, value, options = {}) {
-                try {
-                    const { silent = false, skipHistory = false } = options;
+            // 状態の更新（Automerge.changeを使用）
+            change(callback, options = {}) {
+                const oldDoc = this.doc;
+                const newDoc = Automerge.change(this.doc, (docProxy) => {
+                    callback(docProxy);
+                });
+                
+                this.doc = newDoc;
 
-                    if (!skipHistory && !this._skipHistory) {
-                        this._saveToHistory();
-                    }
+                const changes = Automerge.getChanges(oldDoc, newDoc);
 
-                    const oldValue = this.get(path);
-
-                    const newState = Utils.deepClone(this.state);
-                    let current = newState;
-                    const keys = path.split('.');
-                    const lastKey = keys.pop();
-
-                    for (const key of keys) {
-                        if (!(key in current)) {
-                            current[key] = {};
-                        }
-                        current = current[key];
-                    }
-                    current[lastKey] = value;
-                    this.state = newState;
-
-                    if (!silent) {
-                        this._notifyListeners(path, value, oldValue);
-                    }
-
-                    return true;
-                } catch (error) {
-                    ErrorHandler.handle(error, 'state_update');
-                    return false;
-                }
-            }
-
-            // 複数の状態を一括更新
-            batch(updates, options = {}) {
-                const { silent = false } = options;
-
-                if (!this._skipHistory) {
-                    this._saveToHistory();
-                }
-
-                const oldValues = {};
-                if (!silent) {
-                    for (const path of Object.keys(updates)) {
-                        oldValues[path] = this.get(path);
+                // 変更があった場合、かつ silent オプションが指定されていない場合に通知する
+                if (changes.length > 0 && !options.silent) {
+                    if (this.onChangeCallback) {
+                        this.onChangeCallback(changes);
                     }
                 }
-
-                this._skipHistory = true;
-
-                try {
-                    const changedPaths = [];
-
-                    for (const [path, value] of Object.entries(updates)) {
-                        if (this.set(path, value, { silent: true, skipHistory: true })) {
-                            changedPaths.push(path);
-                        }
-                    }
-
-                    if (!silent) {
-                        changedPaths.forEach(path => {
-                            this._notifyListeners(path, this.get(path), oldValues[path]);
-                        });
-                    }
-                } finally {
-                    this._skipHistory = false;
+                
+                // 変更をリスナーに通知 (こちらも silent オプションを尊重)
+                if (!options.silent) {
+                    this._notifyListeners('*', this.doc);
                 }
             }
 
@@ -506,84 +564,220 @@ import { ColorPicker } from './ColorPicker.js';
                 }
                 this.listeners.get(path).add(callback);
                 
-                // アンサブスクライブ関数を返す
                 return () => {
                     const pathListeners = this.listeners.get(path);
                     if (pathListeners) {
                         pathListeners.delete(callback);
-                        if (pathListeners.size === 0) {
-                            this.listeners.delete(path);
-                        }
                     }
                 };
             }
 
-            _notifyListeners(path, newValue, oldValue) {
-                // 完全一致のリスナーに通知
+            _notifyListeners(path, newValue) {
+                 // 全体リスナーに通知
+                 const allListeners = this.listeners.get('*');
+                 if (allListeners) {
+                     allListeners.forEach(callback => {
+                         try {
+                             callback(newValue);
+                         } catch (error) {
+                             ErrorHandler.handle(error, 'state_listener');
+                         }
+                     });
+                 }
+                // パス指定のリスナーにも通知（簡易版）
                 const exactListeners = this.listeners.get(path);
                 if (exactListeners) {
                     exactListeners.forEach(callback => {
                         try {
-                            callback(newValue, oldValue, path);
+                            callback(this.get(path));
                         } catch (error) {
                             ErrorHandler.handle(error, 'state_listener');
                         }
                     });
                 }
+            }
+            
+            // 変更通知コールバックの設定
+            setOnChange(callback) {
+                this.onChangeCallback = callback;
+            }
 
-                // パスの親に対するリスナーにも通知
-                const pathParts = path.split('.');
-                for (let i = pathParts.length - 1; i > 0; i--) {
-                    const parentPath = pathParts.slice(0, i).join('.');
-                    const parentListeners = this.listeners.get(parentPath);
-                    if (parentListeners) {
-                        parentListeners.forEach(callback => {
-                            try {
-                                callback(this.get(parentPath), undefined, parentPath);
-                            } catch (error) {
-                                ErrorHandler.handle(error, 'state_listener');
-                            }
+            undo() {
+                console.warn("Undo is not supported in this version of Automerge.");
+                return false;
+            }
+
+            redo() {
+                console.warn("Redo is not supported in this version of Automerge.");
+                return false;
+            }
+
+            canUndo() {
+                return false;
+            }
+
+            canRedo() {
+                return false;
+            }
+        }
+        window.StateManager = StateManager;
+
+        // =================================================================
+        // WebSocketクライアント
+        // =================================================================
+        class WebSocketClient {
+            constructor(url, stateManager) {
+                this.url = url;
+                this.stateManager = stateManager;
+                this.ws = null;
+                this.reconnectAttempts = 0;
+                this.maxReconnectAttempts = 10;
+                this.sendQueue = []; // メッセージキュー
+                this.clientId = Utils.generateId('client');
+                this.connect();
+            }
+
+            async _ensureSlideExists() {
+                // slideId は URL もしくは stateManager から取得
+                const slideId = this.stateManager?.slideId || window.SLIDE_ID || null;
+                if (!slideId) return;
+
+                try {
+                    const res = await fetch(`/api/slides/${slideId}`);
+                    if (res.status === 404) {
+                        // 空ドキュメントを作成
+                        const payload = { data: btoa(String.fromCharCode(...(new Uint8Array(0)))) };
+                        const putRes = await fetch(`/api/slides/${slideId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload),
                         });
+                        if (!putRes.ok) {
+                            console.warn('Failed to create slide on server:', await putRes.text());
+                        }
+                    }
+                } catch (e) {
+                    console.warn('ensureSlideExists failed', e);
+                }
+            }
+
+            _buildWsUrl() {
+                // 認証トークンがあるならクエリに付与
+                try {
+                    const token = localStorage.getItem('access_token');
+                    const url = new URL(this.url, window.location.origin);
+                    if (token) {
+                        url.searchParams.set('token', token);
+                    }
+                    return url.toString().replace(/^http/, 'ws');
+                } catch {
+                    return this.url;
+                }
+            }
+
+            connect() {
+                try {
+                    this.ws = new WebSocket(this._buildWsUrl());
+                    this.ws.binaryType = 'arraybuffer';
+
+                    this.ws.onopen = async () => {
+                        console.log('WebSocket connection established');
+                        this.reconnectAttempts = 0;
+                        // 接続直後も保険で存在確認（APIとWSの競合を避けるためにawait）
+                        await this._ensureSlideExists();
+                        this.flushQueue(); // 接続時にキューを処理
+                    };
+
+                    this.ws.onmessage = (event) => {
+                        try {
+                            if (event.data instanceof ArrayBuffer) {
+                                // バイナリデータ（ドキュメント全体）を受信した場合
+                                const binary = new Uint8Array(event.data);
+                                console.log('Received full document from server, loading.');
+                                this.stateManager.loadDoc(binary);
+                                return;
+                            }
+
+                            // JSONメッセージ（差分）を受信した場合
+                            const message = JSON.parse(event.data);
+                            if (message.clientId === this.clientId) {
+                                console.log('Ignoring own changes received from server.');
+                                return;
+                            }
+                            
+                            // changesはBase64エンコードされた文字列の配列
+                            const changes = message.changes.map(this.stateManager._base64ToBytes);
+                            console.log('Received changes from another client, applying them.');
+                            this.stateManager.applyChanges(changes);
+                        } catch (error) {
+                            ErrorHandler.handle(error, 'ws_message_processing');
+                        }
+                    };
+
+                    this.ws.onerror = (error) => {
+                        ErrorHandler.handle(error, 'ws_error');
+                    };
+
+                    this.ws.onclose = async (ev) => {
+                        console.log('WebSocket connection closed.', ev && ev.reason);
+                        // 1008 + 認証/未存在理由は再接続しない
+                        const reason = (ev && ev.reason) || '';
+                        if (reason.includes('Authentication Failed') || reason.includes('Slide not found')) {
+                            console.warn('WS close due to auth/slide not found. Stop reconnecting.');
+                            return;
+                        }
+
+                        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                            this.reconnectAttempts++;
+                            const delay = Math.min(30000, (2 ** this.reconnectAttempts) * 1000);
+                            console.log(`Attempting to reconnect in ${delay / 1000}s...`);
+                            // 再接続前に存在確認（404なら作成）
+                            await this._ensureSlideExists();
+                            setTimeout(() => this.connect(), delay);
+                        } else {
+                            ErrorHandler.showNotification('サーバーとの接続が切れました。リロードしてください。', 'error');
+                        }
+                    };
+                } catch (error) {
+                    ErrorHandler.handle(error, 'ws_connection');
+                }
+            }
+
+            flushQueue() {
+                while (this.sendQueue.length > 0) {
+                    const change = this.sendQueue.shift();
+                    try {
+                        this.ws.send(change);
+                    } catch (error) {
+                        ErrorHandler.handle(error, 'ws_send_queued');
                     }
                 }
             }
 
-            _saveToHistory() {
-                this._undoStack.push(this.state);
-                if (this._undoStack.length > CONFIG.MAX_UNDO_STACK) {
-                    this._undoStack.shift();
+            send(changes) {
+                if (!changes || changes.length === 0) return;
+
+                const message = {
+                    clientId: this.clientId,
+                    // changes は Uint8Array の配列なので、Base64文字列に変換して送信
+                    changes: changes.map(this.stateManager._bytesToBase64)
+                };
+                const messageString = JSON.stringify(message);
+
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    try {
+                        this.ws.send(messageString);
+                        console.log('Sent changes to server:', changes.length);
+                    } catch (error) {
+                        ErrorHandler.handle(error, 'ws_send');
+                        this.sendQueue.push(messageString); // エラー時はキューに入れる
+                    }
+                } else {
+                    console.warn('WebSocket is not open. Queuing message. Ready state:', this.ws?.readyState);
+                    this.sendQueue.push(messageString);
                 }
-                this._redoStack = []; // 新しい操作でredoスタックをクリア
-            }
-
-            undo() {
-                if (this._undoStack.length === 0) return false;
-                this._redoStack.push(this.state);
-                this.state = this._undoStack.pop();
-                return true;
-            }
-
-            redo() {
-                if (this._redoStack.length === 0) return false;
-                this._undoStack.push(this.state);
-                this.state = this._redoStack.pop();
-                return true;
-            }
-
-            // 履歴をクリア
-            clearHistory() {
-                this._undoStack = [];
-                this._redoStack = [];
-            }
-
-            // 状態のリセット
-            reset() {
-                this.state = this._createInitialState();
-                this.clearHistory();
-                this._notifyListeners('*', this.state);
             }
         }
-        window.StateManager = StateManager; // StateManagerクラスをグローバルに公開
 
         // =================================================================
         // ユーティリティ関数群
@@ -957,7 +1151,7 @@ static _createIframe(elData) {
         height: '100%',
         border: 'none'
     });
-    iframe.sandbox = content.sandbox || 'allow-scripts allow-same-origin';
+    iframe.sandbox = content.sandbox || 'allow-scripts';
 
     // 読み込み失敗・ブロック時に簡易メッセージを表示（451/4xx想定）
     iframe.addEventListener('load', () => {
@@ -1190,22 +1384,534 @@ static _createIframe(elData) {
         };
 
         // =================================================================
+        // InteractionManager: ユーザー操作の管理
+        // =================================================================
+        class InteractionManager {
+            constructor(app) {
+                this.app = app;
+                this.stateManager = app.stateManager;
+                this._animationFrameId = null;
+                this._boundHandleMouseMove = null;
+                this._boundHandleMouseUp = null;
+            }
+
+            get state() {
+                return this.stateManager.get();
+            }
+
+            bindEvents() {
+                 // マウス・タッチイベント統合ハンドラー
+                 const pointerDownHandler = Utils.debounce(this._createPointerDownHandler(), 50);
+                 this.app.elements.slideCanvas.addEventListener('mousedown', pointerDownHandler);
+                 this.app.elements.slideCanvas.addEventListener('touchstart', pointerDownHandler, { passive: false });
+ 
+                 // ダブルクリック・ダブルタップ
+                 this.app.elements.slideCanvas.addEventListener('dblclick', e => this.handleCanvasDblClick(e));
+                 this._bindTouchDoubleTap();
+            }
+
+            _createPointerDownHandler() {
+                return (e) => {
+                    try {
+                        if (!e.target || e.target.closest('select, option')) {
+                            return;
+                        }
+
+                        const isTouch = e.type.startsWith('touch');
+                        if (isTouch && (!e.touches || e.touches.length === 0)) return;
+
+                        const point = isTouch ? e.touches[0] : e;
+                        if (!point || !point.target) return;
+
+                        const element = point.target.closest('.slide-element');
+                        if (element) {
+                            this.handleCanvasMouseDown(e);
+                        } else {
+                            this.app.handleSelectionBoxStart(e);
+                        }
+                    } catch (error) {
+                        ErrorHandler.handle(error, 'pointer_down');
+                    }
+                };
+            }
+
+            _bindTouchDoubleTap() {
+                this.app.elements.slideCanvas.addEventListener('touchend', e => {
+                    try {
+                        if (!this._lastTap) {
+                            this._lastTap = Date.now();
+                            setTimeout(() => { this._lastTap = null; }, 400);
+                        } else {
+                            const now = Date.now();
+                            if (now - this._lastTap < 400) {
+                                const touch = e.changedTouches[0];
+                                if (touch) {
+                                    const target = document.elementFromPoint(touch.clientX, touch.clientY);
+                                    if (target && target.classList.contains('slide-element') && target.classList.contains('text')) {
+                                        this.handleCanvasDblClick({ target });
+                                    }
+                                }
+                            }
+                            this._lastTap = null;
+                        }
+                    } catch (error) {
+                        ErrorHandler.handle(error, 'touch_double_tap');
+                    }
+                });
+            }
+
+            handleCanvasMouseDown(e) {
+                if (!e.type.startsWith('touch') && e.button === 2) return;
+
+                const isTouch = e.type.startsWith('touch');
+                const point = isTouch ? e.touches[0] : e;
+                const target = point.target;
+
+                if (this.state.isEditingText) {
+                    const clickedElement = target.closest('.slide-element');
+                    if (!clickedElement || !this.state.selectedElementIds.includes(clickedElement.dataset.id)) {
+                        this.app.stopTextEditing(true);
+                    }
+                    return;
+                }
+
+                const element = target.closest('.slide-element');
+                const elementId = element ? element.dataset.id : null;
+                const clickedGroup = elementId ? this.app._findGroupForElement(elementId) : null;
+
+                let shouldStartInteraction = false;
+
+                this.stateManager.change(doc => {
+                    if (!doc.interaction) doc.interaction = {};
+                    doc.interaction.isCtrlPressed = e.ctrlKey || e.metaKey;
+
+                    if (clickedGroup) {
+                        doc.selectedElementIds = [];
+                        doc.selectedGroupIds = [clickedGroup.id];
+                        doc.interaction.isDragging = true;
+                        shouldStartInteraction = true;
+                    } else if (elementId) {
+                        const isSelected = doc.selectedElementIds.includes(elementId);
+                        if (doc.interaction.isCtrlPressed) {
+                            if (isSelected) {
+                                doc.selectedElementIds = doc.selectedElementIds.filter(id => id !== elementId);
+                            } else {
+                                doc.selectedElementIds.push(elementId);
+                            }
+                        } else {
+                            if (!isSelected) {
+                                doc.selectedElementIds = [elementId];
+                                this.app.switchToTab('inspector');
+                            }
+                        }
+                        doc.selectedGroupIds = [];
+
+                        if (target.classList.contains('resize-handle')) {
+                            doc.interaction.isResizing = true;
+                            doc.interaction.handle = target.dataset.handle;
+                        } else {
+                            doc.interaction.isDragging = true;
+                        }
+                        shouldStartInteraction = true;
+                    } else {
+                        doc.selectedElementIds = [];
+                        doc.selectedGroupIds = [];
+                    }
+                });
+
+                if (shouldStartInteraction) {
+                    this.startInteraction(e);
+                }
+            }
+
+            startInteraction(e) {
+                this._boundHandleMouseMove = this.handleMouseMove.bind(this);
+                this._boundHandleMouseUp = this.handleMouseUp.bind(this);
+                window.addEventListener('mousemove', this._boundHandleMouseMove);
+                window.addEventListener('touchmove', this._boundHandleMouseMove, { passive: false });
+                window.addEventListener('mouseup', this._boundHandleMouseUp);
+                window.addEventListener('touchend', this._boundHandleMouseUp);
+
+                const isTouch = e.type.startsWith('touch');
+                const point = isTouch ? e.touches[0] : e;
+                const canvasRect = this.app.elements.slideCanvas.getBoundingClientRect();
+
+                this.stateManager.change(doc => {
+                    if (!doc.canvas) doc.canvas = {};
+                    doc.canvas.rect = { left: canvasRect.left, top: canvasRect.top, width: canvasRect.width, height: canvasRect.height, right: canvasRect.right, bottom: canvasRect.bottom, x: canvasRect.x, y: canvasRect.y };
+                    if (!doc.interaction) doc.interaction = {};
+                    doc.interaction.startX = point.clientX;
+                    doc.interaction.startY = point.clientY;
+
+                    let elementsToTrack = [];
+                    if (doc.selectedGroupIds.length > 0) {
+                        const slideGroups = doc.presentation.groups[doc.activeSlideId] || [];
+                        doc.selectedGroupIds.forEach(groupId => {
+                            const group = slideGroups.find(g => g.id === groupId);
+                            if (group) {
+                                elementsToTrack.push(...doc.presentation.slides.find(s => s.id === doc.activeSlideId).elements.filter(el => group.elementIds.includes(el.id)));
+                            }
+                        });
+                    } else {
+                        elementsToTrack = doc.presentation.slides.find(s => s.id === doc.activeSlideId).elements.filter(el => doc.selectedElementIds.includes(el.id));
+                    }
+                    
+                    const allElementsPixelRects = doc.presentation.slides.find(s => s.id === doc.activeSlideId).elements.map(elData => {
+                        const domEl = this.app.elements.slideCanvas.querySelector(`[data-id="${elData.id}"]`);
+                        if (!domEl) {
+                            return { id: elData.id, rect: { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0, centerX: 0, centerY: 0 } };
+                        }
+                        const rect = { left: domEl.offsetLeft, top: domEl.offsetTop, width: domEl.offsetWidth, height: domEl.offsetHeight };
+                        rect.right = rect.left + rect.width;
+                        rect.bottom = rect.top + rect.height;
+                        rect.centerX = rect.left + rect.width / 2;
+                        rect.centerY = rect.top + rect.height / 2;
+                        return { id: elData.id, rect };
+                    });
+
+                    doc.interaction.initialStates = elementsToTrack.map(elData => {
+                        const domEl = this.app.elements.slideCanvas.querySelector(`[data-id="${elData.id}"]`);
+                        if (!domEl) return null;
+                        
+                        domEl.style.willChange = 'transform, width, height';
+                        
+                        if (elData.type === 'iframe') {
+                            const iframeEl = domEl.querySelector('iframe');
+                            if (iframeEl) iframeEl.style.pointerEvents = 'none';
+                        }
+                        
+                        const foundRect = allElementsPixelRects.find(r => r.id === elData.id);
+                        return {
+                            id: elData.id,
+                            startX: elData.style.left ?? 0,
+                            startY: elData.style.top ?? 0,
+                            startW: elData.style.width ?? 0,
+                            startH: elData.style.height ?? (domEl.offsetHeight / canvasRect.height * 100),
+                            initialRect: foundRect ? foundRect.rect : { left: 0, top: 0, width: 0, height: 0 },
+                            _initialFontSize: elData.style.fontSize ?? null
+                        };
+                    }).filter(Boolean);
+
+                    const selectedIds = new Set(doc.selectedElementIds);
+                    doc.interaction.staticElementsBounds = allElementsPixelRects
+                        .filter(el => !selectedIds.has(el.id))
+                        .map(el => el.rect);
+                }, { silent: true });
+            }
+
+            handleMouseMove(e) {
+                const interaction = this.state.interaction;
+                if (!interaction.isDragging && !interaction.isResizing) return;
+                e.preventDefault();
+
+                if (this._animationFrameId) return;
+
+                this._animationFrameId = requestAnimationFrame(() => {
+                    const isTouch = e.type.startsWith('touch');
+                    if (isTouch && e.touches.length === 0) {
+                        this._animationFrameId = null;
+                        return;
+                    }
+                    const point = isTouch ? e.touches[0] : e;
+                    const dx = point.clientX - interaction.startX;
+                    const dy = point.clientY - interaction.startY;
+
+                    this.stateManager.change(doc => {
+                        doc.interaction.lastDx = dx;
+                        doc.interaction.lastDy = dy;
+                    }, { silent: true });
+
+                    if (interaction.isDragging) {
+                        this.handleDragMove(dx, dy);
+                    } else if (interaction.isResizing) {
+                        const scale = this.state.canvas.actualScale || 1;
+                        const dxPercent = (dx / scale) / CANVAS_WIDTH * 100;
+                        const dyPercent = (dy / scale) / CANVAS_HEIGHT * 100;
+                        this.performResize(dxPercent, dyPercent);
+                    }
+                    this._animationFrameId = null;
+                });
+            }
+
+            handleDragMove(dx, dy) {
+                this.app.guideLineManager.clear();
+                const interaction = this.state.interaction;
+                const draggingElementsInitialStates = interaction.initialStates;
+                const scale = this.state.canvas.actualScale || 1;
+                const canvasWidth = CANVAS_WIDTH;
+                const canvasHeight = CANVAS_HEIGHT;
+                let snapOffset = { x: 0, y: 0 };
+                let guides = [];
+                const scaledDx = dx / scale;
+                const scaledDy = dy / scale;
+
+                if (this.app.isSnapEnabled()) {
+                    const combinedBounds = draggingElementsInitialStates.reduce((acc, state) => {
+                        const currentLeft = state.initialRect.left + scaledDx;
+                        const currentTop = state.initialRect.top + scaledDy;
+                        acc.left = Math.min(acc.left, currentLeft);
+                        acc.top = Math.min(acc.top, currentTop);
+                        acc.right = Math.max(acc.right, currentLeft + state.initialRect.width);
+                        acc.bottom = Math.max(acc.bottom, currentTop + state.initialRect.height);
+                        return acc;
+                    }, { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity });
+                    combinedBounds.centerX = combinedBounds.left + (combinedBounds.right - combinedBounds.left) / 2;
+                    combinedBounds.centerY = combinedBounds.top + (combinedBounds.bottom - combinedBounds.top) / 2;
+                    
+                    const staticElementsBounds = interaction.staticElementsBounds || [];
+                    const canvasBounds = { left: 0, top: 0, right: canvasWidth, bottom: canvasHeight, centerX: canvasWidth / 2, centerY: canvasHeight / 2 };
+                    const snapResult = this.app.guideLineManager.calculateSnapGuides(combinedBounds, staticElementsBounds, canvasBounds);
+                    snapOffset = snapResult.snapOffset;
+                    guides = snapResult.guides;
+                }
+
+                this.stateManager.change(doc => { doc.interaction.lastSnapOffset = snapOffset; }, { silent: true });
+                const elementsToUpdate = this.app.getSelectedElementsData();
+                draggingElementsInitialStates.forEach(initialState => {
+                    const elData = elementsToUpdate.find(el => el.id === initialState.id);
+                    if (elData) {
+                        const domEl = this.app.elements.slideCanvas.querySelector(`[data-id="${elData.id}"]`);
+                        if (domEl) {
+                            const finalDx = scaledDx + snapOffset.x;
+                            const finalDy = scaledDy + snapOffset.y;
+                            const rotation = elData.style.rotation || 0;
+                            domEl.style.transform = `translate(${finalDx}px, ${finalDy}px) rotate(${rotation}deg)`;
+                        }
+                    }
+                });
+
+                this.app.renderSelectionBoundingBox();
+                if (this.app.isSnapEnabled()) {
+                    guides.forEach(g => { const [o, p] = g.split('-'); this.app.guideLineManager.addGuide(o, p); });
+                }
+            }
+
+            handleMouseUp() {
+                if (this._boundHandleMouseMove) {
+                    window.removeEventListener('mousemove', this._boundHandleMouseMove);
+                    window.removeEventListener('touchmove', this._boundHandleMouseMove);
+                    this._boundHandleMouseMove = null;
+                }
+                if (this._boundHandleMouseUp) {
+                    window.removeEventListener('mouseup', this._boundHandleMouseUp);
+                    window.removeEventListener('touchend', this._boundHandleMouseUp);
+                    this._boundHandleMouseUp = null;
+                }
+
+                const interaction = this.state.interaction;
+                if (!interaction || (!interaction.isDragging && !interaction.isResizing)) return;
+
+                this.stateManager.change(doc => {
+                    const activeSlide = doc.presentation.slides.find(s => s.id === doc.activeSlideId);
+                    if (!activeSlide) return;
+
+                    if (doc.isEditingText) {
+                        doc.interaction.isDragging = false;
+                        doc.interaction.isResizing = false;
+                        return;
+                    }
+
+                    if (interaction.isDragging) {
+                        const { lastDx, lastDy, lastSnapOffset, initialStates } = interaction;
+                        const currentActualScale = doc.canvas?.actualScale || 1;
+                        const finalDx = (lastDx / currentActualScale) + (lastSnapOffset?.x || 0);
+                        const finalDy = (lastDy / currentActualScale) + (lastSnapOffset?.y || 0);
+
+                        initialStates.forEach(initialState => {
+                            const element = activeSlide.elements.find(el => el.id === initialState.id);
+                            if (element) {
+                                const newLeft = (initialState.startX || 0) + (finalDx / CANVAS_WIDTH * 100);
+                                const newTop = (initialState.startY || 0) + (finalDy / CANVAS_HEIGHT * 100);
+                                if (!isNaN(newLeft)) element.style.left = parseFloat(newLeft.toFixed(2));
+                                if (!isNaN(newTop)) element.style.top = parseFloat(newTop.toFixed(2));
+                            }
+                        });
+                    }
+
+                    if (interaction.isResizing) {
+                        const { handle, initialStates, lastDx, lastDy } = interaction;
+                        const elId = doc.selectedElementIds[0];
+                        const initialState = initialStates[0];
+                        const element = activeSlide.elements.find(el => el.id === elId);
+
+                        if (element && initialState) {
+                            const scale = doc.canvas?.actualScale || 1;
+                            const dxPercent = (lastDx / scale) / CANVAS_WIDTH * 100;
+                            const dyPercent = (lastDy / scale) / CANVAS_HEIGHT * 100;
+                            const finalStyles = this._calculateResize(handle, initialState, dxPercent, dyPercent, interaction);
+
+                            if (!isNaN(finalStyles.newLeft)) element.style.left = finalStyles.newLeft;
+                            if (!isNaN(finalStyles.newTop)) element.style.top = finalStyles.newTop;
+                            if (!isNaN(finalStyles.newWidth)) element.style.width = finalStyles.newWidth;
+                            if (finalStyles.newHeight != null && !isNaN(finalStyles.newHeight)) element.style.height = finalStyles.newHeight;
+                            if (finalStyles.newFontSize && !isNaN(finalStyles.newFontSize)) element.style.fontSize = finalStyles.newFontSize;
+                        }
+                    }
+
+                    this.app.guideLineManager.clear();
+                    doc.interaction.isDragging = false;
+                    doc.interaction.isResizing = false;
+                    doc.interaction.initialStates = [];
+                    doc.interaction.staticElementsBounds = [];
+                    doc.interaction.lastDx = 0;
+                    doc.interaction.lastDy = 0;
+                    doc.interaction.lastSnapOffset = { x: 0, y: 0 };
+                });
+
+                this.state.selectedElementIds.forEach(id => {
+                    const domEl = this.app.elements.slideCanvas.querySelector(`[data-id="${id}"]`);
+                    if (domEl) {
+                        domEl.style.willChange = 'auto';
+                        const elData = this.app.getActiveSlide().elements.find(el => el.id === id);
+                        if (elData && elData.type === 'iframe') {
+                            const iframeEl = domEl.querySelector('iframe');
+                            if (iframeEl) iframeEl.style.pointerEvents = 'auto';
+                        }
+                    }
+                });
+            }
+
+            performResize(dxPercent, dyPercent) {
+                const interaction = this.state.interaction;
+                const { handle, initialStates } = interaction;
+                const elData = this.app.getSelectedElement();
+                const initialState = initialStates[0];
+                if (!elData || !initialState) return;
+
+                this.app.guideLineManager.clear();
+                const newStyles = this._calculateResize(handle, initialState, dxPercent, dyPercent, interaction);
+
+                if (newStyles.snapResult.snapped) {
+                    const scale = this.state.canvas.actualScale || 1;
+                    newStyles.snapResult.guides.forEach(guideInfo => {
+                        this.app.guideLineManager.drawSizeMatchGuide(guideInfo, scale);
+                    });
+                }
+
+                const domEl = this.app.elements.slideCanvas.querySelector(`[data-id="${elData.id}"]`);
+                if (domEl) {
+                    const rotation = elData.style.rotation || 0;
+                    domEl.style.width = `${newStyles.newWidth}%`;
+                    if (newStyles.newHeight != null) domEl.style.height = `${newStyles.newHeight}%`;
+                    const finalDxPercent = newStyles.newLeft - initialState.startX;
+                    const finalDyPercent = newStyles.newTop - initialState.startY;
+                    const translateXPx = Utils.percentToPixels(finalDxPercent, CANVAS_WIDTH);
+                    const translateYPx = Utils.percentToPixels(finalDyPercent, CANVAS_HEIGHT);
+                    domEl.style.transform = `translate(${translateXPx}px, ${translateYPx}px) rotate(${rotation}deg)`;
+                    if (newStyles.newFontSize) {
+                        const fontSizer = domEl.querySelector('i, span, div');
+                        if(fontSizer) fontSizer.style.fontSize = `${newStyles.newFontSize}px`;
+                    }
+                }
+                this.app.renderSelectionBoundingBox();
+            }
+
+            _calculateResize(handle, initialState, dxPercent, dyPercent, interaction) {
+                const { startX, startY, startW, startH } = initialState;
+                let newLeft = startX, newTop = startY, newWidth = startW, newHeight = startH;
+
+                if (handle.includes('e')) newWidth = Math.max(2, startW + dxPercent);
+                if (handle.includes('w')) { newWidth = Math.max(2, startW - dxPercent); newLeft = startX + dxPercent; }
+                if (handle.includes('s')) newHeight = startH != null ? Math.max(2, startH + dyPercent) : null;
+                if (handle.includes('n')) { newHeight = startH != null ? Math.max(2, startH - dyPercent) : null; newTop = startY + dyPercent; }
+
+                if (isNaN(newLeft)) newLeft = startX;
+                if (isNaN(newTop)) newTop = startY;
+                if (isNaN(newWidth)) newWidth = startW;
+                if (isNaN(newHeight)) newHeight = startH;
+
+                const elData = this.app.getSelectedElement();
+                if (elData.type === 'icon' && startW > 0.001 && startH > 0.001) {
+                    const ratio = startH / startW;
+                    if (newWidth !== startW) newHeight = newWidth * ratio;
+                    else if (newHeight !== startH && ratio > 0.001) newWidth = newHeight / ratio;
+                }
+
+                let newFontSize = null;
+                if ((elData.type === 'text' || elData.type === 'icon') && startW > 0 && newWidth !== startW) {
+                    const initialFontSize = initialState._initialFontSize ?? elData.style.fontSize;
+                    if (typeof initialFontSize === 'number') {
+                        newFontSize = Math.max(8, Math.round(initialFontSize * (newWidth / startW)));
+                    }
+                }
+
+                const snapResult = { snapped: false, guides: [] };
+                if (this.app.isSnapEnabled() && interaction) {
+                    const newWidthLogicalPx = Utils.percentToPixels(newWidth, CANVAS_WIDTH);
+                    const newHeightLogicalPx = newHeight != null ? Utils.percentToPixels(newHeight, CANVAS_HEIGHT) : null;
+                    const staticElementsRects = interaction.staticElementsBounds;
+
+                    for (const staticElRect of staticElementsRects) {
+                        const staticWidthLogicalPx = staticElRect.width;
+                        const staticHeightLogicalPx = staticElRect.height;
+
+                        if (Math.abs(newWidthLogicalPx - staticWidthLogicalPx) < CONFIG.SNAP_THRESHOLD) {
+                            const snappedWidthPercent = Utils.pixelsToPercent(staticWidthLogicalPx, CANVAS_WIDTH);
+                            if (handle.includes('w')) newLeft = startX + (startW - snappedWidthPercent);
+                            newWidth = snappedWidthPercent;
+                            snapResult.guides.push({ type: 'width', elementAId: elData.id, elementBId: staticElRect.id, handle });
+                            snapResult.snapped = true;
+                        }
+
+                        if (newHeightLogicalPx != null && Math.abs(newHeightLogicalPx - staticHeightLogicalPx) < CONFIG.SNAP_THRESHOLD) {
+                            const snappedHeightPercent = Utils.pixelsToPercent(staticHeightLogicalPx, CANVAS_HEIGHT);
+                            if (handle.includes('n')) newTop = startY + (startH - snappedHeightPercent);
+                            newHeight = snappedHeightPercent;
+                            snapResult.guides.push({ type: 'height', elementAId: elData.id, elementBId: staticElRect.id, handle });
+                            snapResult.snapped = true;
+                        }
+                        if (snapResult.snapped) break;
+                    }
+                }
+                return { newLeft, newTop, newWidth, newHeight, newFontSize, snapResult };
+            }
+
+            handleCanvasDblClick(e) {
+                const event = (typeof e.preventDefault === "function") ? e : null;
+                const target = e.target || e;
+                const element = target.closest('.slide-element.text');
+                if (!element) return;
+                
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                
+                this.app.stopTextEditing(true);
+                
+                this.stateManager.change(doc => {
+                    doc.selectedElementIds = [element.dataset.id];
+                    doc.isEditingText = true;
+                });
+                
+                this.app.elements.slideCanvas.querySelectorAll('.slide-element[contenteditable="true"]').forEach(el => el.setAttribute('contenteditable', 'false'));
+                element.setAttribute('contenteditable', 'true');
+                element.style.cursor = 'text';
+                
+                requestAnimationFrame(() => {
+                    element.focus();
+                    const selection = window.getSelection();
+                    const range = document.createRange();
+                    range.selectNodeContents(element);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    if (this.state.selectedElementIds.length > 0) {
+                        this.app.switchToTab('inspector');
+                        this.app.renderInspector();
+                    }
+                });
+            }
+        }
+
+        // =================================================================
         // App: メインアプリケーション（リファクタリング版）
         // =================================================================
         const App = window.App = { // Appオブジェクトをグローバルに公開
-            // 新しい状態管理システム
             stateManager: null,
+            slideId: null,
             
-            // 従来のstate参照（後方互換性のため）
             get state() {
-                return this.stateManager ? this.stateManager.state : {};
-            },
-            
-            // stateの直接更新のためのセッター
-            set state(value) {
-                if (this.stateManager) {
-                    this.stateManager.state = value;
-                }
+                return this.stateManager ? this.stateManager.get() : {};
             },
             
             elements: {},
@@ -1214,9 +1920,8 @@ static _createIframe(elData) {
             domElementCache: new Map(),
             thumbnailCache: new Map(),
             _animationFrameId: null,
-            _boundHandleMouseMove: null,
-            _boundHandleMouseUp: null,
             _sidebarCloseHandler: null,
+            interactionManager: null,
 
             applyStyles(element, styles) {
                 StyleManager.applyStyles(element, styles);
@@ -1224,20 +1929,62 @@ static _createIframe(elData) {
 
             async init() {
                 try {
-                    // 状態管理システムの初期化
+                    // Automerge WASMの初期化
+                    await Automerge.initializeWasm(
+                        fetch("https://esm.sh/@automerge/automerge@3.1.1/dist/automerge.wasm")
+                    );
+
+                    this.interactionManager = new InteractionManager(this);
+
+                    const pathParts = window.location.pathname.split('/');
+                    this.slideId = pathParts.pop() || pathParts.pop(); // 末尾が空文字列の場合を考慮
+                    if (!this.slideId) {
+                        console.error("Slide ID not found in URL, defaulting to 1");
+                        this.slideId = '1';
+                    }
+
                     this.stateManager = new StateManager();
+                    
+                    // スライドIDが不正(例: 'slide')のときもそのまま接続を試みると404/再接続ループになる。
+                    // ここではフェールセーフとして、存在しない/短いIDには新規IDを払い出して使用する。
+                    let safeSlideId = this.slideId;
+                    if (!safeSlideId || safeSlideId.length < 8) {
+                        safeSlideId = `s-${Date.now().toString(16)}${Math.random().toString(36).slice(2,10)}`;
+                        const newUrl = `/slide/${safeSlideId}${window.location.search}${window.location.hash}`;
+                        window.location.href = newUrl; // ハードリロード
+                        return; // リロードするので、以降の処理は中断
+                    }
+
+                    // 1. Load state from server or create a new one
+                    await this.stateManager.load(safeSlideId);
+
+                    // 2. Now that the slide is guaranteed to exist on the server, connect WebSocket
+                    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsUrl = `${wsProtocol}//${window.location.host}/ws/collaborate/${safeSlideId}`;
+                    // WebSocketClient から ensure 用に参照できるよう、slideId を保持
+                    this.stateManager.slideId = safeSlideId;
+                    this.webSocketClient = new WebSocketClient(wsUrl, this.stateManager);
+                    
+                    // 3. Set up the change listener to send updates via WebSocket
+                    this.stateManager.setOnChange((changes) => {
+                        this.webSocketClient.send(changes);
+                    });
+
+                    // 4. Initialize UI and other components
                     this._initializeStateListeners();
                     
                     this.cacheElements();
                     this.guideLineManager = new GuideLineManager(this.elements.slideCanvas);
-                    this.presentationManager = new PresentationManager(this); // PresentationManagerの初期化
-                    this.iconManager = new IconManager(this); // IconManagerの初期化
-                    this.inspectorManager = new InspectorManager(this); // InspectorManagerの初期化
-                    this.inspectorManager.render(); // 初期ロード時にインスペクターの表示状態を更新
-                    await this.iconManager.loadIconData();
-                    await this.loadCssProperties();
+                    this.presentationManager = new PresentationManager(this);
+                    this.iconManager = new IconManager(this);
+                    this.inspectorManager = new InspectorManager(this);
                     
-                    // URL安全チェックのUIバインド
+                    // 並列実行で初期化を高速化
+                    await Promise.all([
+                        this.iconManager.loadIconData(),
+                        this.loadCssProperties()
+                    ]);
+                    
                     this._bindQrModalUrlSafety();
                     this._bindEmbedModalUrlSafety();
 
@@ -1254,61 +2001,89 @@ static _createIframe(elData) {
                         { root: this.elements.slideList, rootMargin: '200px' }
                     );
                     
-                    // bindEvents, loadState, render, initZoomControl は loadIconData() の後に実行
                     this.bindEvents();
-                    this._initPresentMenu(); // プレゼン表示方法メニュー初期化
-                    this._autoStartIfPopup(); // 新規ウィンドウでの自動開始対応
-                    this.loadState();
+                    this._initPresentMenu();
+                    this._autoStartIfPopup();
                     this.render();
                     this.initZoomControl();
                     
                     if (window.developmentMode) {
                         console.log('App initialized successfully');
                     }
+                    
+                    // 初期化完了イベントを発火
+                    window.dispatchEvent(new CustomEvent('app-initialized'));
                 } catch (error) {
                     ErrorHandler.handle(error, 'app_initialization');
                 }
             },
+
             _initializeStateListeners() {
-                // 選択要素変更時の処理
-                this.stateManager.subscribe('selectedElementIds', (newIds, oldIds) => {
-                    if (JSON.stringify(newIds) !== JSON.stringify(oldIds)) {
-                        this.render();
-                    }
+                // Automergeでは、ドキュメント全体が変更されたときに通知が来る
+                this.stateManager.subscribe('*', (newDoc) => {
+                    this.render();
                 });
-
-                // アクティブスライド変更時の処理
-                this.stateManager.subscribe('activeSlideId', (newId, oldId) => {
-                    if (newId !== oldId) {
-                        this.stateManager.set('selectedElementIds', [], { silent: true });
-                        
-                        this.render();
-                    }
-                });
-
-                // プレゼンテーション変更時の自動保存
-                this.stateManager.subscribe('presentation', () => {
-                    if (this._autoSaveEnabled()) {
-                        this.saveState();
-                    }
-                });
-            },
-
-            _autoSaveEnabled() {
-                return localStorage.getItem('webSlideMakerAutoSave') !== 'false';
             },
 
             // StateManagerを使った状態更新メソッド
-            updateState(path, value, options = {}) {
-                return this.stateManager.set(path, value, options);
+            updateState(callbackOrPath, maybeValueOrOpts = undefined, maybeOpts = undefined) {
+                // オーバーロード:
+                // 1) updateState(doc => { ... }, { message? })
+                // 2) updateState('a.b.c', value, { message? })
+                if (typeof callbackOrPath === 'function') {
+                    const opts = (maybeValueOrOpts && typeof maybeValueOrOpts === 'object' && !Array.isArray(maybeValueOrOpts)) ? maybeValueOrOpts : {};
+                    if (!this.stateManager) {
+                        console.warn('StateManager is not initialized yet');
+                        return;
+                    }
+                    this.stateManager.change(callbackOrPath, opts);
+                    return;
+                }
+                if (typeof callbackOrPath === 'string') {
+                    const path = callbackOrPath;
+                    const value = maybeValueOrOpts;
+                    const opts = (maybeOpts && typeof maybeOpts === 'object') ? maybeOpts : {};
+                    if (!this.stateManager) {
+                        console.warn('StateManager is not initialized yet');
+                        return;
+                    }
+                    this.stateManager.change(doc => {
+                        const keys = path.split('.');
+                        let cur = doc;
+                        const last = keys.pop();
+                        for (const k of keys) {
+                            if (cur[k] == null || typeof cur[k] !== 'object') cur[k] = {};
+                            cur = cur[k];
+                        }
+                        cur[last] = value;
+                    }, opts);
+                    return;
+                }
+                console.warn('updateState called with unsupported arguments', arguments);
             },
 
             getState(path) {
+                if (!this.stateManager) {
+                    console.warn(`StateManager not ready, cannot get path: ${path}`);
+                    return undefined;
+                }
                 return this.stateManager.get(path);
             },
 
+            // batchUpdateStateはupdateStateに統合
             batchUpdateState(updates, options = {}) {
-                return this.stateManager.batch(updates, options);
+                this.updateState(doc => {
+                    for (const [path, value] of Object.entries(updates)) {
+                        const keys = path.split('.');
+                        let current = doc;
+                        const lastKey = keys.pop();
+                        for (const key of keys) {
+                            if(!current[key]) current[key] = {};
+                            current = current[key];
+                        }
+                        current[lastKey] = value;
+                    }
+                });
             },
 
 
@@ -1412,128 +2187,16 @@ static _createIframe(elData) {
                 };
             },
 
-            loadState() {
-                try {
-                    const savedData = localStorage.getItem('webSlideMakerData');
-                    if (savedData) {
-                        const newPresentation = JSON.parse(savedData);
-                        // 既存のデータにscriptプロパティがない場合、空文字列で初期化
-                        if (newPresentation.script === undefined) {
-                            newPresentation.script = '';
-                        }
-                        // groupsプロパティがない場合、空のオブジェクトで初期化
-                        if (newPresentation.groups === undefined) {
-                            newPresentation.groups = {};
-                        }
-                        this.stateManager.batch({
-                            'presentation': newPresentation,
-                            'activeSlideId': newPresentation.slides[0]?.id || null,
-                            'selectedElementIds': []
-                        }, { silent: true });
-                    } else {
-                        this.createNewPresentation();
-                    }
-                    
-                    // グローバルCSSをテキストエリアに反映
-                    const globalCssInput = document.getElementById('global-css-input');
-                    if (globalCssInput) {
-                        globalCssInput.value = this.state.presentation?.settings?.globalCss || '';
-                    }
-                    this.applyCustomCss();
-                    this.applyPageBackground();
-                    
-                    // ColorPickerの初期化
-                    if (this.elements.pageBgColorPickerContainer) {
-                        this.pageBgColorPicker = new ColorPicker(
-                            this.elements.pageBgColorPickerContainer,
-                            this.state.presentation.settings.backgroundColor,
-                            (color) => {
-                                this.updateState('presentation.settings.backgroundColor', color);
-                                this.applyPageBackground();
-                                this.saveState();
-                            },
-                            {
-                                defaultColor: '#ffffff',
-                                paletteKey: 'pageBackgroundPalette'
-                            }
-                        );
-                    }
-
-                } catch (error) {
-                    ErrorHandler.handle(error, 'load_state');
-                    this.createNewPresentation();
-                }
-            },
 
             saveState() {
-                try {
-                    const presentation = this.state.presentation;
-                    if (!presentation) return;
-                    
-                    localStorage.setItem('webSlideMakerData', JSON.stringify(presentation));
-                    
-                    // UI更新
-                    const saveButton = this.elements.saveBtn?.querySelector('span');
-                    if (saveButton) {
-                        const originalText = saveButton.textContent;
-                        saveButton.textContent = '保存済み';
-                        setTimeout(() => {
-                            if (saveButton.textContent === '保存済み') {
-                                saveButton.textContent = originalText;
-                            }
-                        }, 1500);
-                    }
-                } catch (error) {
-                    ErrorHandler.handle(error, 'save_state');
-                }
+                // AutomergeとWebSocketによるリアルタイム同期アーキテクチャでは、
+                // 変更は即座に送信・永続化されるため、この手動保存メソッドは不要です。
+                // UIからの呼び出しは削除されています。
+                console.log("Manual save is deprecated. Changes are sent automatically.");
             },
 
             createNewPresentation() {
-                try {
-                    const firstSlideId = this.generateId('slide');
-                    const newPresentation = {
-                        settings: {
-                            width: CANVAS_WIDTH,
-                            height: CANVAS_HEIGHT,
-                            globalCss: '',
-                            backgroundType: 'solid',
-                            backgroundColor: '#ffffff',
-                            gradientStart: '#ffffff',
-                            gradientEnd: '#007bff',
-                            gradientAngle: 90
-                        },
-                        slides: [{
-                            id: firstSlideId,
-                            elements: [{
-                                id: this.generateId('el'),
-                                type: 'text',
-                                content: 'タイトル',
-                                style: {
-                                    top: 20, left: 10, width: 80, height: null,
-                                    zIndex: 1, rotation: 0, color: '#212529',
-                                    fontSize: 60, fontFamily: 'sans-serif', animation: ''
-                                }
-                            }, {
-                                id: this.generateId('el'),
-                                type: 'text',
-                                content: 'サブタイトル',
-                                style: {
-                                    top: 40, left: 10, width: 80, height: null,
-                                    zIndex: 2, rotation: 0, color: '#6c757d',
-                                    fontSize: 32, fontFamily: 'sans-serif', animation: ''
-                                }
-                            }]
-                        }]
-                    };
-                    
-                    this.stateManager.batch({
-                        'presentation': newPresentation,
-                        'activeSlideId': firstSlideId,
-                        'selectedElementIds': []
-                    }, { silent: true });
-                } catch (error) {
-                    ErrorHandler.handle(error, 'create_new_presentation');
-                }
+                this.stateManager.createInitialDoc();
             },
 
             render() {
@@ -1541,10 +2204,6 @@ static _createIframe(elData) {
                 
                 requestAnimationFrame(() => {
                     try {
-                        // キャンバスのBoundingRectを状態管理システムで管理
-                        const canvasRect = this.elements.slideCanvas.getBoundingClientRect();
-                        this.stateManager.set('canvas.rect', canvasRect, { silent: true });
-                        
                         this.renderThumbnails();
                         this.renderSlideCanvas();
 
@@ -1643,9 +2302,9 @@ static _createIframe(elData) {
                                 : status === 'invalid' ? '#721c24'
                                 : '#856404';
                     const bg = status === 'safe' ? '#d4edda'
-                              : status === 'blocked' ? '#f8d7da'
-                              : status === 'invalid' ? '#f8d7da'
-                              : '#fff3cd';
+                                : status === 'blocked' ? '#f8d7da'
+                                : status === 'invalid' ? '#f8d7da'
+                                : '#fff3cd';
                     warning.style.padding = '8px 10px';
                     warning.style.borderRadius = '6px';
                     warning.style.border = '1px solid rgba(0,0,0,0.08)';
@@ -1757,9 +2416,9 @@ static _createIframe(elData) {
                                     : status === 'invalid' ? '#721c24'
                                     : '#856404';
                         const bg = status === 'safe' ? '#d4edda'
-                                  : status === 'blocked' ? '#f8d7da'
-                                  : status === 'invalid' ? '#f8d7da'
-                                  : '#fff3cd';
+                                    : status === 'blocked' ? '#f8d7da'
+                                    : status === 'invalid' ? '#f8d7da'
+                                    : '#fff3cd';
                         msg.style.padding = '6px 8px';
                         msg.style.borderRadius = '6px';
                         msg.style.border = '1px solid rgba(0,0,0,0.08)';
@@ -1997,8 +2656,8 @@ static _createIframe(elData) {
                 this.elements.ungroupBtn.disabled = selectedGroupCount === 0;
 
                 // Undo/Redo buttons
-                this.elements.undoBtn.disabled = this.stateManager._undoStack.length === 0;
-                this.elements.redoBtn.disabled = this.stateManager._redoStack.length === 0;
+                this.elements.undoBtn.disabled = !this.stateManager.canUndo();
+                this.elements.redoBtn.disabled = !this.stateManager.canRedo();
             },
 
             _createThumbnailElement(slide, settings) {
@@ -2050,7 +2709,9 @@ static _createIframe(elData) {
                 // 2. 不要なDOMを削除
                 for (const [id, dom] of existingDoms.entries()) {
                     if (!newSlideIds.has(id)) {
-                        this.thumbnailObserver.unobserve(dom);
+                        if (this.thumbnailObserver) {
+                            this.thumbnailObserver.unobserve(dom);
+                        }
                         dom.remove();
                         this.thumbnailCache.delete(id);
                     }
@@ -2075,7 +2736,9 @@ static _createIframe(elData) {
                         // --- 新規作成 ---
                         li = this._createThumbnailElement(slide, settings);
                         this.thumbnailCache.set(slide.id, li);
-                        this.thumbnailObserver.observe(li);
+                        if (this.thumbnailObserver) {
+                            this.thumbnailObserver.observe(li);
+                        }
                         li.className = `slide-thumbnail ${slide.id === activeSlideId ? 'active' : ''}`;
                         li.querySelector('.thumbnail-index').textContent = index + 1;
                     }
@@ -2221,23 +2884,21 @@ static _createIframe(elData) {
 
                 // 要素の更新と追加
                 activeSlide.elements.forEach((elData, index) => {
-                    // elData.style.zIndex = index + 1; // 配列の順序に基づいてzIndexを動的に設定 - zIndexは要素の移動時に更新されるため不要
                     const cacheEntry = this.domElementCache.get(elData.id);
                     let el = cacheEntry ? cacheEntry.dom : null;
-                    const previousContent = cacheEntry ? cacheEntry.content : null;
+                    const newHash = Utils.objectHash({ style: elData.style, content: elData.content });
 
                     if (!el) {
                         // --- 新規作成 ---
                         el = this.createElementDOM(elData);
                         el.dataset.id = elData.id;
                         canvas.appendChild(el);
-                        this.domElementCache.set(elData.id, { dom: el, content: elData.content });
+                        this.domElementCache.set(elData.id, { dom: el, hash: newHash });
                     } else {
-                        // --- 更新 ---
-                        StyleManager.applyStyles(el, elData.style);
-                        
-                        // immerにより、contentオブジェクトが変更されていれば参照も変わる
-                        if (previousContent !== elData.content) {
+                        // --- 更新（ハッシュを比較して変更があった場合のみ） ---
+                        if (cacheEntry.hash !== newHash) {
+                            StyleManager.applyStyles(el, elData.style);
+                            
                             const content = ElementFactory.createElement(elData);
                             el.textContent = ''; // 中身をクリア
                             if (content) {
@@ -2247,7 +2908,7 @@ static _createIframe(elData) {
                                     el.innerText = content;
                                 }
                             }
-                            this.domElementCache.set(elData.id, { dom: el, content: elData.content });
+                            this.domElementCache.set(elData.id, { dom: el, hash: newHash });
                         }
                     }
 
@@ -2309,8 +2970,11 @@ static _createIframe(elData) {
                 canvas.style.transformOrigin = "center center";
                 canvas.style.transform = `scale(${finalScale}) translate(${pan.x / finalScale}px, ${pan.y / finalScale}px)`;
                 
-                // 状態管理システムに実際のスケールを保存
-                this.stateManager.set('canvas.actualScale', finalScale, { silent: true });
+                // 状態管理システムに実際のスケールを保存 (再描画ループを防ぐためsilent)
+                this.updateState(doc => {
+                    if (!doc.canvas) doc.canvas = {};
+                    doc.canvas.actualScale = finalScale;
+                }, { silent: true });
             },
 
             renderSelectionBoundingBox() {
@@ -2393,7 +3057,7 @@ static _createIframe(elData) {
                     this._bindGroupEvents();
                     this._bindInspectorEvents();
                     this._bindGlobalEvents();
-                   this._bindWikiImageSearchEvents();
+                    this._bindWikiImageSearchEvents();
                 } catch (error) {
                     ErrorHandler.handle(error, 'bind_events');
                 }
@@ -2403,16 +3067,8 @@ static _createIframe(elData) {
                 // スライド操作ボタン
                 this.elements.addSlideBtn.addEventListener('click', () => this.addSlide());
                 this.elements.deleteSlideBtn.addEventListener('click', () => this.deleteSlide());
-                this.elements.undoBtn.addEventListener('click', () => {
-                    if (this.stateManager.undo()) {
-                        this.render();
-                    }
-                });
-                this.elements.redoBtn.addEventListener('click', () => {
-                    if (this.stateManager.redo()) {
-                        this.render();
-                    }
-                });
+                this.elements.undoBtn.addEventListener('click', () => this.stateManager.undo());
+                this.elements.redoBtn.addEventListener('click', () => this.stateManager.redo());
                 
                 // 要素追加ボタン
                 this.elements.addTextBtn.addEventListener('click', () => this.addElement('text'));
@@ -2437,8 +3093,7 @@ static _createIframe(elData) {
                 // 画像関連ボタン
                 this._bindImageButtons();
 
-                // プレゼンテーション・保存・エクスポートボタン
-                this.elements.saveBtn.addEventListener('click', () => this.saveState());
+                // プレゼンテーション・エクスポートボタン
                 this.elements.presentBtn.addEventListener('click', () => this.presentationManager.startPresentation());
                 this.elements.exportBtn.addEventListener('click', (e) => this.showExportMenu(e));
 
@@ -2539,9 +3194,9 @@ static _createIframe(elData) {
                         const btn = e.target.closest('button');
                         if (btn) {
                             const type = btn.dataset.bgType;
-                            this.updateState('presentation.settings.backgroundType', type);
-                            this.applyPageBackground();
-                            this.saveState();
+                            this.updateState(doc => {
+                                doc.presentation.settings.backgroundType = type;
+                            });
                             // 単色モードに切り替わったらカラーピッカーの値を更新
                             if (type === 'solid' && this.pageBgColorPicker) {
                                 this.pageBgColorPicker.setColor(this.state.presentation.settings.backgroundColor);
@@ -2555,14 +3210,11 @@ static _createIframe(elData) {
                 gradientControls.forEach(control => {
                     if (control) {
                         control.addEventListener('input', Utils.debounce(() => {
-                            const updates = {
-                                'presentation.settings.gradientStart': this.elements.gradientStartColor.value,
-                                'presentation.settings.gradientEnd': this.elements.gradientEndColor.value,
-                                'presentation.settings.gradientAngle': parseInt(this.elements.gradientAngle.value)
-                            };
-                            this.batchUpdateState(updates);
-                            this.applyPageBackground();
-                            this.saveState();
+                            this.updateState(doc => {
+                                doc.presentation.settings.gradientStart = this.elements.gradientStartColor.value;
+                                doc.presentation.settings.gradientEnd = this.elements.gradientEndColor.value;
+                                doc.presentation.settings.gradientAngle = parseInt(this.elements.gradientAngle.value);
+                            });
                         }, 150));
                     }
                 });
@@ -2752,9 +3404,9 @@ static _createIframe(elData) {
                     if (!textarea) return;
                     const css = textarea.value;
 
-                    this.updateState('presentation.settings.globalCss', css);
-                    this.applyCustomCss();
-                    this.saveState();
+                    this.updateState(doc => {
+                        doc.presentation.settings.globalCss = css;
+                    });
                     alert('ページ全体のCSSを適用しました。');
                 } catch (error) {
                     ErrorHandler.handle(error, 'global_css_save');
@@ -2917,46 +3569,49 @@ static _createIframe(elData) {
                 const elementId = element ? element.dataset.id : null;
                 const clickedGroup = elementId ? this._findGroupForElement(elementId) : null;
 
-                this.updateState('interaction.isCtrlPressed', e.ctrlKey || e.metaKey, { skipHistory: true });
+                let shouldStartInteraction = false;
 
-                if (clickedGroup) {
-                    this.batchUpdateState({
-                        'selectedElementIds': [],
-                        'selectedGroupIds': [clickedGroup.id]
-                    });
-                    this.updateState('interaction.isDragging', true);
-                    this.startInteraction(e);
-                } else if (elementId) {
-                    const isSelected = this.getState('selectedElementIds').includes(elementId);
-                    if (this.getState('interaction.isCtrlPressed')) {
-                        this.updateState('selectedElementIds', isSelected
-                            ? this.getState('selectedElementIds').filter(id => id !== elementId)
-                            : [...this.getState('selectedElementIds'), elementId]
-                        );
-                    } else {
-                        if (!isSelected) {
-                            this.updateState('selectedElementIds', [elementId]);
-                            this.switchToTab('inspector'); // 要素が選択されたらインスペクタータブに切り替える
+                this.updateState(doc => {
+                    if (!doc.interaction) doc.interaction = {};
+                    doc.interaction.isCtrlPressed = e.ctrlKey || e.metaKey;
+
+                    if (clickedGroup) {
+                        doc.selectedElementIds = [];
+                        doc.selectedGroupIds = [clickedGroup.id];
+                        doc.interaction.isDragging = true;
+                        shouldStartInteraction = true;
+                    } else if (elementId) {
+                        const isSelected = doc.selectedElementIds.includes(elementId);
+                        if (doc.interaction.isCtrlPressed) {
+                            if (isSelected) {
+                                doc.selectedElementIds = doc.selectedElementIds.filter(id => id !== elementId);
+                            } else {
+                                doc.selectedElementIds.push(elementId);
+                            }
+                        } else {
+                            if (!isSelected) {
+                                doc.selectedElementIds = [elementId];
+                                this.switchToTab('inspector');
+                            }
                         }
-                    }
-                    this.updateState('selectedGroupIds', []);
+                        doc.selectedGroupIds = [];
 
-                    if (target.classList.contains('resize-handle')) {
-                        this.batchUpdateState({
-                            'interaction.isResizing': true,
-                            'interaction.handle': target.dataset.handle
-                        });
+                        if (target.classList.contains('resize-handle')) {
+                            doc.interaction.isResizing = true;
+                            doc.interaction.handle = target.dataset.handle;
+                        } else {
+                            doc.interaction.isDragging = true;
+                        }
+                        shouldStartInteraction = true;
                     } else {
-                        this.updateState('interaction.isDragging', true);
+                        doc.selectedElementIds = [];
+                        doc.selectedGroupIds = [];
                     }
+                });
+
+                if (shouldStartInteraction) {
                     this.startInteraction(e);
-                } else {
-                    this.batchUpdateState({
-                        'selectedElementIds': [],
-                        'selectedGroupIds': []
-                    });
                 }
-                this.render();
             },
 
             startInteraction(e) {
@@ -2968,75 +3623,82 @@ static _createIframe(elData) {
                 window.addEventListener('mouseup', this._boundHandleMouseUp);
                 window.addEventListener('touchend', this._boundHandleMouseUp);
 
-                this.stateManager._saveToHistory();
                 const isTouch = e.type.startsWith('touch');
                 const point = isTouch ? e.touches[0] : e;
                 const canvasRect = this.elements.slideCanvas.getBoundingClientRect();
 
-                this.batchUpdateState({
-                    'canvas.rect': canvasRect,
-                    'interaction.startX': point.clientX,
-                    'interaction.startY': point.clientY
-                });
-
-                let elementsToTrack = [];
-                if (this.state.selectedGroupIds.length > 0) {
-                    const slideGroups = this.state.presentation.groups[this.state.activeSlideId] || [];
-                    this.state.selectedGroupIds.forEach(groupId => {
-                        const group = slideGroups.find(g => g.id === groupId);
-                        if (group) {
-                            elementsToTrack.push(...this.getActiveSlide().elements.filter(el => group.elementIds.includes(el.id)));
-                        }
-                    });
-                } else {
-                    elementsToTrack = this.getSelectedElementsData();
-                }
-                
-                // Get all elements' pixel rects at the beginning of interaction
-                const allElementsPixelRects = this.getActiveSlide().elements.map(elData => {
-                    const domEl = this.elements.slideCanvas.querySelector(`[data-id="${elData.id}"]`);
-                    if (!domEl) {
-                        const rect = { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0, centerX: 0, centerY: 0 };
-                        return { id: elData.id, rect };
-                    }
-                    const rect = { left: domEl.offsetLeft, top: domEl.offsetTop, width: domEl.offsetWidth, height: domEl.offsetHeight };
-                    rect.right = rect.left + rect.width;
-                    rect.bottom = rect.top + rect.height;
-                    rect.centerX = rect.left + rect.width / 2;
-                    rect.centerY = rect.top + rect.height / 2;
-                    return { id: elData.id, rect };
-                });
-
-                const initialStates = elementsToTrack.map(elData => {
-                    const domEl = this.elements.slideCanvas.querySelector(`[data-id="${elData.id}"]`);
-                    if (!domEl) return null;
-                    
-                    domEl.style.willChange = 'transform, width, height';
-                    
-                    // iframe pointer events
-                    if (elData.type === 'iframe') {
-                        const iframeEl = domEl.querySelector('iframe');
-                        if (iframeEl) {
-                            iframeEl.style.pointerEvents = 'none';
-                        }
-                    }
-                    
-                    const foundRect = allElementsPixelRects.find(r => r.id === elData.id);
-                    return {
-                        id: elData.id,
-                        startX: elData.style.left,
-                        startY: elData.style.top,
-                        startW: elData.style.width,
-                        startH: elData.style.height ?? (domEl.offsetHeight / canvasRect.height * 100),
-                        initialRect: foundRect ? foundRect.rect : { left: 0, top: 0, width: 0, height: 0 },
-                        _initialFontSize: elData.style.fontSize
+                this.updateState(doc => {
+                    if (!doc.canvas) doc.canvas = {};
+                    // DOMRectをプレーンオブジェクトに変換して保存
+                    doc.canvas.rect = {
+                        left: canvasRect.left,
+                        top: canvasRect.top,
+                        width: canvasRect.width,
+                        height: canvasRect.height,
+                        right: canvasRect.right,
+                        bottom: canvasRect.bottom,
+                        x: canvasRect.x,
+                        y: canvasRect.y
                     };
-                }).filter(Boolean);
+                    if (!doc.interaction) doc.interaction = {};
+                    doc.interaction.startX = point.clientX;
+                    doc.interaction.startY = point.clientY;
 
-                this.batchUpdateState({
-                    'interaction.initialStates': initialStates,
-                    'interaction.allElementsPixelRects': allElementsPixelRects
-                });
+                    let elementsToTrack = [];
+                    if (doc.selectedGroupIds.length > 0) {
+                        const slideGroups = doc.presentation.groups[doc.activeSlideId] || [];
+                        doc.selectedGroupIds.forEach(groupId => {
+                            const group = slideGroups.find(g => g.id === groupId);
+                            if (group) {
+                                elementsToTrack.push(...doc.presentation.slides.find(s => s.id === doc.activeSlideId).elements.filter(el => group.elementIds.includes(el.id)));
+                            }
+                        });
+                    } else {
+                        elementsToTrack = doc.presentation.slides.find(s => s.id === doc.activeSlideId).elements.filter(el => doc.selectedElementIds.includes(el.id));
+                    }
+                    
+                    const allElementsPixelRects = doc.presentation.slides.find(s => s.id === doc.activeSlideId).elements.map(elData => {
+                        const domEl = this.elements.slideCanvas.querySelector(`[data-id="${elData.id}"]`);
+                        if (!domEl) {
+                            return { id: elData.id, rect: { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0, centerX: 0, centerY: 0 } };
+                        }
+                        const rect = { left: domEl.offsetLeft, top: domEl.offsetTop, width: domEl.offsetWidth, height: domEl.offsetHeight };
+                        rect.right = rect.left + rect.width;
+                        rect.bottom = rect.top + rect.height;
+                        rect.centerX = rect.left + rect.width / 2;
+                        rect.centerY = rect.top + rect.height / 2;
+                        return { id: elData.id, rect };
+                    });
+
+                    doc.interaction.initialStates = elementsToTrack.map(elData => {
+                        const domEl = this.elements.slideCanvas.querySelector(`[data-id="${elData.id}"]`);
+                        if (!domEl) return null;
+                        
+                        domEl.style.willChange = 'transform, width, height';
+                        
+                        if (elData.type === 'iframe') {
+                            const iframeEl = domEl.querySelector('iframe');
+                            if (iframeEl) iframeEl.style.pointerEvents = 'none';
+                        }
+                        
+                        const foundRect = allElementsPixelRects.find(r => r.id === elData.id);
+                        return {
+                            id: elData.id,
+                            startX: elData.style.left ?? 0,
+                            startY: elData.style.top ?? 0,
+                            startW: elData.style.width ?? 0,
+                            startH: elData.style.height ?? (domEl.offsetHeight / canvasRect.height * 100),
+                            initialRect: foundRect ? foundRect.rect : { left: 0, top: 0, width: 0, height: 0 },
+                            _initialFontSize: elData.style.fontSize ?? null
+                        };
+                    }).filter(Boolean);
+
+                    // 静的要素の情報をキャッシュ
+                    const selectedIds = new Set(doc.selectedElementIds);
+                    doc.interaction.staticElementsBounds = allElementsPixelRects
+                        .filter(el => !selectedIds.has(el.id))
+                        .map(el => el.rect);
+                }, { silent: true });
             },
 
             handleMouseMove(e) {
@@ -3108,10 +3770,7 @@ static _createIframe(elData) {
                     combinedBounds.centerX = combinedBounds.left + (combinedBounds.right - combinedBounds.left) / 2;
                     combinedBounds.centerY = combinedBounds.top + (combinedBounds.bottom - combinedBounds.top) / 2;
 
-                    // Use cached pixel rects
-                    const staticElementsBounds = interaction.allElementsPixelRects
-                        .filter(el => !this.state.selectedElementIds.includes(el.id))
-                        .map(el => el.rect);
+                    const staticElementsBounds = interaction.staticElementsBounds || [];
                     const canvasBounds = { left: 0, top: 0, right: canvasWidth, bottom: canvasHeight, centerX: canvasWidth / 2, centerY: canvasHeight / 2 };
                     
                     const snapResult = this.guideLineManager.calculateSnapGuides(combinedBounds, staticElementsBounds, canvasBounds);
@@ -3141,7 +3800,6 @@ static _createIframe(elData) {
             },
 
             handleMouseUp() {
-                // Remove event listeners
                 if (this._boundHandleMouseMove) {
                     window.removeEventListener('mousemove', this._boundHandleMouseMove);
                     window.removeEventListener('touchmove', this._boundHandleMouseMove);
@@ -3154,87 +3812,90 @@ static _createIframe(elData) {
                 }
 
                 const interaction = this.getState('interaction');
-                
-                if (this.state.isEditingText) {
-                    this.batchUpdateState({ 'interaction.isDragging': false, 'interaction.isResizing': false });
-                    return;
-                }
+                if (!interaction || (!interaction.isDragging && !interaction.isResizing)) return;
 
-                if (interaction.isDragging) {
-                    const canvasWidth = CANVAS_WIDTH;
-                    const canvasHeight = CANVAS_HEIGHT;
-                    const { lastDx, lastDy, lastSnapOffset, initialStates } = interaction;
-                    const currentActualScale = this.getState('canvas.actualScale') || 1;
+                this.updateState(doc => {
+                    const activeSlide = doc.presentation.slides.find(s => s.id === doc.activeSlideId);
+                    if (!activeSlide) return;
 
-                    // finalDx と finalDy は、スケール補正された「論理ピクセル」移動量
-                    const finalDx = (lastDx / currentActualScale) + (lastSnapOffset.x || 0);
-                    const finalDy = (lastDy / currentActualScale) + (lastSnapOffset.y || 0);
-
-                    const updates = {};
-                    initialStates.forEach(initialState => {
-                        // 論理ピクセル移動量を、論理キャンバスサイズに対するパーセンテージに変換
-                        const newLeft = parseFloat((initialState.startX + (finalDx / canvasWidth * 100)).toFixed(2));
-                        const newTop = parseFloat((initialState.startY + (finalDy / canvasHeight * 100)).toFixed(2));
-                        updates[`presentation.slides.${this.getActiveSlideIndex()}.elements.${this.getElementIndex(initialState.id)}.style.left`] = newLeft;
-                        updates[`presentation.slides.${this.getActiveSlideIndex()}.elements.${this.getElementIndex(initialState.id)}.style.top`] = newTop;
-                    });
-                    this.batchUpdateState(updates);
-                    this.saveState();
-                }
-                
-                if (interaction.isResizing) {
-                    const { handle, initialStates, lastDx, lastDy } = interaction;
-                    const elId = this.state.selectedElementIds[0];
-                    const initialState = initialStates[0];
-                    
-                    if (elId && initialState) {
-                        const scale = this.getState('canvas.actualScale') || 1;
-                        const dxPercent = (lastDx / scale) / CANVAS_WIDTH * 100;
-                        const dyPercent = (lastDy / scale) / CANVAS_HEIGHT * 100;
-                        
-                        const finalStyles = this._calculateResize(handle, initialState, dxPercent, dyPercent);
-                        
-                        const updates = {
-                            [`presentation.slides.${this.getActiveSlideIndex()}.elements.${this.getElementIndex(elId)}.style.left`]: finalStyles.newLeft,
-                            [`presentation.slides.${this.getActiveSlideIndex()}.elements.${this.getElementIndex(elId)}.style.top`]: finalStyles.newTop,
-                            [`presentation.slides.${this.getActiveSlideIndex()}.elements.${this.getElementIndex(elId)}.style.width`]: finalStyles.newWidth
-                        };
-                        if (finalStyles.newHeight != null) {
-                            updates[`presentation.slides.${this.getActiveSlideIndex()}.elements.${this.getElementIndex(elId)}.style.height`] = finalStyles.newHeight;
-                        }
-                        if (finalStyles.newFontSize) {
-                            updates[`presentation.slides.${this.getActiveSlideIndex()}.elements.${this.getElementIndex(elId)}.style.fontSize`] = finalStyles.newFontSize;
-                        }
-                        this.batchUpdateState(updates);
+                    if (doc.isEditingText) {
+                        doc.interaction.isDragging = false;
+                        doc.interaction.isResizing = false;
+                        return;
                     }
-                    this.saveState();
-                }
 
-                this.guideLineManager.clear();
-                
-                this.batchUpdateState({
-                    'interaction.isDragging': false,
-                    'interaction.isResizing': false,
-                    'interaction.initialStates': [],
-                    'interaction.allElementsPixelRects': [],
-                    'interaction.lastDx': 0,
-                    'interaction.lastDy': 0,
-                    'interaction.lastSnapOffset': { x: 0, y: 0 }
+                    if (interaction.isDragging) {
+                        const { lastDx, lastDy, lastSnapOffset, initialStates } = interaction;
+                        const currentActualScale = doc.canvas?.actualScale || 1;
+                        const finalDx = (lastDx / currentActualScale) + (lastSnapOffset?.x || 0);
+                        const finalDy = (lastDy / currentActualScale) + (lastSnapOffset?.y || 0);
+
+                        initialStates.forEach(initialState => {
+                            const element = activeSlide.elements.find(el => el.id === initialState.id);
+                            if (element) {
+                                const newLeft = (initialState.startX || 0) + (finalDx / CANVAS_WIDTH * 100);
+                                const newTop = (initialState.startY || 0) + (finalDy / CANVAS_HEIGHT * 100);
+                                if (!isNaN(newLeft)) {
+                                    element.style.left = parseFloat(newLeft.toFixed(2));
+                                }
+                                if (!isNaN(newTop)) {
+                                    element.style.top = parseFloat(newTop.toFixed(2));
+                                }
+                            }
+                        });
+                    }
+
+                    if (interaction.isResizing) {
+                        const { handle, initialStates, lastDx, lastDy } = interaction;
+                        const elId = doc.selectedElementIds[0];
+                        const initialState = initialStates[0];
+                        const element = activeSlide.elements.find(el => el.id === elId);
+
+                        if (element && initialState) {
+                            const scale = doc.canvas?.actualScale || 1;
+                            const dxPercent = (lastDx / scale) / CANVAS_WIDTH * 100;
+                            const dyPercent = (lastDy / scale) / CANVAS_HEIGHT * 100;
+
+                            const finalStyles = this._calculateResize(handle, initialState, dxPercent, dyPercent, interaction);
+
+                            if (!isNaN(finalStyles.newLeft)) element.style.left = finalStyles.newLeft;
+                            if (!isNaN(finalStyles.newTop)) element.style.top = finalStyles.newTop;
+                            if (!isNaN(finalStyles.newWidth)) element.style.width = finalStyles.newWidth;
+                            if (finalStyles.newHeight != null && !isNaN(finalStyles.newHeight)) {
+                                element.style.height = finalStyles.newHeight;
+                            }
+                            if (finalStyles.newFontSize && !isNaN(finalStyles.newFontSize)) {
+                                element.style.fontSize = finalStyles.newFontSize;
+                            }
+                        }
+                    }
+
+                    this.guideLineManager.clear();
+                    
+                    doc.interaction.isDragging = false;
+                    doc.interaction.isResizing = false;
+                    doc.interaction.initialStates = [];
+                    doc.interaction.allElementsPixelRects = [];
+                    doc.interaction.lastDx = 0;
+                    doc.interaction.lastDy = 0;
+                    doc.interaction.lastSnapOffset = { x: 0, y: 0 };
                 });
-                
-                this.getState('selectedElementIds').forEach(id => {
-                    const elData = this.getActiveSlide().elements.find(el => el.id === id);
+
+                this.state.selectedElementIds.forEach(id => {
                     const domEl = this.elements.slideCanvas.querySelector(`[data-id="${id}"]`);
                     if (domEl) {
                         domEl.style.willChange = 'auto';
-                    }
-                    if (elData && elData.type === 'iframe') {
-                        const iframeEl = domEl.querySelector('iframe');
-                        if (iframeEl) iframeEl.style.pointerEvents = 'auto';
+                        const elData = this.getActiveSlide().elements.find(el => el.id === id);
+                        if (elData && elData.type === 'iframe') {
+                            const iframeEl = domEl.querySelector('iframe');
+                            if (iframeEl) iframeEl.style.pointerEvents = 'auto';
+                        }
                     }
                 });
 
-                this.render();
+                // 変更は stateManager.change によって自動的に Automerge の内部で記録され、
+                // stateManager の setOnChange コールバック経由で WebSocket に送信されるため、
+                // ここで明示的に send する必要はありません。
             },
 
             performResize(dxPercent, dyPercent) {
@@ -3245,7 +3906,7 @@ static _createIframe(elData) {
                 if (!elData || !initialState) return;
 
                 this.guideLineManager.clear();
-                const newStyles = this._calculateResize(handle, initialState, dxPercent, dyPercent);
+                const newStyles = this._calculateResize(handle, initialState, dxPercent, dyPercent, interaction);
 
                 if (newStyles.snapResult.snapped) {
                     const scale = this.getState('canvas.actualScale') || 1;
@@ -3278,7 +3939,7 @@ static _createIframe(elData) {
                 this.renderSelectionBoundingBox();
             },
 
-            _calculateResize(handle, initialState, dxPercent, dyPercent) {
+            _calculateResize(handle, initialState, dxPercent, dyPercent, interaction) {
                 const { startX, startY, startW, startH } = initialState;
                 let newLeft = startX;
                 let newTop = startY;
@@ -3290,35 +3951,46 @@ static _createIframe(elData) {
                 if (handle.includes('s')) newHeight = startH != null ? Math.max(2, startH + dyPercent) : null;
                 if (handle.includes('n')) { newHeight = startH != null ? Math.max(2, startH - dyPercent) : null; newTop = startY + dyPercent; }
 
+                // NaNガード: 計算結果がNaNになった場合は元の値に戻す
+                if (isNaN(newLeft)) newLeft = startX;
+                if (isNaN(newTop)) newTop = startY;
+                if (isNaN(newWidth)) newWidth = startW;
+                if (isNaN(newHeight)) newHeight = startH;
+
+                // NaNガード: 計算結果がNaNになった場合は元の値に戻す
+                if (isNaN(newLeft)) newLeft = startX;
+                if (isNaN(newTop)) newTop = startY;
+                if (isNaN(newWidth)) newWidth = startW;
+                if (isNaN(newHeight)) newHeight = startH;
+
                 const elData = this.getSelectedElement();
-                if (elData.type === 'icon' && startW > 0 && startH > 0) {
+                if (elData.type === 'icon' && startW > 0.001 && startH > 0.001) { // ゼロ除算を避ける
                     const ratio = startH / startW;
-                    if (newWidth !== startW) newHeight = newWidth * ratio;
-                    else if (newHeight !== startH) newWidth = newHeight / ratio;
+                    if (newWidth !== startW) {
+                        newHeight = newWidth * ratio;
+                    } else if (newHeight !== startH && ratio > 0.001) { // ratioもチェック
+                        newWidth = newHeight / ratio;
+                    }
                 }
 
                 let newFontSize = null;
                 if ((elData.type === 'text' || elData.type === 'icon') && startW > 0 && newWidth !== startW) {
-                    const initialFontSize = initialState._initialFontSize || elData.style.fontSize;
-                    newFontSize = Math.max(8, Math.round(initialFontSize * (newWidth / startW)));
+                    const initialFontSize = initialState._initialFontSize ?? elData.style.fontSize;
+                    if (typeof initialFontSize === 'number') {
+                        newFontSize = Math.max(8, Math.round(initialFontSize * (newWidth / startW)));
+                    }
                 }
 
                 // --- サイズ一致ガイドのロジック ---
                 const snapResult = { snapped: false, guides: [] };
-                if (this.isSnapEnabled()) {
-                    const currentActualScale = this.getState('canvas.actualScale') || 1;
-                    // 論理パーセンテージを論理ピクセルに変換
+                if (this.isSnapEnabled() && interaction) {
                     const newWidthLogicalPx = Utils.percentToPixels(newWidth, CANVAS_WIDTH);
                     const newHeightLogicalPx = newHeight != null ? Utils.percentToPixels(newHeight, CANVAS_HEIGHT) : null;
-                    const staticElements = this.getActiveSlide().elements.filter(el => !this.state.selectedElementIds.includes(el.id));
+                    const staticElementsRects = interaction.allElementsPixelRects.filter(el => !this.state.selectedElementIds.includes(el.id));
 
-                    for (const staticEl of staticElements) {
-                        const domEl = this.elements.slideCanvas.querySelector(`[data-id="${staticEl.id}"]`);
-                        if (!domEl) continue;
-
-                        // 静的要素の表示ピクセル幅を取得し、これを論理ピクセル幅に変換
-                        const staticWidthLogicalPx = domEl.offsetWidth / currentActualScale;
-                        const staticHeightLogicalPx = domEl.offsetHeight / currentActualScale;
+                    for (const staticElRect of staticElementsRects) {
+                        const staticWidthLogicalPx = staticElRect.rect.width;
+                        const staticHeightLogicalPx = staticElRect.rect.height;
 
                         // 幅の比較 (論理ピクセルで比較)
                         if (Math.abs(newWidthLogicalPx - staticWidthLogicalPx) < CONFIG.SNAP_THRESHOLD) {
@@ -3328,7 +4000,7 @@ static _createIframe(elData) {
                                 newLeft = startX + (startW - snappedWidthPercent);
                             }
                             newWidth = snappedWidthPercent;
-                            snapResult.guides.push({ type: 'width', elementAId: elData.id, elementBId: staticEl.id, handle });
+                            snapResult.guides.push({ type: 'width', elementAId: elData.id, elementBId: staticElRect.id, handle });
                             snapResult.snapped = true;
                         }
 
@@ -3340,7 +4012,7 @@ static _createIframe(elData) {
                                 newTop = startY + (startH - snappedHeightPercent);
                             }
                             newHeight = snappedHeightPercent;
-                            snapResult.guides.push({ type: 'height', elementAId: elData.id, elementBId: staticEl.id, handle });
+                            snapResult.guides.push({ type: 'height', elementAId: elData.id, elementBId: staticElRect.id, handle });
                             snapResult.snapped = true;
                         }
 
@@ -3359,49 +4031,57 @@ static _createIframe(elData) {
                     return; // Exit early
                 }
 
-                if (e.key === 'Control' || e.key === 'Meta') this.updateState('interaction.isCtrlPressed', true, { skipHistory: true });
+                this.updateState(doc => {
+                    if (e.key === 'Control' || e.key === 'Meta') {
+                        if (!doc.interaction) doc.interaction = {};
+                        doc.interaction.isCtrlPressed = true;
+                    }
+                });
 
-                    // テキスト編集中はEscapeキーで編集終了のみ許可
-                    if (this.getState('isEditingText')) {
-                        if (e.key === 'Escape') {
-                            this.stopTextEditing(true);
-                            this.render();
-                        }
-                        return;
+
+                // テキスト編集中はEscapeキーで編集終了のみ許可
+                if (this.getState('isEditingText')) {
+                    if (e.key === 'Escape') {
+                        this.stopTextEditing(true);
                     }
-                    // 一括削除
-                    if (e.key === 'Delete' || e.key === 'Backspace') {
-                        if (this.getState('selectedElementIds').length > 0) this.deleteSelectedElements();
-                    }
-                    // 一括コピー
-                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
-                        if (this.getState('selectedElementIds').length > 0) {
-                            e.preventDefault();
-                            this.copySelectedElements();
-                        }
-                    }
-                    // 一括貼り付け
-                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
-                        if (this._lastCopiedIds && this._lastCopiedIds.length > 0) {
-                            e.preventDefault();
-                            this.pasteCopiedElements();
-                        }
-                    }
-                    // Undo/Redo
-                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                    return;
+                }
+                // 一括削除
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    if (this.getState('selectedElementIds').length > 0) this.deleteSelectedElements();
+                }
+                // 一括コピー
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+                    if (this.getState('selectedElementIds').length > 0) {
                         e.preventDefault();
-                        if (this.stateManager.undo()) {
-                            this.render();
-                        }
+                        this.copySelectedElements();
                     }
-                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                }
+                // 一括貼り付け
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+                    if (window._slideClipboard) { // Check the global clipboard
                         e.preventDefault();
-                        if (this.stateManager.redo()) {
-                            this.render();
-                        }
+                        this.pasteCopiedElements();
                     }
+                }
+                // Undo/Redo
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                    e.preventDefault();
+                    this.stateManager.undo();
+                }
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                    e.preventDefault();
+                    this.stateManager.redo();
+                }
             },
-            handleKeyUp(e) { if (e.key === 'Control' || e.key === 'Meta') this.updateState('interaction.isCtrlPressed', false, { skipHistory: true }); },
+            handleKeyUp(e) {
+                if (e.key === 'Control' || e.key === 'Meta') {
+                    this.updateState(doc => {
+                        if (!doc.interaction) doc.interaction = {};
+                        doc.interaction.isCtrlPressed = false;
+                    });
+                }
+            },
 
             toggleElementSelection(id) {
                 const selectedElementIds = this.getState('selectedElementIds');
@@ -3426,13 +4106,44 @@ static _createIframe(elData) {
             stopTextEditing(save = false) {
                 if (!this.getState('isEditingText')) return;
                 const editableEl = this.elements.slideCanvas.querySelector('[contenteditable="true"]');
-                if (editableEl && save) {
-                    const elData = this.getSelectedElement();
-                    if (elData && elData.content !== editableEl.innerText) {
-                        this.updateState(`presentation.slides.${this.getActiveSlideIndex()}.elements.${this.getElementIndex(elData.id)}.content`, editableEl.innerText);
+                if (!editableEl) {
+                    this.updateState(doc => { doc.isEditingText = false; });
+                    return;
+                }
+
+                const newText = editableEl.innerText;
+                const oldDoc = this.stateManager.get();
+                const elId = this.getState('selectedElementIds')[0];
+                const activeSlideId = this.getState('activeSlideId');
+                
+                let textChanged = false;
+                const activeSlide = oldDoc.presentation.slides.find(s => s.id === activeSlideId);
+                const element = activeSlide?.elements.find(e => e.id === elId);
+                
+                if (save && element && element.content !== newText) {
+                    textChanged = true;
+                }
+
+                this.updateState(doc => {
+                    const slide = doc.presentation.slides.find(s => s.id === activeSlideId);
+                    const el = slide?.elements.find(e => e.id === elId);
+                    if (el && textChanged) {
+                        el.content = newText;
+                    }
+                    doc.isEditingText = false;
+                });
+
+                // 変更があった場合のみ、ドキュメント全体を送信
+                if (textChanged) {
+                    const newDoc = this.stateManager.get();
+                    // Automerge.equals を使ってドキュメントが実際に変更されたか確認
+                    if (!Automerge.equals(oldDoc, newDoc)) {
+                        const fullDocBytes = Automerge.save(newDoc);
+                        if (this.webSocketClient) {
+                            this.webSocketClient.send([fullDocBytes]);
+                        }
                     }
                 }
-                this.updateState('isEditingText', false);
             },
 
             handleCanvasDblClick(e) {
@@ -3450,9 +4161,10 @@ static _createIframe(elData) {
                 // 他の編集中テキストがあれば保存して終了
                 this.stopTextEditing(true);
                 
-                // 要素を選択状態にする
-                this.updateState('selectedElementIds', [element.dataset.id]);
-                this.updateState('isEditingText', true);
+                this.updateState(doc => {
+                    doc.selectedElementIds = [element.dataset.id];
+                    doc.isEditingText = true;
+                });
                 
                 // すべての要素のcontenteditableをfalseにリセット
                 this.elements.slideCanvas.querySelectorAll('.slide-element[contenteditable="true"]')
@@ -3482,160 +4194,131 @@ static _createIframe(elData) {
             },
 
             handleElementBlur(e) {
-                if (this.getState('isEditingText') && e.target.classList.contains('slide-element')) {
+                const isEditing = this.getState('isEditingText');
+                const isSlideElement = e.target.classList.contains('slide-element');
+                
+                if (isEditing && isSlideElement) {
+                    // 変更を保存するオプションを付けて編集を終了
                     this.stopTextEditing(true);
-                    this.saveState();
-                    this.render();
                 }
             },
 
             addSlide(silent = false) {
-                if (!silent) this.stateManager._saveToHistory();
-                const newId = this.generateId('slide');
+                const newId = Utils.generateId('slide');
                 const newSlide = { id: newId, elements: [] };
                 const activeIndex = this.state.presentation.slides.findIndex(s => s.id === this.state.activeSlideId);
                 const insertionIndex = activeIndex === -1 ? this.state.presentation.slides.length : activeIndex + 1;
                 
-                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
-                updatedSlides.splice(insertionIndex, 0, newSlide);
-
-                this.updateState('presentation.slides', updatedSlides, { skipHistory: true });
-
-                if (!silent) {
-                    this.batchUpdateState({
-                        'activeSlideId': newId,
-                        'selectedElementIds': []
-                    });
-                    this.render();
-                    this.saveState();
-                }
+                this.updateState(doc => {
+                    const activeIndex = doc.presentation.slides.findIndex(s => s.id === doc.activeSlideId);
+                    const insertionIndex = activeIndex === -1 ? doc.presentation.slides.length : activeIndex + 1;
+                    const newSlide = { id: newId, elements: [] };
+                    doc.presentation.slides.splice(insertionIndex, 0, newSlide);
+                    if (!silent) {
+                        doc.activeSlideId = newId;
+                        doc.selectedElementIds = [];
+                    }
+                });
                 return newId;
             },
             deleteSlide(slideId, silent = false) {
                 const slides = this.getState('presentation.slides');
                 if (slides.length <= 1) {
                     const msg = '最後のスライドは削除できません。';
-                    if (!silent) alert(msg);
+                    if (!silent) ErrorHandler.showNotification(msg, 'warning');
                     return { success: false, message: msg };
                 }
                 const targetId = slideId || this.getState('activeSlideId');
                 if (!silent && !confirm(`スライド(ID: ${targetId})を削除しますか？`)) {
                     return { success: false, message: '削除がキャンセルされました。' };
                 }
-                if (!silent) this.stateManager._saveToHistory();
-                const idx = slides.findIndex(s => s.id === targetId);
-                if (idx === -1) {
-                    return { success: false, message: `スライド(ID: ${targetId})が見つかりません。` };
-                }
-                
-                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
-                updatedSlides.splice(idx, 1);
-                this.updateState('presentation.slides', updatedSlides, { skipHistory: true });
-                
-                if (this.getState('activeSlideId') === targetId) {
-                    const newActiveId = updatedSlides[Math.max(0, idx - 1)]?.id; // 修正: updatedSlides を参照
-                    this.updateState('activeSlideId', newActiveId, { skipHistory: true });
-                }
 
-                if (!silent) {
-                    this.updateState('selectedElementIds', []);
-                    this.render();
-                    this.saveState();
-                }
+                this.updateState(doc => {
+                    const idx = doc.presentation.slides.findIndex(s => s.id === targetId);
+                    if (idx === -1) return;
+
+                    doc.presentation.slides.splice(idx, 1);
+                    
+                    if (doc.activeSlideId === targetId) {
+                        const newActiveId = doc.presentation.slides[Math.max(0, idx - 1)]?.id;
+                        doc.activeSlideId = newActiveId;
+                    }
+                    if (!silent) {
+                        doc.selectedElementIds = [];
+                    }
+                });
                 return { success: true };
             },
             addElementToSlide(slideId, type, content, style) {
-                this.stateManager._saveToHistory(); // 履歴保存を追加
-                const activeSlideIndex = this.state.presentation.slides.findIndex(s => s.id === slideId);
-                if (activeSlideIndex === -1) return null;
+                let newEl = null;
+                this.updateState(doc => {
+                    const slide = doc.presentation.slides.find(s => s.id === slideId);
+                    if (!slide) return;
 
-                const newEl = {
-                    id: this.generateId('el'),
-                    type,
-                    content: content || '',
-                    style: {
-                        top: 20, left: 20, width: 30, height: null, rotation: 0, animation: '',
-                        ...style
-                    }
-                };
-                if (type === 'text' && !style?.fontSize) newEl.style.fontSize = 24;
-                if (type === 'image' && style.height === undefined) newEl.style.height = 30;
-
-                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
-                updatedSlides[activeSlideIndex].elements.push(newEl);
-                this.updateState('presentation.slides', updatedSlides, { silent: true });
+                    newEl = {
+                        id: Utils.generateId('el'),
+                        type,
+                        content: content || '',
+                        style: {
+                            top: 20, left: 20, width: 30, height: null, rotation: 0, animation: '',
+                            ...style
+                        }
+                    };
+                    if (type === 'text' && !style?.fontSize) newEl.style.fontSize = 24;
+                    if (type === 'image' && style.height === undefined) newEl.style.height = 30;
+                    
+                    slide.elements.push(newEl);
+                });
                 return newEl;
             },
             addElement(type, content) { // This is for user interaction
-                this.stateManager._saveToHistory();
-                const activeSlideIndex = this.getActiveSlideIndex();
-                if (activeSlideIndex === -1) return;
+                const newElId = Utils.generateId('el');
+                this.updateState(doc => {
+                    const activeSlide = doc.presentation.slides.find(s => s.id === doc.activeSlideId);
+                    if (!activeSlide) return;
 
-                const newEl = {
-                    id: this.generateId('el'),
-                    type,
-                    style: { top: 20, left: 20, width: 30, height: null, rotation: 0, animation: '' }
-                };
-                if (type === 'text') {
-                    newEl.content = content || '新しいテキスト'; // Use provided content or default
-                    Object.assign(newEl.style, { width: 'auto', color: '#212529', fontSize: 24, fontFamily: 'sans-serif' });
-                } else if (type === 'image') {
-                    if (!content) { // Content is now the dataURL, no prompt needed
-                        console.error('画像データがありません。');
-                        return;
-                    }
-                    newEl.content = content; // content is the Base64 dataURL
-                    newEl.style.width = 30; // QRコードは正方形なのでwidthも設定
-                    newEl.style.height = 30; // Default height, user can resize
-                } else if (type === 'video') {
-                    const url = content || prompt('動画のURLを入力してください:', 'https://www.w3schools.com/html/mov_bbb.mp4');
-                    if (!url) return;
-                    newEl.content = { url: url, autoplay: false, loop: false, controls: true };
-                    newEl.style.height = 30;
-                } else if (type === 'table') {
-                    // デフォルト2x2の表
-                    newEl.content = {
-                        rows: 2,
-                        cols: 2,
-                        data: [
-                            ["セル1", "セル2"],
-                            ["セル3", "セル4"]
-                        ]
+                    const newEl = {
+                        id: newElId,
+                        type,
+                        style: { top: 20, left: 20, width: 30, height: null, rotation: 0, animation: '' }
                     };
-                    newEl.style.height = 30;
-                } else if (type === 'iframe') {
-                    // 専用モーダルを開いて、URL追加前に警告とプレビューを表示
-                    App.openEmbedModal();
-                    return;
-                } else if (type === 'shape') {
-                    if (!content || !content.shapeType) {
-                        console.error('図形タイプが指定されていません。');
+                    if (type === 'text') {
+                        newEl.content = content || '新しいテキスト';
+                        Object.assign(newEl.style, { width: 'auto', color: '#212529', fontSize: 24, fontFamily: 'sans-serif' });
+                    } else if (type === 'image') {
+                        if (!content) { console.error('画像データがありません。'); return; }
+                        newEl.content = content;
+                        newEl.style.width = 30;
+                        newEl.style.height = 30;
+                    } else if (type === 'video') {
+                        const url = content || prompt('動画のURLを入力してください:', 'https://www.w3schools.com/html/mov_bbb.mp4');
+                        if (!url) return;
+                        newEl.content = { url: url, autoplay: false, loop: false, controls: true };
+                        newEl.style.height = 30;
+                    } else if (type === 'table') {
+                        newEl.content = { rows: 2, cols: 2, data: [["セル1", "セル2"], ["セル3", "セル4"]] };
+                        newEl.style.height = 30;
+                    } else if (type === 'iframe') {
+                        App.openEmbedModal();
                         return;
+                    } else if (type === 'shape') {
+                        if (!content || !content.shapeType) { console.error('図形タイプが指定されていません。'); return; }
+                        newEl.content = content;
+                        Object.assign(newEl.style, { width: 20, height: 20, fill: '#cccccc', stroke: 'transparent', strokeWidth: 0 });
+                        if (content.shapeType === 'line') {
+                            newEl.style.height = 0;
+                            newEl.style.stroke = '#000000';
+                            newEl.style.strokeWidth = 2;
+                            delete newEl.style.fill;
+                        }
                     }
-                    newEl.content = content;
-                    Object.assign(newEl.style, {
-                        width: 20,
-                        height: 20,
-                        fill: '#cccccc',
-                        stroke: 'transparent', // デフォルトのstrokeを透明に
-                        strokeWidth: 0 // デフォルトのstrokeWidthを0に
-                    });
-                    if (content.shapeType === 'line') {
-                        newEl.style.height = 0; // 線は高さを0にする
-                        newEl.style.stroke = '#000000'; // 線のデフォルト色
-                        newEl.style.strokeWidth = 2; // 線のデフォルト太さ
-                        delete newEl.style.fill; // 線はfill不要
-                    }
-                }
-                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
-                updatedSlides[activeSlideIndex].elements.push(newEl);
-                this.updateState('presentation.slides', updatedSlides);
+                    activeSlide.elements.push(newEl);
+                    doc.selectedElementIds = [newElId];
+                });
 
-                this.updateState('selectedElementIds', [newEl.id]);
-                this.saveState();
-                this.render();
-                if (type === 'text') setTimeout(() => this.handleCanvasDblClick({ target: this.elements.slideCanvas.querySelector(`[data-id="${newEl.id}"]`) }), 50);
-                this.applyCustomCss();
+                if (type === 'text') {
+                    setTimeout(() => this.handleCanvasDblClick({ target: this.elements.slideCanvas.querySelector(`[data-id="${newElId}"]`) }), 50);
+                }
             },
 
             
@@ -3650,80 +4333,60 @@ static _createIframe(elData) {
 
             deleteSelectedElements() {
                 if (!confirm(`${this.getState('selectedElementIds').length}個の要素を削除しますか？`)) return;
-                this.stateManager._saveToHistory();
-                const activeSlideIndex = this.getActiveSlideIndex();
-                if (activeSlideIndex === -1) return;
-
-                const selectedIds = this.getState('selectedElementIds');
-                const updatedElements = this.state.presentation.slides[activeSlideIndex].elements.filter(el => !selectedIds.includes(el.id));
-
-                this.batchUpdateState({
-                    [`presentation.slides.${activeSlideIndex}.elements`]: updatedElements,
-                    'selectedElementIds': []
+                this.updateState(doc => {
+                    const activeSlide = doc.presentation.slides.find(s => s.id === doc.activeSlideId);
+                    if (!activeSlide) return;
+                    const selectedIds = doc.selectedElementIds;
+                    activeSlide.elements = activeSlide.elements.filter(el => !selectedIds.includes(el.id));
+                    doc.selectedElementIds = [];
                 });
-                this.render();
-                this.saveState();
             },
 
             alignElements(type) {
                 const elementsData = this.getSelectedElementsData();
                 if (elementsData.length === 0) return;
 
-                // 単一のテキスト要素が選択されている場合、テキストの配置を変更
-                if (elementsData.length === 1 && elementsData[0].type === 'text') {
-                    const elData = elementsData[0];
-                    const textAlignMap = {
-                        'left': 'left',
-                        'center-h': 'center',
-                        'right': 'right'
-                    };
+                this.updateState(doc => {
+                    const activeSlide = doc.presentation.slides.find(s => s.id === doc.activeSlideId);
+                    if (!activeSlide) return;
 
-                    if (textAlignMap[type]) {
-                        const newAlign = textAlignMap[type];
-                        this.stateManager._saveToHistory();
-                        const activeSlideIndex = this.getActiveSlideIndex();
-                        const elementIndex = this.getElementIndex(elData.id);
+                    // 単一のテキスト要素
+                    if (elementsData.length === 1 && elementsData[0].type === 'text') {
+                        const el = activeSlide.elements.find(e => e.id === elementsData[0].id);
+                        const textAlignMap = { 'left': 'left', 'center-h': 'center', 'right': 'right' };
+                        if (textAlignMap[type]) {
+                            el.style.textAlign = textAlignMap[type];
+                            return;
+                        }
+                    }
+
+                    if (elementsData.length < 2) return;
+
+                    const pixelElements = this.getElementsWithPixelRects(elementsData);
+                    const bounds = this.calculatePixelBounds(pixelElements);
+                    const currentActualScale = doc.canvas?.actualScale || 1;
+
+                    pixelElements.forEach(el => {
+                        const elementToUpdate = activeSlide.elements.find(e => e.id === el.data.id);
+                        if (!elementToUpdate) return;
                         
-                        this.updateState(`presentation.slides.${activeSlideIndex}.elements.${elementIndex}.style.textAlign`, newAlign);
-                        this.saveState();
-                        this.render();
-                        return; // 処理を終了
-                    }
-                }
-                
-                // 複数の要素が選択されている場合、要素自体を整列
-                if (elementsData.length < 2) return;
-
-                this.stateManager._saveToHistory();
-                const activeSlideIndex = this.getActiveSlideIndex();
-                if (activeSlideIndex === -1) return;
-
-                const updates = {};
-                const pixelElements = this.getElementsWithPixelRects(elementsData);
-                const bounds = this.calculatePixelBounds(pixelElements);
-                const canvasRect = this.getState('canvas.rect');
-
-                pixelElements.forEach(el => {
-                    let newLeft, newTop;
-                    switch (type) {
-                        case 'left': newLeft = bounds.minX; break;
-                        case 'center-h': newLeft = bounds.centerX - el.rect.width / 2; break;
-                        case 'right': newLeft = bounds.maxX - el.rect.width; break;
-                        case 'top': newTop = bounds.minY; break;
-                        case 'center-v': newTop = bounds.centerY - el.rect.height / 2; break;
-                        case 'bottom': newTop = bounds.maxY - el.rect.height; break;
-                    }
-                    const currentActualScale = this.getState('canvas.actualScale') || 1;
-                    if (newLeft !== undefined) {
-                        updates[`presentation.slides.${activeSlideIndex}.elements.${this.getElementIndex(el.data.id)}.style.left`] = (newLeft / currentActualScale) / CANVAS_WIDTH * 100;
-                    }
-                    if (newTop !== undefined) {
-                        updates[`presentation.slides.${activeSlideIndex}.elements.${this.getElementIndex(el.data.id)}.style.top`] = (newTop / currentActualScale) / CANVAS_HEIGHT * 100;
-                    }
+                        let newLeft, newTop;
+                        switch (type) {
+                            case 'left': newLeft = bounds.minX; break;
+                            case 'center-h': newLeft = bounds.centerX - el.rect.width / 2; break;
+                            case 'right': newLeft = bounds.maxX - el.rect.width; break;
+                            case 'top': newTop = bounds.minY; break;
+                            case 'center-v': newTop = bounds.centerY - el.rect.height / 2; break;
+                            case 'bottom': newTop = bounds.maxY - el.rect.height; break;
+                        }
+                        if (newLeft !== undefined) {
+                            elementToUpdate.style.left = (newLeft / currentActualScale) / CANVAS_WIDTH * 100;
+                        }
+                        if (newTop !== undefined) {
+                            elementToUpdate.style.top = (newTop / currentActualScale) / CANVAS_HEIGHT * 100;
+                        }
+                    });
                 });
-                this.batchUpdateState(updates);
-                this.render();
-                this.saveState();
             },
 
             distributeElements(direction) {
@@ -3765,8 +4428,6 @@ static _createIframe(elData) {
                 }
 
                 this.batchUpdateState(updates);
-                this.render();
-                this.saveState();
             },
 
             tidyUpElements() {
@@ -3795,8 +4456,6 @@ static _createIframe(elData) {
 
                 if (Object.keys(updates).length > 0) {
                     this.batchUpdateState(updates);
-                    this.render();
-                    this.saveState();
                 }
             },
 
@@ -3873,29 +4532,32 @@ static _createIframe(elData) {
 
             // --- 複数コピー ---
             copySelectedElements() {
-                this.stateManager._saveToHistory();
-                const activeSlideIndex = this.getActiveSlideIndex();
-                if (activeSlideIndex === -1 || this.getState('selectedElementIds').length === 0) return;
+                const selectedElements = this.getSelectedElementsData();
+                if (selectedElements.length === 0) return;
+                // Use structuredClone for deep copy to plain JS objects, removing Automerge metadata
+                window._slideClipboard = structuredClone(selectedElements);
+            },
 
-                const newIds = [];
-                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
-                const currentSlide = updatedSlides[activeSlideIndex];
-                this.getState('selectedElementIds').forEach(id => {
-                    const idx = currentSlide.elements.findIndex(el => el.id === id);
-                    if (idx === -1) return;
-                    const newEl = Utils.deepClone(currentSlide.elements[idx]); // deepCloneを使用
-                    newEl.id = this.generateId('el');
-                    newEl.style.left = (newEl.style.left || 0) + 2;
-                    newEl.style.top = (newEl.style.top || 0) + 2;
-                    newEl.style.zIndex = currentSlide.elements.length + 1;
-                    currentSlide.elements.push(newEl);
-                    newIds.push(newEl.id);
+            pasteCopiedElements() {
+                if (!window._slideClipboard) return;
+                this.updateState(doc => {
+                    const slide = doc.presentation.slides.find(s => s.id === doc.activeSlideId);
+                    if (!slide) return;
+
+                    const newIds = [];
+                    const clipboardData = Array.isArray(window._slideClipboard) ? window._slideClipboard : [window._slideClipboard];
+
+                    clipboardData.forEach(elData => {
+                        const newEl = { ...elData }; // Plain JS object, shallow copy is fine
+                        newEl.id = Utils.generateId('el');
+                        newEl.style.left = (newEl.style.left || 0) + 2;
+                        newEl.style.top = (newEl.style.top || 0) + 2;
+                        newEl.style.zIndex = slide.elements.length + 1;
+                        slide.elements.push(newEl);
+                        newIds.push(newEl.id);
+                    });
+                    doc.selectedElementIds = newIds;
                 });
-                this.updateState('presentation.slides', updatedSlides);
-                this.updateState('selectedElementIds', newIds);
-                this.render();
-                this.saveState();
-                this.applyCustomCss();
             },
 
             getElementsWithPixelRects(elementsData) {
@@ -3972,16 +4634,14 @@ static _createIframe(elData) {
             getElementIndex(elId) { return this.getActiveSlide()?.elements.findIndex(el => el.id === elId); },
             getSelectedElementsData() { const slide = this.getActiveSlide(); if (!slide) return []; return slide.elements.filter(el => this.state.selectedElementIds.includes(el.id)); },
             setActiveSlide(slideId) {
-                if (this.getState('presentation.slides').some(s => s.id === slideId)) {
-                    this.batchUpdateState({
-                        'activeSlideId': slideId,
-                        'selectedElementIds': []
-                    });
-                    if (document.body.classList.contains('presentation-mode')) {
-                        this.presentationManager.renderPresentationSlide();
-                    } else {
-                        this.render();
+                this.updateState(doc => {
+                    if (doc.presentation.slides.some(s => s.id === slideId)) {
+                        doc.activeSlideId = slideId;
+                        doc.selectedElementIds = [];
                     }
+                });
+                if (document.body.classList.contains('presentation-mode')) {
+                    this.presentationManager.renderPresentationSlide();
                 }
             },
             showExportMenu(e) {
@@ -4192,33 +4852,30 @@ static _createIframe(elData) {
                 return slideContainer;
             },
             moveSlide(fromId, toId) {
-                this.stateManager._saveToHistory();
-                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
-                const fromIndex = updatedSlides.findIndex(s => s.id === fromId);
-                const toIndex = updatedSlides.findIndex(s => s.id === toId);
-                if (fromIndex !== -1 && toIndex !== -1) {
-                    const [moved] = updatedSlides.splice(fromIndex, 1);
-                    updatedSlides.splice(toIndex, 0, moved);
-                }
-                this.updateState('presentation.slides', updatedSlides);
-                this.render();
-                this.saveState();
+                this.updateState(doc => {
+                    const slides = doc.presentation.slides;
+                    const fromIndex = slides.findIndex(s => s.id === fromId);
+                    const toIndex = slides.findIndex(s => s.id === toId);
+                    if (fromIndex !== -1 && toIndex !== -1) {
+                        const [moved] = slides.splice(fromIndex, 1);
+                        slides.splice(toIndex, 0, moved);
+                    }
+                });
             },
             duplicateSlide(slideId) {
-                this.stateManager._saveToHistory();
-                const slideIndex = this.state.presentation.slides.findIndex(s => s.id === slideId);
-                if (slideIndex === -1) return;
+                this.updateState(doc => {
+                    const slideIndex = doc.presentation.slides.findIndex(s => s.id === slideId);
+                    if (slideIndex === -1) return;
 
-                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
-                const originalSlide = updatedSlides[slideIndex];
-                const newSlide = Utils.deepClone(originalSlide); // deepCloneを使用
-                newSlide.id = this.generateId('slide');
-                newSlide.elements.forEach(el => el.id = this.generateId('el'));
-                updatedSlides.splice(slideIndex + 1, 0, newSlide);
-                this.updateState('presentation.slides', updatedSlides);
-                this.batchUpdateState({ activeSlideId: updatedSlides[slideIndex + 1].id, selectedElementIds: [] });
-                this.render();
-                this.saveState();
+                    const originalSlide = doc.presentation.slides[slideIndex];
+                    const newSlide = JSON.parse(JSON.stringify(originalSlide)); // Automerge object to plain JS
+                    newSlide.id = Utils.generateId('slide');
+                    newSlide.elements.forEach(el => el.id = Utils.generateId('el'));
+                    
+                    doc.presentation.slides.splice(slideIndex + 1, 0, newSlide);
+                    doc.activeSlideId = newSlide.id;
+                    doc.selectedElementIds = [];
+                });
             },
             showContextMenu(e, id, content, handlers) {
                 const oldMenu = document.getElementById(id);
@@ -4375,33 +5032,21 @@ static _createIframe(elData) {
             },
             // 複製（現状のコピー機能）
             duplicateElement(elId) {
-                this.stateManager._saveToHistory();
-                const activeSlideIndex = this.getActiveSlideIndex();
-                if (activeSlideIndex === -1) return;
-            
-                let newElId = null;
-            
-                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
-                const currentSlide = updatedSlides[activeSlideIndex];
-                const originalElementIndex = currentSlide.elements.findIndex(el => el.id === elId);
-                if (originalElementIndex !== -1) {
-                    const newEl = JSON.parse(JSON.stringify(currentSlide.elements[originalElementIndex]));
-                    newEl.id = this.generateId('el');
+                this.updateState(doc => {
+                    const slide = doc.presentation.slides.find(s => s.id === doc.activeSlideId);
+                    if (!slide) return;
+                    const elementToDup = slide.elements.find(el => el.id === elId);
+                    if (!elementToDup) return;
+
+                    const newEl = JSON.parse(JSON.stringify(elementToDup));
+                    newEl.id = Utils.generateId('el');
                     newEl.style.left = (newEl.style.left || 0) + 2;
                     newEl.style.top = (newEl.style.top || 0) + 2;
-                    newEl.style.zIndex = currentSlide.elements.length + 1;
+                    newEl.style.zIndex = slide.elements.length + 1;
                     
-                    currentSlide.elements.push(newEl);
-                    newElId = newEl.id;
-                }
-            
-                if (newElId) {
-                    this.updateState('presentation.slides', updatedSlides);
-                    this.updateState('selectedElementIds', [newElId]);
-                    this.render();
-                    this.saveState();
-                    this.applyCustomCss();
-                }
+                    slide.elements.push(newEl);
+                    doc.selectedElementIds = [newEl.id];
+                });
             },
             // クリップボードコピー
             copyToClipboard(elId) {
@@ -4413,28 +5058,26 @@ static _createIframe(elData) {
             },
             // クリップボードペースト
             pasteFromClipboard() {
-                this.stateManager._saveToHistory();
-                const activeSlideIndex = this.getActiveSlideIndex();
-                if (activeSlideIndex === -1 || !window._slideClipboard) return;
+                if (!window._slideClipboard) return;
+                
+                this.updateState(doc => {
+                    const slide = doc.presentation.slides.find(s => s.id === doc.activeSlideId);
+                    if (!slide) return;
 
-                let newElId = null;
-                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
-                const slide = updatedSlides[activeSlideIndex];
-                const newEl = JSON.parse(JSON.stringify(window._slideClipboard));
-                newEl.id = this.generateId('el');
-                newEl.style.left = (newEl.style.left || 0) + 4;
-                newEl.style.top = (newEl.style.top || 0) + 4;
-                newEl.style.zIndex = slide.elements.length + 1;
-                slide.elements.push(newEl);
-                newElId = newEl.id;
+                    const newIds = [];
+                    const clipboardData = Array.isArray(window._slideClipboard) ? window._slideClipboard : [window._slideClipboard];
 
-                if (newElId) {
-                    this.updateState('presentation.slides', updatedSlides);
-                    this.updateState('selectedElementIds', [newElId]);
-                    this.render();
-                    this.saveState();
-                    this.applyCustomCss();
-                }
+                    clipboardData.forEach(elData => {
+                        const newEl = { ...elData }; // Shallow copy is enough as it's plain JS
+                        newEl.id = Utils.generateId('el');
+                        newEl.style.left = (newEl.style.left || 0) + 4;
+                        newEl.style.top = (newEl.style.top || 0) + 4;
+                        newEl.style.zIndex = slide.elements.length + 1;
+                        slide.elements.push(newEl);
+                        newIds.push(newEl.id);
+                    });
+                    doc.selectedElementIds = newIds;
+                });
             },
 
             initCategoryFilters(iconType) {
@@ -4547,180 +5190,132 @@ static _createIframe(elData) {
             },
 
             addIconElement(iconType, iconClass, style = {}) {
-                const activeSlideIndex = this.getActiveSlideIndex();
-                if (activeSlideIndex === -1) return;
-                
-                let newElId = null;
+                this.updateState(doc => {
+                    const slide = doc.presentation.slides.find(s => s.id === doc.activeSlideId);
+                    if (!slide) return;
 
-                const updatedSlides = Utils.deepClone(this.state.presentation.slides);
-                const slide = updatedSlides[activeSlideIndex];
-                const defaultFontSize = 48;
-                const fontSize = style.fontSize || defaultFontSize;
-                const canvasWidth = this.state.presentation.settings.width || CANVAS_WIDTH;
-                const canvasHeight = this.state.presentation.settings.height || CANVAS_HEIGHT;
+                    const defaultFontSize = 48;
+                    const fontSize = style.fontSize || defaultFontSize;
+                    const canvasWidth = doc.presentation.settings.width || CANVAS_WIDTH;
+                    const canvasHeight = doc.presentation.settings.height || CANVAS_HEIGHT;
 
-                const newEl = {
-                    id: this.generateId('el'),
-                    type: 'icon',
-                    iconType: iconType, // Store icon type (fa or mi)
-                    content: iconClass, // Class string for FA, class name for MI
-                    style: {
-                        top: 20,
-                        left: 20,
-                        width: (fontSize / canvasWidth) * 100,
-                        height: (fontSize / canvasHeight) * 100,
-                        rotation: 0,
-                        color: '#212529',
-                        fontSize: fontSize,
-                        animation: '',
-                        zIndex: slide.elements.length + 1,
-                        ...style // 渡されたスタイルで上書き
+                    const newEl = {
+                        id: Utils.generateId('el'),
+                        type: 'icon',
+                        iconType: iconType,
+                        content: iconClass,
+                        style: {
+                            top: 20, left: 20,
+                            width: (fontSize / canvasWidth) * 100,
+                            height: (fontSize / canvasHeight) * 100,
+                            rotation: 0, color: '#212529', fontSize: fontSize, animation: '',
+                            zIndex: slide.elements.length + 1,
+                            ...style
+                        }
+                    };
+
+                    if (iconType === 'mi') {
+                        newEl.miContent = iconClass;
+                        const miStyleSelect = document.getElementById('mi-style-select');
+                        if (miStyleSelect) {
+                            newEl.content = miStyleSelect.value;
+                        }
                     }
-                };
 
-                if (iconType === 'mi') {
-                    newEl.miContent = iconClass;
-                    const miStyleSelect = document.getElementById('mi-style-select');
-                    if (miStyleSelect) {
-                        newEl.content = miStyleSelect.value;
-                    }
-                }
-
-                slide.elements.push(newEl);
-                newElId = newEl.id;
-
-                if(newElId) {
-                    this.updateState('presentation.slides', updatedSlides);
-                    this.updateState('selectedElementIds', [newElId]);
-                    this.saveState();
-                    this.render();
-                }
+                    slide.elements.push(newEl);
+                    doc.selectedElementIds = [newEl.id];
+                });
             },
             // Inspectorでアイコンのスタイルを変更する関数
             updateIconStyle(element, newStylePrefix) {
-                const slideIndex = this.getActiveSlideIndex();
-                const elementIndex = this.getElementIndex(element.id);
-                if (slideIndex === -1 || elementIndex === -1) return;
+                this.updateState(doc => {
+                    const slide = doc.presentation.slides.find(s => s.id === doc.activeSlideId);
+                    const elToUpdate = slide?.elements.find(e => e.id === element.id);
+                    if (!elToUpdate) return;
 
-                let newContent;
-                if (element.iconType === 'fa') {
-                    newContent = element.content.replace(/^(fas|far|fal|fat)\s/, newStylePrefix + ' ');
-                } else if (element.iconType === 'mi') {
-                    newContent = newStylePrefix;
-                } else {
-                    return;
-                }
-                this.updateState(`presentation.slides.${slideIndex}.elements.${elementIndex}.content`, newContent);
+                    if (elToUpdate.iconType === 'fa') {
+                        elToUpdate.content = element.content.replace(/^(fas|far|fal|fat)\s/, newStylePrefix + ' ');
+                    } else if (elToUpdate.iconType === 'mi') {
+                        elToUpdate.content = newStylePrefix;
+                    }
+                });
             },
 
         // 要素を最前面へ (配列の末尾に移動)
         bringElementToFront(elId) {
-            this.stateManager._saveToHistory();
-            const activeSlideId = this.state.activeSlideId;
-            const updatedSlides = Utils.deepClone(this.state.presentation.slides);
-            const currentSlide = updatedSlides.find(s => s.id === activeSlideId);
-            if (currentSlide) {
-                const fromIndex = currentSlide.elements.findIndex(el => el.id === elId);
+            this.updateState(doc => {
+                const slide = doc.presentation.slides.find(s => s.id === doc.activeSlideId);
+                if (!slide) return;
+                const fromIndex = slide.elements.findIndex(el => el.id === elId);
                 if (fromIndex !== -1) {
-                    const element = currentSlide.elements[fromIndex];
-                    currentSlide.elements.splice(fromIndex, 1);
-                    currentSlide.elements.push(element);
-                    // zIndex をここで更新する
-                    currentSlide.elements.forEach((el, idx) => {
-                        el.style.zIndex = idx + 1;
-                    });
+                    const [element] = slide.elements.splice(fromIndex, 1);
+                    slide.elements.push(element);
+                    slide.elements.forEach((el, idx) => el.style.zIndex = idx + 1);
                 }
-            }
-            this.updateState('presentation.slides', updatedSlides);
-            this.saveState();
-            this.render();
+            });
         },
         // 要素を最背面へ (配列の先頭に移動)
         sendElementToBack(elId) {
-            this.stateManager._saveToHistory();
-            const activeSlideId = this.state.activeSlideId;
-            const updatedSlides = Utils.deepClone(this.state.presentation.slides);
-            const currentSlide = updatedSlides.find(s => s.id === activeSlideId);
-            if (currentSlide) {
-                const fromIndex = currentSlide.elements.findIndex(el => el.id === elId);
+            this.updateState(doc => {
+                const slide = doc.presentation.slides.find(s => s.id === doc.activeSlideId);
+                if (!slide) return;
+                const fromIndex = slide.elements.findIndex(el => el.id === elId);
                 if (fromIndex !== -1) {
-                    const element = currentSlide.elements[fromIndex];
-                    currentSlide.elements.splice(fromIndex, 1);
-                    currentSlide.elements.unshift(element); // unshift で先頭に移動
-                    // zIndex をここで更新する
-                    currentSlide.elements.forEach((el, idx) => {
-                        el.style.zIndex = idx + 1;
-                    });
+                    const [element] = slide.elements.splice(fromIndex, 1);
+                    slide.elements.unshift(element);
+                    slide.elements.forEach((el, idx) => el.style.zIndex = idx + 1);
                 }
-            }
-            this.updateState('presentation.slides', updatedSlides);
-            this.saveState();
-            this.render();
+            });
         },
 
         // 要素を一つ前面へ (配列内で一つ後ろに)
         bringElementForward(elId) {
-            this.stateManager._saveToHistory();
-            const activeSlideId = this.state.activeSlideId;
-            const updatedSlides = Utils.deepClone(this.state.presentation.slides);
-            const currentSlide = updatedSlides.find(s => s.id === activeSlideId);
-            if (currentSlide) {
-                const fromIndex = currentSlide.elements.findIndex(el => el.id === elId);
-                if (fromIndex !== -1 && fromIndex < currentSlide.elements.length - 1) {
-                    const element = currentSlide.elements[fromIndex];
-                    currentSlide.elements.splice(fromIndex, 1);
-                    currentSlide.elements.splice(fromIndex + 1, 0, element);
-                    // zIndex をここで更新する
-                    currentSlide.elements.forEach((el, idx) => {
-                        el.style.zIndex = idx + 1;
-                    });
+            this.updateState(doc => {
+                const slide = doc.presentation.slides.find(s => s.id === doc.activeSlideId);
+                if (!slide) return;
+                const fromIndex = slide.elements.findIndex(el => el.id === elId);
+                if (fromIndex !== -1 && fromIndex < slide.elements.length - 1) {
+                    const [element] = slide.elements.splice(fromIndex, 1);
+                    slide.elements.splice(fromIndex + 1, 0, element);
+                    slide.elements.forEach((el, idx) => el.style.zIndex = idx + 1);
                 }
-            }
-            this.updateState('presentation.slides', updatedSlides);
-            this.saveState();
-            this.render();
+            });
         },
 
         // 要素を一つ背面へ (配列内で一つ前に)
         sendElementBackward(elId) {
-            this.stateManager._saveToHistory();
-            const activeSlideId = this.state.activeSlideId;
-            const updatedSlides = Utils.deepClone(this.state.presentation.slides);
-            const currentSlide = updatedSlides.find(s => s.id === activeSlideId);
-            if (currentSlide) {
-                const fromIndex = currentSlide.elements.findIndex(el => el.id === elId);
-                if (fromIndex !== -1 && fromIndex > 0) {
-                    const element = currentSlide.elements[fromIndex];
-                    currentSlide.elements.splice(fromIndex, 1);
-                    currentSlide.elements.splice(fromIndex - 1, 0, element);
-                    // zIndex をここで更新する
-                    currentSlide.elements.forEach((el, idx) => {
-                        el.style.zIndex = idx + 1;
-                    });
+            this.updateState(doc => {
+                const slide = doc.presentation.slides.find(s => s.id === doc.activeSlideId);
+                if (!slide) return;
+                const fromIndex = slide.elements.findIndex(el => el.id === elId);
+                if (fromIndex > 0) {
+                    const [element] = slide.elements.splice(fromIndex, 1);
+                    slide.elements.splice(fromIndex - 1, 0, element);
+                    slide.elements.forEach((el, idx) => el.style.zIndex = idx + 1);
                 }
-            }
-            this.updateState('presentation.slides', updatedSlides);
-            this.saveState();
-            this.render();
+            });
         },
         
         initGlobalCssEditor() {
             this._initCssEditor('global-css-input', this.state.presentation.settings.globalCss || '', (css) => {
-                this.updateState('presentation.settings.globalCss', css);
+                this.updateState(doc => {
+                    doc.presentation.settings.globalCss = css;
+                });
             });
         },
 
         initElementCssEditor(initialContent) {
             this._initCssEditor('element-css-editor-container', initialContent || '', (css) => {
-                const el = this.getSelectedElement();
-                if (el) {
-                    const elIndex = this.getElementIndex(el.id);
-                    const slideIndex = this.getActiveSlideIndex();
-                    if (elIndex > -1 && slideIndex > -1) {
-                        this.updateState(`presentation.slides.${slideIndex}.elements.${elIndex}.style.customCss`, css);
-                        this.render();
+                this.updateState(doc => {
+                    const elId = doc.selectedElementIds[0];
+                    if (elId) {
+                        const slide = doc.presentation.slides.find(s => s.id === doc.activeSlideId);
+                        const element = slide?.elements.find(e => e.id === elId);
+                        if (element) {
+                            element.style.customCss = css;
+                        }
                     }
-                }
+                });
             });
         },
 
@@ -4994,10 +5589,10 @@ static _createIframe(elData) {
                     
                     if (data.presentation) {
                         if (confirm('データをインポートしますか？現在のデータは上書きされます。')) {
-                            this.batchUpdateState({
-                                'presentation': data.presentation,
-                                'activeSlideId': data.presentation.slides[0]?.id || null,
-                                'selectedElementIds': []
+                            this.updateState(doc => {
+                                doc.presentation = data.presentation;
+                                doc.activeSlideId = data.presentation.slides[0]?.id || null;
+                                doc.selectedElementIds = [];
                             });
                             
                             // 設定の復元
@@ -5014,9 +5609,6 @@ static _createIframe(elData) {
                                 localStorage.setItem('webSlideMakerSnap', data.settings.snap);
                                 localStorage.setItem('webSlideMakerGrid', data.settings.grid);
                             }
-                            
-                            this.saveState();
-                            this.render();
                             
                             // 設定パネルの更新
                             this.initSettingsEventListeners();
@@ -5067,56 +5659,52 @@ static _createIframe(elData) {
         },
 
         groupSelectedElements() {
-            const selectedElementIds = this.getState('selectedElementIds');
-            const activeSlideId = this.getState('activeSlideId');
-            if (selectedElementIds.length < 2) return;
+            this.updateState(doc => {
+                const selectedElementIds = doc.selectedElementIds;
+                const activeSlideId = doc.activeSlideId;
+                if (selectedElementIds.length < 2) return;
 
-            this.stateManager._saveToHistory();
+                const newGroupId = Utils.generateId('group');
+                if (!doc.presentation.groups) {
+                    doc.presentation.groups = {};
+                }
+                if (!doc.presentation.groups[activeSlideId]) {
+                    doc.presentation.groups[activeSlideId] = [];
+                }
+                
+                doc.presentation.groups[activeSlideId].push({
+                    id: newGroupId,
+                    elementIds: [...selectedElementIds]
+                });
 
-            const newGroupId = this.generateId('group');
-            const slideGroups = this.getState(`presentation.groups.${activeSlideId}`) || [];
-            
-            slideGroups.push({
-                id: newGroupId,
-                elementIds: [...selectedElementIds]
+                doc.selectedElementIds = [];
+                doc.selectedGroupIds = [newGroupId];
             });
-
-            this.batchUpdateState({
-                [`presentation.groups.${activeSlideId}`]: slideGroups,
-                'selectedElementIds': [],
-                'selectedGroupIds': [newGroupId]
-            });
-            
-            this.render();
-            this.saveState();
         },
 
         ungroupSelectedElements() {
-            const selectedGroupIds = this.getState('selectedGroupIds');
-            const activeSlideId = this.getState('activeSlideId');
-            if (selectedGroupIds.length === 0) return;
+            this.updateState(doc => {
+                const selectedGroupIds = doc.selectedGroupIds;
+                const activeSlideId = doc.activeSlideId;
+                if (selectedGroupIds.length === 0) return;
 
-            this.stateManager._saveToHistory();
+                const slideGroups = doc.presentation.groups?.[activeSlideId] || [];
+                const newSelectedElementIds = [];
 
-            const slideGroups = this.getState(`presentation.groups.${activeSlideId}`) || [];
-            const newSelectedElementIds = [];
-
-            const remainingGroups = slideGroups.filter(g => {
-                if (selectedGroupIds.includes(g.id)) {
-                    newSelectedElementIds.push(...g.elementIds);
-                    return false;
+                const remainingGroups = slideGroups.filter(g => {
+                    if (selectedGroupIds.includes(g.id)) {
+                        newSelectedElementIds.push(...g.elementIds);
+                        return false;
+                    }
+                    return true;
+                });
+                
+                if (doc.presentation.groups) {
+                    doc.presentation.groups[activeSlideId] = remainingGroups;
                 }
-                return true;
+                doc.selectedGroupIds = [];
+                doc.selectedElementIds = newSelectedElementIds;
             });
-
-            this.batchUpdateState({
-                [`presentation.groups.${activeSlideId}`]: remainingGroups,
-                'selectedGroupIds': [],
-                'selectedElementIds': newSelectedElementIds
-            });
-
-            this.render();
-            this.saveState();
         },
 
         showCompletions(textarea, completionList) {
@@ -5357,7 +5945,7 @@ static _createIframe(elData) {
 
         async loadCssProperties() {
             try {
-                const response = await fetch('cssproperty.json');
+                const response = await fetch('/static/slide/cssproperty.json');
                 if (!response.ok) {
                     throw new Error('Failed to load CSS properties');
                 }
@@ -5406,346 +5994,346 @@ static _createIframe(elData) {
                 }
            }
         },
-        _bindWikiImageSearchEvents() {
-               if (this.elements.wikiImageSearchBtn) {
-                   this.elements.wikiImageSearchBtn.addEventListener('click', () => this.handleWikiImageSearch());
-               }
-               if (this.elements.wikiImageSearchInput) {
-                   this.elements.wikiImageSearchInput.addEventListener('keydown', (e) => {
-                       if (e.key === 'Enter') {
-                           e.preventDefault();
-                           this.handleWikiImageSearch();
-                       }
-                   });
-               }
-               if (this.elements.wikiImageResultsContainer) {
-                   this.elements.wikiImageResultsContainer.addEventListener('click', (e) => {
-                       const item = e.target.closest('.wiki-image-item');
-                       if (item && item.dataset.imageUrl) {
-                           // 画像追加時、Base64ではなくURLを直接渡す
-                           this.addElement('image', item.dataset.imageUrl);
-                       }
-                   });
-               }
-           }, // ここにカンマを追加
+            _bindWikiImageSearchEvents() {
+                if (this.elements.wikiImageSearchBtn) {
+                    this.elements.wikiImageSearchBtn.addEventListener('click', () => this.handleWikiImageSearch());
+                }
+                if (this.elements.wikiImageSearchInput) {
+                    this.elements.wikiImageSearchInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            this.handleWikiImageSearch();
+                        }
+                    });
+                }
+                if (this.elements.wikiImageResultsContainer) {
+                    this.elements.wikiImageResultsContainer.addEventListener('click', (e) => {
+                        const item = e.target.closest('.wiki-image-item');
+                        if (item && item.dataset.imageUrl) {
+                            // 画像追加時、Base64ではなくURLを直接渡す
+                            this.addElement('image', item.dataset.imageUrl);
+                        }
+                    });
+                }
+            },
 
-           async handleWikiImageSearch() {
-               const keyword = this.elements.wikiImageSearchInput.value.trim();
-               if (!keyword) return;
+            async handleWikiImageSearch() {
+                const keyword = this.elements.wikiImageSearchInput.value.trim();
+                if (!keyword) return;
 
-               this.elements.wikiImageLoading.style.display = 'block';
-               this.elements.wikiImageResultsContainer.innerHTML = '';
+                this.elements.wikiImageLoading.style.display = 'block';
+                this.elements.wikiImageResultsContainer.innerHTML = '';
 
-               try {
-                   const response = await fetch(`/wiki/image/${encodeURIComponent(keyword)}`);
-                   if (!response.ok) {
-                       const errorData = await response.json().catch(() => ({ detail: 'Server error' }));
-                       throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-                   }
-                   const data = await response.json();
+                try {
+                    const response = await fetch(`/wiki/image/${encodeURIComponent(keyword)}`);
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ detail: 'Server error' }));
+                        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
 
-                   if (data.image_urls && data.image_urls.length > 0) {
-                       data.image_urls.forEach(url => {
-                           const item = document.createElement('div');
-                           item.className = 'wiki-image-item';
-                           item.dataset.imageUrl = url;
-                           
-                           const img = document.createElement('img');
-                           img.src = url;
-                           img.alt = keyword;
-                           img.loading = 'lazy'; // Lazy loading for images
-                           
-                           item.appendChild(img);
-                           this.elements.wikiImageResultsContainer.appendChild(item);
-                       });
-                   } else {
-                       this.elements.wikiImageResultsContainer.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">画像が見つかりませんでした。</p>';
-                   }
-               } catch (error) {
-                   console.error('Wikipedia image search failed:', error);
-                   this.elements.wikiImageResultsContainer.innerHTML = `<p style="color: var(--danger-color); text-align: center;">画像の検索中にエラーが発生しました。<br>${error.message}</p>`;
-                   ErrorHandler.handle(error, 'wiki_image_search');
-               } finally {
-                   this.elements.wikiImageLoading.style.display = 'none';
-               }
-           }, // ここにカンマを追加
-       }; // ここでAppオブジェクトが閉じられる
+                    if (data.image_urls && data.image_urls.length > 0) {
+                        data.image_urls.forEach(url => {
+                            const item = document.createElement('div');
+                            item.className = 'wiki-image-item';
+                            item.dataset.imageUrl = url;
+                            
+                            const img = document.createElement('img');
+                            img.src = url;
+                            img.alt = keyword;
+                            img.loading = 'lazy'; // Lazy loading for images
+                            
+                            item.appendChild(img);
+                            this.elements.wikiImageResultsContainer.appendChild(item);
+                        });
+                    } else {
+                        this.elements.wikiImageResultsContainer.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">画像が見つかりませんでした。</p>';
+                    }
+                } catch (error) {
+                    console.error('Wikipedia image search failed:', error);
+                    this.elements.wikiImageResultsContainer.innerHTML = `<p style="color: var(--danger-color); text-align: center;">画像の検索中にエラーが発生しました。<br>${error.message}</p>`;
+                    ErrorHandler.handle(error, 'wiki_image_search');
+                } finally {
+                    this.elements.wikiImageLoading.style.display = 'none';
+                }
+            }
+        }; // ここでAppオブジェクトが閉じられる
 
-       // 埋め込み警告ユーティリティ + モーダル制御（統合版）
-       // slide.html では「簡易版(embed-modal-*)」と「上級版(embed-modal-advanced)」の2種類のIDが存在する。
-       // 本関数はまず上級版(advanced)の要素群を優先して取得し、無ければ簡易版(simple)をフォールバックとして使用する。
-       (function attachEmbedWarningAPI(){
-         let warnedUrls = new Set();
-         let warnedOnceThisSession = false;
+        // 埋め込み警告ユーティリティ + モーダル制御（統合版）
+        // slide.html では「簡易版(embed-modal-*)」と「上級版(embed-modal-advanced)」の2種類のIDが存在する。
+        // 本関数はまず上級版(advanced)の要素群を優先して取得し、無ければ簡易版(simple)をフォールバックとして使用する。
+        (function attachEmbedWarningAPI(){
+            let warnedUrls = new Set();
+            let warnedOnceThisSession = false;
 
-         function getWarningEl() {
-           const el = document.getElementById('embed-warning');
-           if (!el) return null;
-           const close = document.getElementById('embed-warning-close');
-           if (close && !close._bound) {
-             close._bound = true;
-             close.addEventListener('click', () => {
-               el.style.display = 'none';
-             });
-           }
-           return el;
-         }
+            function getWarningEl() {
+            const el = document.getElementById('embed-warning');
+            if (!el) return null;
+            const close = document.getElementById('embed-warning-close');
+            if (close && !close._bound) {
+                close._bound = true;
+                close.addEventListener('click', () => {
+                el.style.display = 'none';
+                });
+            }
+            return el;
+            }
 
-         App.showEmbedWarning = function(message, opts = {}) {
-           const { oncePerUrl = false, url = null, oncePerSession = false } = opts;
-           if (oncePerSession && warnedOnceThisSession) return;
-           if (oncePerUrl && url && warnedUrls.has(url)) return;
+            App.showEmbedWarning = function(message, opts = {}) {
+            const { oncePerUrl = false, url = null, oncePerSession = false } = opts;
+            if (oncePerSession && warnedOnceThisSession) return;
+            if (oncePerUrl && url && warnedUrls.has(url)) return;
 
-           const warnEl = getWarningEl();
-           if (!warnEl) return;
-           const msgEl = document.getElementById('embed-warning-message');
-           if (msgEl) msgEl.textContent = message;
+            const warnEl = getWarningEl();
+            if (!warnEl) return;
+            const msgEl = document.getElementById('embed-warning-message');
+            if (msgEl) msgEl.textContent = message;
 
-           warnEl.style.display = 'block';
+            warnEl.style.display = 'block';
 
-           if (oncePerSession) warnedOnceThisSession = true;
-           if (oncePerUrl && url) warnedUrls.add(url);
-         };
+            if (oncePerSession) warnedOnceThisSession = true;
+            if (oncePerUrl && url) warnedUrls.add(url);
+            };
 
-         // 埋め込みモーダルの制御（URL検証 + デバウンス + 既定 allow-scripts + 危険URLはプレビューしない/挿入禁止）
-         App.openEmbedModal = function() {
-           // 1) 上級版(advanced)を優先
-           let modalId = 'embed-modal-advanced';
-           let urlInput   = document.getElementById('embed-url-input-advanced');
-           let widthInput = document.getElementById('embed-width-input-advanced');
-           let heightInput= document.getElementById('embed-height-input-advanced');
-           let preview    = document.getElementById('embed-preview-advanced');
-           let insertBtn  = document.getElementById('embed-insert-btn-advanced');
+            // 埋め込みモーダルの制御（URL検証 + デバウンス + 既定 allow-scripts + 危険URLはプレビューしない/挿入禁止）
+            App.openEmbedModal = function() {
+            // 1) 上級版(advanced)を優先
+            let modalId = 'embed-modal-advanced';
+            let urlInput   = document.getElementById('embed-url-input-advanced');
+            let widthInput = document.getElementById('embed-width-input-advanced');
+            let heightInput= document.getElementById('embed-height-input-advanced');
+            let preview    = document.getElementById('embed-preview-advanced');
+            let insertBtn  = document.getElementById('embed-insert-btn-advanced');
 
-           // 2) 無ければ簡易版(simple)にフォールバック
-           if (!urlInput || !widthInput || !heightInput || !preview || !insertBtn) {
-             modalId   = 'embed-modal';
-             urlInput  = document.getElementById('embed-url-input-simple');
-             widthInput= document.getElementById('embed-width-input-simple');
-             heightInput = document.getElementById('embed-height-input-simple');
-             preview   = document.getElementById('embed-preview-simple');
-             insertBtn = document.getElementById('embed-insert-btn-simple');
-           }
+            // 2) 無ければ簡易版(simple)にフォールバック
+            if (!urlInput || !widthInput || !heightInput || !preview || !insertBtn) {
+                modalId   = 'embed-modal';
+                urlInput  = document.getElementById('embed-url-input-simple');
+                widthInput= document.getElementById('embed-width-input-simple');
+                heightInput = document.getElementById('embed-height-input-simple');
+                preview   = document.getElementById('embed-preview-simple');
+                insertBtn = document.getElementById('embed-insert-btn-simple');
+            }
 
-           if (!urlInput || !preview || !insertBtn) {
-             ErrorHandler.showNotification('埋め込みモーダルの初期化に失敗しました', 'error');
-             return;
-           }
+            if (!urlInput || !preview || !insertBtn) {
+                ErrorHandler.showNotification('埋め込みモーダルの初期化に失敗しました', 'error');
+                return;
+            }
 
-           // 初期値
-           urlInput.value = '';
-           widthInput.value = 50;
-           heightInput.value = 50;
-           preview.removeAttribute('src');
+            // 初期値
+            urlInput.value = '';
+            widthInput.value = 50;
+            heightInput.value = 50;
+            preview.removeAttribute('src');
 
-           // 上級者向け: アコーディオン開閉
-           const advToggle = document.getElementById('embed-advanced-toggle');
-           const advPanel  = document.getElementById('embed-advanced-panel');
-           if (advToggle && advPanel && !advToggle._bound) {
-             advToggle._bound = true;
-             advToggle.addEventListener('click', () => {
-               const expanded = advToggle.getAttribute('aria-expanded') === 'true';
-               advToggle.setAttribute('aria-expanded', String(!expanded));
-               advPanel.hidden = expanded;
-               const icon = advToggle.querySelector('i.fas');
-               if (icon) {
-                 icon.classList.toggle('fa-chevron-right', expanded);
-                 icon.classList.toggle('fa-chevron-down', !expanded);
-               }
-             });
-           }
+            // 上級者向け: アコーディオン開閉
+            const advToggle = document.getElementById('embed-advanced-toggle');
+            const advPanel  = document.getElementById('embed-advanced-panel');
+            if (advToggle && advPanel && !advToggle._bound) {
+                advToggle._bound = true;
+                advToggle.addEventListener('click', () => {
+                const expanded = advToggle.getAttribute('aria-expanded') === 'true';
+                advToggle.setAttribute('aria-expanded', String(!expanded));
+                advPanel.hidden = expanded;
+                const icon = advToggle.querySelector('i.fas');
+                if (icon) {
+                    icon.classList.toggle('fa-chevron-right', expanded);
+                    icon.classList.toggle('fa-chevron-down', !expanded);
+                }
+                });
+            }
 
-           // デフォルト sandbox は allow-scripts のみ
-           document.querySelectorAll('.embed-sbx').forEach(cb => {
-             if (cb.value === 'allow-scripts') cb.checked = true;
-             else cb.checked = false;
-           });
-           if (preview) preview.setAttribute('sandbox', 'allow-scripts');
+            // デフォルト sandbox は allow-scripts のみ
+            document.querySelectorAll('.embed-sbx').forEach(cb => {
+                if (cb.value === 'allow-scripts') cb.checked = true;
+                else cb.checked = false;
+            });
+            if (preview) preview.setAttribute('sandbox', 'allow-scripts');
 
-           // URL形式チェック用ヘルパ
-           const isValidHttpUrl = (val) => {
-             try {
-               const u = new URL(val, window.location.origin);
-               if (!/^https?:$/.test(u.protocol)) return false;
-               // ドメイン風または localhost/127.0.0.1 許可
-               const hostOk = /([a-z0-9-]+\.)+[a-z]{2,}$/i.test(u.hostname) || /^localhost$/.test(u.hostname) || /^127\.0\.0\.1$/.test(u.hostname);
-               // パスは任意、ただしスキーム直後のtypoを粗検知
-               const typoLike = /https?:;\/\/|https?:\/\/\/|https?:\/\/:|https?:\/\/\s/i.test(val);
-               return hostOk && !typoLike;
-             } catch {
-               return false;
-             }
-           };
+            // URL形式チェック用ヘルパ
+            const isValidHttpUrl = (val) => {
+                try {
+                const u = new URL(val, window.location.origin);
+                if (!/^https?:$/.test(u.protocol)) return false;
+                // ドメイン風または localhost/127.0.0.1 許可
+                const hostOk = /([a-z0-9-]+\.)+[a-z]{2,}$/i.test(u.hostname) || /^localhost$/.test(u.hostname) || /^127\.0\.0\.1$/.test(u.hostname);
+                // パスは任意、ただしスキーム直後のtypoを粗検知
+                const typoLike = /https?:;\/\/|https?:\/\/\/|https?:\/\/:|https?:\/\/\s/i.test(val);
+                return hostOk && !typoLike;
+                } catch {
+                return false;
+                }
+            };
 
-           // 入力終了待ちのデバウンス
-           let embedUrlTimer = null;
-           const schedulePreview = () => {
-             clearTimeout(embedUrlTimer);
-             embedUrlTimer = setTimeout(updatePreview, 500);
-           };
+            // 入力終了待ちのデバウンス
+            let embedUrlTimer = null;
+            const schedulePreview = () => {
+                clearTimeout(embedUrlTimer);
+                embedUrlTimer = setTimeout(updatePreview, 500);
+            };
 
-           // プレビュー更新関数（安全チェック結果に応じて厳格制御）
-           const updatePreview = async () => {
-             const url = urlInput.value.trim();
+            // プレビュー更新関数（安全チェック結果に応じて厳格制御）
+            const updatePreview = async () => {
+                const url = urlInput.value.trim();
 
-             // sandboxの組み立て（デフォルト allow-scripts）
-             const sbx = (() => {
-               const selected = Array.from(document.querySelectorAll('.embed-sbx:checked')).map(i => i.value);
-               if (selected.length === 0) return 'allow-scripts';
-               return selected.join(' ');
-             })();
-             if (preview) preview.setAttribute('sandbox', sbx);
+                // sandboxの組み立て（デフォルト allow-scripts）
+                const sbx = (() => {
+                const selected = Array.from(document.querySelectorAll('.embed-sbx:checked')).map(i => i.value);
+                if (selected.length === 0) return 'allow-scripts';
+                return selected.join(' ');
+                })();
+                if (preview) preview.setAttribute('sandbox', sbx);
 
-             // 入力なしならクリア
-             if (!url) {
-               if (preview) {
-                 preview.removeAttribute('src');
-                 preview.title = '';
-               }
-               urlInput.setCustomValidity('');
-               urlInput.reportValidity();
-               // 追加ボタンの存在チェック（両モーダル対応）
-               const insertBtn = document.getElementById('embed-insert-btn-advanced') || document.getElementById('embed-insert-btn-simple');
-               if (insertBtn) insertBtn.disabled = true;
-               return;
-             }
+                // 入力なしならクリア
+                if (!url) {
+                if (preview) {
+                    preview.removeAttribute('src');
+                    preview.title = '';
+                }
+                urlInput.setCustomValidity('');
+                urlInput.reportValidity();
+                // 追加ボタンの存在チェック（両モーダル対応）
+                const insertBtn = document.getElementById('embed-insert-btn-advanced') || document.getElementById('embed-insert-btn-simple');
+                if (insertBtn) insertBtn.disabled = true;
+                return;
+                }
 
-             // URL形式検証
-             if (!isValidHttpUrl(url)) {
-               if (preview) {
-                 preview.removeAttribute('src');
-                 preview.title = '';
-               }
-               urlInput.setCustomValidity('有効な http/https のURLを入力してください。例: https://example.com/page');
-               urlInput.reportValidity();
-               const insertBtn = document.getElementById('embed-insert-btn-advanced') || document.getElementById('embed-insert-btn-simple');
-               if (insertBtn) insertBtn.disabled = true;
-               return;
-             }
+                // URL形式検証
+                if (!isValidHttpUrl(url)) {
+                if (preview) {
+                    preview.removeAttribute('src');
+                    preview.title = '';
+                }
+                urlInput.setCustomValidity('有効な http/https のURLを入力してください。例: https://example.com/page');
+                urlInput.reportValidity();
+                const insertBtn = document.getElementById('embed-insert-btn-advanced') || document.getElementById('embed-insert-btn-simple');
+                if (insertBtn) insertBtn.disabled = true;
+                return;
+                }
 
-             // 一旦バリデーションOK
-             urlInput.setCustomValidity('');
-             urlInput.reportValidity();
+                // 一旦バリデーションOK
+                urlInput.setCustomValidity('');
+                urlInput.reportValidity();
 
-             // ここでサーバの安全チェックを実施。安全でなければプレビューしない
-             let safeCheck = { safe: false, reason: 'error' };
-             try {
-               const uTmp = new URL(url, window.location.origin);
-               safeCheck = await Utils.checkUrlSafety(uTmp.toString());
-             } catch (_) {
-               safeCheck = { safe: false, reason: 'invalid_url' };
-             }
+                // ここでサーバの安全チェックを実施。安全でなければプレビューしない
+                let safeCheck = { safe: false, reason: 'error' };
+                try {
+                const uTmp = new URL(url, window.location.origin);
+                safeCheck = await Utils.checkUrlSafety(uTmp.toString());
+                } catch (_) {
+                safeCheck = { safe: false, reason: 'invalid_url' };
+                }
 
-             const insertBtn = document.getElementById('embed-insert-btn-advanced') || document.getElementById('embed-insert-btn-simple');
-             if (!safeCheck.safe) {
-               // 危険/不正/エラー時はプレビューをロードしない
-               if (preview) {
-                 preview.removeAttribute('src');
-                 preview.title = '';
-               }
-               if (insertBtn) insertBtn.disabled = true;
+                const insertBtn = document.getElementById('embed-insert-btn-advanced') || document.getElementById('embed-insert-btn-simple');
+                if (!safeCheck.safe) {
+                // 危険/不正/エラー時はプレビューをロードしない
+                if (preview) {
+                    preview.removeAttribute('src');
+                    preview.title = '';
+                }
+                if (insertBtn) insertBtn.disabled = true;
 
-               // 既存の警告バナーを使用してユーザーに通知
-               const reason = safeCheck.reason || 'error';
-               if (reason === 'matched') {
-                 const matched = (safeCheck.matched_domain || '');
-                 const srcName = (safeCheck.source || '');
-                 App.showEmbedWarning(`危険なURLとしてブロックリストに一致しました（${matched} / ${srcName}）。このURLはプレビューできません。`, { oncePerUrl: false, url });
-               } else if (reason === 'invalid_url') {
-                 App.showEmbedWarning('URLが正しくありません。プレビューできません。', { oncePerUrl: false, url });
-               } else {
-                 App.showEmbedWarning('安全性チェックで問題が検出されました。プレビューできません。', { oncePerUrl: false, url });
-               }
-               return;
-             }
+                // 既存の警告バナーを使用してユーザーに通知
+                const reason = safeCheck.reason || 'error';
+                if (reason === 'matched') {
+                    const matched = (safeCheck.matched_domain || '');
+                    const srcName = (safeCheck.source || '');
+                    App.showEmbedWarning(`危険なURLとしてブロックリストに一致しました（${matched} / ${srcName}）。このURLはプレビューできません。`, { oncePerUrl: false, url });
+                } else if (reason === 'invalid_url') {
+                    App.showEmbedWarning('URLが正しくありません。プレビューできません。', { oncePerUrl: false, url });
+                } else {
+                    App.showEmbedWarning('安全性チェックで問題が検出されました。プレビューできません。', { oncePerUrl: false, url });
+                }
+                return;
+                }
 
-             // 安全な場合のみプレビューを表示
-             try {
-               const u = new URL(url, window.location.origin);
-               if (preview) {
-                 preview.src = u.toString();
-                 preview.title = u.toString();
-               }
-               if (insertBtn) insertBtn.disabled = false;
-             } catch {
-               if (preview) {
-                 preview.removeAttribute('src');
-                 preview.title = '';
-               }
-               if (insertBtn) insertBtn.disabled = true;
-             }
-           };
+                // 安全な場合のみプレビューを表示
+                try {
+                const u = new URL(url, window.location.origin);
+                if (preview) {
+                    preview.src = u.toString();
+                    preview.title = u.toString();
+                }
+                if (insertBtn) insertBtn.disabled = false;
+                } catch {
+                if (preview) {
+                    preview.removeAttribute('src');
+                    preview.title = '';
+                }
+                if (insertBtn) insertBtn.disabled = true;
+                }
+            };
 
-           // デバウンスを適用
-           if (urlInput) urlInput.oninput = schedulePreview;
-           document.querySelectorAll('.embed-sbx').forEach(cb => cb.onchange = updatePreview);
+            // デバウンスを適用
+            if (urlInput) urlInput.oninput = schedulePreview;
+            document.querySelectorAll('.embed-sbx').forEach(cb => cb.onchange = updatePreview);
 
-           // URL入力前に注意喚起（モーダルオープン時に一度）
-           App.showEmbedWarning('外部サイトのコンテンツを埋め込む前に、提供元が信頼できることを確認してください。', { oncePerSession: true });
+            // URL入力前に注意喚起（モーダルオープン時に一度）
+            App.showEmbedWarning('外部サイトのコンテンツを埋め込む前に、提供元が信頼できることを確認してください。', { oncePerSession: true });
 
-           // 追加ボタン
-           if (!insertBtn._bound) {
-             insertBtn._bound = true;
-             insertBtn.addEventListener('click', () => {
-               const url = (urlInput?.value || '').trim();
-               if (!url) {
-                 alert('URLを入力してください');
-                 return;
-               }
-               if (!isValidHttpUrl(url)) {
-                 alert('http/https の正しいURLを入力してください。');
-                 return;
-               }
-               let u;
-               try {
-                 u = new URL(url, window.location.origin);
-                 if (!/^https?:$/.test(u.protocol)) {
-                   alert('http/https のURLのみ許可されます。');
-                   return;
-                 }
-               } catch {
-                 alert('不正なURLです。正しいURLを入力してください。');
-                 return;
-               }
+            // 追加ボタン
+            if (!insertBtn._bound) {
+                insertBtn._bound = true;
+                insertBtn.addEventListener('click', () => {
+                const url = (urlInput?.value || '').trim();
+                if (!url) {
+                    alert('URLを入力してください');
+                    return;
+                }
+                if (!isValidHttpUrl(url)) {
+                    alert('http/https の正しいURLを入力してください。');
+                    return;
+                }
+                let u;
+                try {
+                    u = new URL(url, window.location.origin);
+                    if (!/^https?:$/.test(u.protocol)) {
+                    alert('http/https のURLのみ許可されます。');
+                    return;
+                    }
+                } catch {
+                    alert('不正なURLです。正しいURLを入力してください。');
+                    return;
+                }
 
-               // 追加前に警告（ここで必ず表示）
-               App.showEmbedWarning(`以下のURLを埋め込みます: ${u.toString()}
- 外部サイトのスクリプトが実行される可能性があります。信頼できる提供元か確認してください。`, { oncePerUrl: false, url: u.toString() });
+                // 追加前に警告（ここで必ず表示）
+                App.showEmbedWarning(`以下のURLを埋め込みます: ${u.toString()}
+    外部サイトのスクリプトが実行される可能性があります。信頼できる提供元か確認してください。`, { oncePerUrl: false, url: u.toString() });
 
-               // sandbox属性（未選択時でも allow-scripts を強制）
-               const selectedSbx = Array.from(document.querySelectorAll('.embed-sbx:checked')).map(i => i.value);
-               const sandbox = (selectedSbx.length ? selectedSbx.join(' ') : 'allow-scripts');
-               // サイズ
-               const w = Math.max(10, Math.min(100, Number(widthInput?.value) || 50));
-               const h = Math.max(10, Math.min(100, Number(heightInput?.value) || 50));
+                // sandbox属性（未選択時でも allow-scripts を強制）
+                const selectedSbx = Array.from(document.querySelectorAll('.embed-sbx:checked')).map(i => i.value);
+                const sandbox = (selectedSbx.length ? selectedSbx.join(' ') : 'allow-scripts');
+                // サイズ
+                const w = Math.max(10, Math.min(100, Number(widthInput?.value) || 50));
+                const h = Math.max(10, Math.min(100, Number(heightInput?.value) || 50));
 
-               // 実際に要素を追加
-               const slide = App.getActiveSlide();
-               if (!slide) return;
+                // 実際に要素を追加
+                const slide = App.getActiveSlide();
+                if (!slide) return;
 
-               const newElStyle = { top: 20, left: 20, width: w, height: h, zIndex: slide.elements.length + 1, rotation: 0, animation: '' };
-               const content = { url: u.toString(), sandbox: sandbox || 'allow-scripts allow-same-origin' };
-               const added = App.addElementToSlide(slide.id, 'iframe', content, newElStyle);
-               if (added) {
-                 App.updateState('selectedElementIds', [added.id]);
-                 App.saveState();
-                 App.render();
-                 if (typeof MicroModal !== 'undefined') MicroModal.close(modalId);
-               }
-             });
-           }
+                const newElStyle = { top: 20, left: 20, width: w, height: h, zIndex: slide.elements.length + 1, rotation: 0, animation: '' };
+                const content = { url: u.toString(), sandbox: sandbox || 'allow-scripts' };
+                const added = App.addElementToSlide(slide.id, 'iframe', content, newElStyle);
+                if (added) {
+                App.updateState(doc => {
+                    doc.selectedElementIds = [added.id];
+                });
+                if (typeof MicroModal !== 'undefined') MicroModal.close(modalId);
+                }
+                });
+            }
 
-           // モーダルを開く
-           if (typeof MicroModal !== 'undefined') {
-             MicroModal.show(modalId, {
-               awaitCloseAnimation: true,
-               disableScroll: true
-             });
-           } else {
-             ErrorHandler.showNotification('モーダルライブラリが読み込まれていません', 'error');
-           }
-         };
-       })();
+            // モーダルを開く
+            if (typeof MicroModal !== 'undefined') {
+                MicroModal.show(modalId, {
+                awaitCloseAnimation: true,
+                disableScroll: true
+                });
+            } else {
+                ErrorHandler.showNotification('モーダルライブラリが読み込まれていません', 'error');
+            }
+            };
+        })();
 
 
 
@@ -6209,9 +6797,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const addedElement = App.addElementToSlide(slide.id, 'chart', newElContent, newElStyle);
             
             if (addedElement) {
-                App.updateState('selectedElementIds', [addedElement.id]);
-                App.saveState();
-                App.render();
+                App.updateState(doc => {
+                    doc.selectedElementIds = [addedElement.id];
+                });
                 MicroModal.close('chart-modal');
             }
         };
@@ -6370,9 +6958,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // 5. Appの初期化
+    // 5. Appの初期化を待ってから、依存する機能を初期化
+    window.addEventListener('app-initialized', () => {
+        window.aiHandler = App.aiHandler = new AIHandler(App);
+    });
+
     await App.init();
-    window.aiHandler = App.aiHandler = new AIHandler(App);
 
     // 6. 図形選択モーダルのイベントリスナー
     const shapeModal = document.getElementById('shape-modal');

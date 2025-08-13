@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, ForeignKey, LargeBinary
 from sqlalchemy.orm import relationship
 from module.database import Base
 
@@ -30,7 +30,7 @@ class UploadedFile(Base):
 class Slide(Base):
     __tablename__ = "slides"
     id = Column(Integer, primary_key=True, index=True)
-    slide_data = Column(Text)
+    slide_data = Column(LargeBinary, nullable=False)
     owner_id = Column(Integer, ForeignKey("users.id"))
 
     owner = relationship("User", back_populates="slides")

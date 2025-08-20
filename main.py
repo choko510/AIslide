@@ -7,6 +7,7 @@ from typing import Annotated, Optional, List, Dict, Any
 import asyncio
 import httpx
 import base64
+import json
 
 from fastapi import (
     FastAPI, Depends, HTTPException, status, UploadFile,
@@ -27,6 +28,7 @@ from google import genai
 from google.genai import types
 from PIL import Image
 import io
+import ffmpeg
 import re
 
 import module.auth as auth
@@ -175,6 +177,10 @@ class URLSafetyResponse(BaseModel):
 class WordRequest(BaseModel):
     keyword: str
 
+class ScoringResult(BaseModel):
+    score: int
+    feedback: Dict[str, Any]
+
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
@@ -315,7 +321,7 @@ async def _ensure_blocklists_loaded(*, force: bool = False) -> None:
                     if isinstance(res, Exception):
                         logger.error(f"Blocklist download failed for {source['url']}: {res}", exc_info=True)
                         continue
-                    items = res
+                    items = res if isinstance(res, (list, set)) else []
                 elif "list" in source:
                     items = source["list"]
                 elif "path" in source:
@@ -592,6 +598,10 @@ async def read_plan(request: Request):
 @app.get("/slide/{slide_id}", response_class=HTMLResponse)
 async def read_slide_index(request: Request, slide_id: str):
     return templates.TemplateResponse("slide.html", {"request": request, "slide_id": slide_id})
+
+@app.get("/scoring/", response_class=HTMLResponse)
+async def read_scoring(request: Request):
+    return templates.TemplateResponse("scroing.html", {"request": request})
 
 # --- User Account Endpoints ---
 @app.post("/auth/register", response_model=UserResponse)
@@ -1302,6 +1312,99 @@ async def get_wiki_image(keyword: str):
 
         return JSONResponse(content={"image_urls": sorted(filtered_urls)})
 
+# --- Scoring Endpoint ---
+@app.post("/scoring/upload")
+async def scoring_upload(
+    slide_id: str = Form(...),
+    video: UploadFile = File(...),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Uploads a video for scoring, processes it with AI, and returns feedback.
+    """
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="AI service is currently unavailable")
+
+    # Validate video file
+    if not video.content_type or not video.content_type.startswith("video/"):
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a video.")
+
+    temp_dir = "data/temp"
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    input_path = os.path.join(temp_dir, f"input_{uuid.uuid4()}.webm")
+    output_path = os.path.join(temp_dir, f"output_{uuid.uuid4()}.mp4")
+
+    try:
+        # Save the uploaded video to a temporary file
+        with open(input_path, "wb") as f:
+            shutil.copyfileobj(video.file, f)
+
+        # Check and convert video properties using ffmpeg-python
+        (
+            ffmpeg
+            .input(input_path)
+            .output(output_path, vf='scale=w=1280:h=720:force_original_aspect_ratio=decrease', r=30)
+            .run(capture_stdout=True, capture_stderr=True, overwrite_output=True)
+        )
+
+        # Initialize Gemini Client
+        client = genai.Client(api_key=GEMINI_API_KEY)
+
+        # Upload the video file to Gemini
+        uploaded_video = client.files.upload(file=output_path)
+
+        # Generate content using Gemini
+        prompt = """
+        あなたはプレゼンテーションのプロのコーチです。
+        この動画を見て、以下の観点からプレゼンテーションを評価し、JSON形式で結果を返してください。
+
+        - score: 総合スコア（0-100点）
+        - feedback:
+            - clarity: 声の明瞭さ、聞き取りやすさについての評価コメント
+            - pace: 話すペースの適切さについての評価コメント
+            - engagement: 聴衆を引きつける工夫（ジェスチャー、視線など）についての評価コメント
+            - improvement_points: 具体的な改善点のリスト（2〜3個）
+
+        以下は出力形式の例です。この形式に厳密に従ってください。
+        {
+            "score": 85,
+            "feedback": {
+                "clarity": "声が明瞭で、非常に聞き取りやすかったです。特に重要なキーワードが強調されており、理解を助けていました。",
+                "pace": "全体的に適切なペースでしたが、一部早口になる場面がありました。特にデータの説明部分では、もう少し間を取ると良いでしょう。",
+                "engagement": "ジェスチャーが効果的に使われており、視線も聴衆全体に向けられていて素晴らしいです。",
+                "improvement_points": [
+                    "専門用語を使用する際に、簡単な言葉での補足を加えると、より多くの聴衆に理解されやすくなります。",
+                    "スライドの切り替えと話すタイミングが少しずれている箇所があったため、リハーサルで調整することをお勧めします。"
+                ]
+            }
+        }
+        """
+        
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[prompt, uploaded_video],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=ScoringResult,
+            ),
+        )
+
+        # Delete the file from Gemini server after processing
+        client.files.delete(name=uploaded_video.name)
+        
+        log_user_action('ai_request_processing', current_user.id, f"Scoring for slide {slide_id}")
+        
+        # The response.text should be a valid JSON string based on the schema
+        return JSONResponse(content=json.loads(response.text))
+
+    except ffmpeg.Error as e:
+        logger.error(f"FFmpeg error: {e.stderr.decode()}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to process video.")
+    except Exception as e:
+        logger.error(f"Error during scoring process for slide {slide_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An error occurred during the scoring process.")
+    
 # --- WebSocket Endpoint ---
 @app.websocket("/ws/collaborate/{slide_id}")
 async def websocket_collaborate(

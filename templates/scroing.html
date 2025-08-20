@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIslide - プレゼン採点</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='scoring/scoring.css') }}">
+    <link rel="stylesheet" href="https://site-assets.fontawesome.com/releases/v6.7.2/css/all.css">
+</head>
+
+<body class="page-transition">
+
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <h1><a href="/" style="text-decoration: none; color: inherit;">AIslide</a></h1>
+            <nav class="sidebar-nav">
+                <a href="/"><i class="fas fa-home"></i><span>ダッシュボード</span></a>
+                <a href="/plan"><i class="fas fa-lightbulb"></i><span>AIプランナー</span></a>
+                <a href="/scoring" class="active"><i class="fas fa-chart-line"></i><span>プレゼン採点</span></a>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="header">
+                <div id="auth-area">
+                    <!-- 認証状態に応じてJSで内容を切り替え -->
+                </div>
+            </header>
+            <div class="content-area">
+                <h2>プレゼンテーション採点</h2>
+
+                <!-- ステップインジケーター -->
+                <div class="step-indicator">
+                    <div class="step active" data-step="1">
+                        <div class="step-icon">1</div>
+                        <div class="step-label">スライド選択</div>
+                    </div>
+                    <div class="step-connector"></div>
+                    <div class="step" data-step="2">
+                        <div class="step-icon">2</div>
+                        <div class="step-label">動画撮影</div>
+                    </div>
+                    <div class="step-connector"></div>
+                    <div class="step" data-step="3">
+                        <div class="step-icon">3</div>
+                        <div class="step-label">採点結果</div>
+                    </div>
+                </div>
+
+                <!-- ステップ1: スライド選択 -->
+                <div id="step-1" class="step-content active">
+                    <h3>採点するプレゼンテーションを選択してください</h3>
+                    <div class="slide-list" id="scoring-slide-list">
+                        <!-- JSでスライドリストを動的に読み込みます -->
+                    </div>
+                    <div class="navigation-buttons">
+                        <button id="to-step-2-btn" class="btn btn-primary" disabled>次へ進む <i class="fas fa-arrow-right"></i></button>
+                    </div>
+                </div>
+
+                <!-- ステップ2: 動画撮影 -->
+                <div id="step-2" class="step-content">
+                    <div class="recording-layout">
+                        <div class="camera-container">
+                            <h3>カメラ映像</h3>
+                            <video id="camera-view" autoplay muted playsinline></video>
+                             <div class="target-time-container">
+                                <label for="target-time-input">目標時間 (分):</label>
+                                <input type="number" id="target-time-input" class="form-control" min="1" value="5">
+                            </div>
+                            <div class="recording-controls">
+                                <button id="toggle-view-btn" class="btn btn-outline" title="表示切替"><i class="fas fa-expand"></i></button>
+                                <button id="start-recording-btn" class="btn btn-danger"><i class="fas fa-video"></i> 録画開始</button>
+                                <button id="stop-recording-btn" class="btn btn-secondary" style="display: none;"><i class="fas fa-stop"></i> 録画停止</button>
+                                <p id="recording-timer">00:00</p>
+                            </div>
+                        </div>
+                        <div class="slide-preview-container">
+                            <h3>スライドプレビュー</h3>
+                            <div id="slide-preview">
+                                <!-- 選択されたスライドのプレビューを表示 -->
+                            </div>
+                        </div>
+                    </div>
+                     <div class="navigation-buttons">
+                        <button id="back-to-step-1-btn" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> 戻る</button>
+                        <button id="to-step-3-btn" class="btn btn-primary" disabled>採点する <i class="fas fa-check"></i></button>
+                    </div>
+                </div>
+
+                <!-- ステップ3: 採点結果 -->
+                <div id="step-3" class="step-content">
+                    <h3>採点結果</h3>
+                    <div id="scoring-result-area">
+                        <!-- AIからの採点結果をここに表示 -->
+                        <div class="loading-spinner" style="display: none;">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <p>AIが採点中です...</p>
+                        </div>
+                        <div id="result-display"></div>
+                    </div>
+                    <div class="navigation-buttons">
+                         <button id="back-to-step-2-btn" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> 再撮影する</button>
+                        <button id="to-dashboard-btn" class="btn btn-primary">ダッシュボードに戻る <i class="fas fa-home"></i></button>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="{{ url_for('static', path='scoring/scoring.js') }}"></script>
+</body>
+
+</html>

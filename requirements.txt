@@ -10,4 +10,5 @@ passlib
 bcrypt
 Jinja2
 requests
-httpx
+httpx[http2]
+ffmpeg-python

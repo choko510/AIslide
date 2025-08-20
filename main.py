@@ -6,6 +6,8 @@ from datetime import timedelta
 from typing import Annotated, Optional, List, Dict, Any
 import asyncio
 import httpx
+import base64
+import json
 
 from fastapi import (
     FastAPI, Depends, HTTPException, status, UploadFile,
@@ -26,6 +28,8 @@ from google import genai
 from google.genai import types
 from PIL import Image
 import io
+import ffmpeg
+import re
 
 import module.auth as auth
 from module.database import engine, get_db
@@ -134,6 +138,7 @@ class UserUpdatePassword(BaseModel):
 
 class UserUpdateUsername(BaseModel):
     new_username: str
+    password: str
 
 class FileResponse(BaseModel):
     id: int
@@ -145,10 +150,12 @@ class FileResponse(BaseModel):
         from_attributes = True
 
 class SlideCreate(BaseModel):
+    # HTTP APIではBase64エンコードされた文字列としてデータを受け取る
     slide_data: str
 
 class SlideResponse(BaseModel):
     id: int
+    # HTTP APIではBase64エンコードされた文字列としてデータを返す
     slide_data: str
     owner_id: int
 
@@ -169,6 +176,46 @@ class URLSafetyResponse(BaseModel):
 
 class WordRequest(BaseModel):
     keyword: str
+
+class ScoringResult(BaseModel):
+    score: int
+    feedback: Dict[str, Any]
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, List[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, slide_id: str):
+        await websocket.accept()
+        if slide_id not in self.active_connections:
+            self.active_connections[slide_id] = []
+        self.active_connections[slide_id].append(websocket)
+
+    def disconnect(self, websocket: WebSocket, slide_id: str):
+        if slide_id in self.active_connections:
+            self.active_connections[slide_id].remove(websocket)
+            if not self.active_connections[slide_id]:
+                del self.active_connections[slide_id]
+
+    async def send_personal_message(self, message: bytes, websocket: WebSocket):
+        await websocket.send_bytes(message)
+
+    async def broadcast_bytes(self, message: bytes, slide_id: str, sender: Optional[WebSocket] = None):
+        if slide_id in self.active_connections:
+            for connection in self.active_connections[slide_id]:
+                if connection != sender:
+                    await connection.send_bytes(message)
+
+    async def broadcast_text(self, message: str, slide_id: str, sender: Optional[WebSocket] = None):
+        if slide_id in self.active_connections:
+            for connection in self.active_connections[slide_id]:
+                if connection != sender:
+                    await connection.send_text(message)
+
+manager = ConnectionManager()
+
+# In-memory storage for slides, mapping slide_id to its data (bytes)
+slides: Dict[str, bytes] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -194,6 +241,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# Development flag: allow anonymous WS and auto-create slide if missing
+ALLOW_ANON_WS = True
+
 # --- HTTP client (app-scope) and utilities for Wikipedia endpoint ---
 # Shared AsyncClient with HTTP/2, connection pooling, and split timeouts
 # Note: keep a single client instance to benefit from connection reuse
@@ -201,18 +251,21 @@ client_timeout = httpx.Timeout(connect=1.0, read=5.0, write=5.0, pool=2.0)
 shared_http_client = httpx.AsyncClient(http2=True, timeout=client_timeout, headers={"Accept-Encoding": "gzip, deflate"})
 
 # --- URL Safety (Blocklist) Utilities ---
-BLOCK_LIST = [
-    "https://phishing.army/download/phishing_army_blocklist.txt",
-    "https://malware-filter.gitlab.io/malware-filter/phishing-filter-domains.txt",
-    "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-domains-online.txt",
-]
-# 追加の外部ブロックリストは別配列で管理（存在しないインデックス参照を避ける）
-EXTRA_BLOCKLISTS = [
-    "https://raw.githubusercontent.com/Spam404/lists/master/main-blacklist.txt",
+BLOCKLIST_SOURCES = [
+    {"url": "https://phishing.army/download/phishing_army_blocklist.txt", "category": "phishing", "type": "domain"},
+    {"url": "https://malware-filter.gitlab.io/malware-filter/phishing-filter-domains.txt", "category": "phishing", "type": "domain"},
+    {"url": "https://malware-filter.gitlab.io/malware-filter/urlhaus-filter-domains-online.txt", "category": "urlhaus", "type": "domain"},
+    {"url": "https://raw.githubusercontent.com/Spam404/lists/master/main-blacklist.txt", "category": "phishing", "type": "domain"},
+    {"path": "module/blocklist.txt", "category": "phishing", "type": "adblock"},
 ]
 
 # メモリキャッシュ（アプリ存続期間内）
-_blocklist_cache: dict[str, set[str]] = {"phishing": set(), "urlhaus": set()}
+_blocklist_cache: dict[str, set[str] | list[re.Pattern]] = {
+    "phishing": set(),
+    "urlhaus": set(),
+    "phishing_regex": [],
+    "urlhaus_regex": [],
+}
 _blocklist_loaded = False
 _blocklist_lock = asyncio.Lock()
 # 1日(24h)に1回の更新
@@ -239,58 +292,85 @@ async def _ensure_blocklists_loaded(*, force: bool = False) -> None:
         if not force and _blocklist_loaded and _blocklist_expire_at > now:
             return
 
-        # 並列ダウンロード
+        # 並列ダウンロードとリスト処理
         try:
-            # BLOCK_LIST は 0..2 の3件構成。0/1 が phishing、2 が urlhaus。
-            # EXTRA_BLOCKLISTS は任意個。全て phishing 側として取り扱う。
-            core_tasks = [
-                _download_blocklist(BLOCK_LIST[0]),  # phishing.army (phishing)
-                _download_blocklist(BLOCK_LIST[1]),  # malware-filter phishing (phishing)
-                _download_blocklist(BLOCK_LIST[2]),  # urlhaus online (urlhaus)
-            ]
-            extra_tasks = [_download_blocklist(url) for url in EXTRA_BLOCKLISTS]  # Spam404 など
-            tasks = core_tasks + extra_tasks
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            phishing_sets: list[set[str]] = []
-            urlhaus_sets: list[set[str]] = []
-
-            # マッピング:
-            #  - phishing: core indices 0,1 + all extras (idx >= len(core_tasks))
-            #  - urlhaus : core index 2
-            for idx, res in enumerate(results):
-                if isinstance(res, Exception):
-                    logger.error(f"Blocklist task {idx} failed: {res}", exc_info=True)
+            # URLベースのリストをダウンロードタスクに追加
+            download_tasks = []
+            for source in BLOCKLIST_SOURCES:
+                if "url" in source:
+                    download_tasks.append(_download_blocklist(source["url"]))
+            
+            download_results = await asyncio.gather(*download_tasks, return_exceptions=True)
+            
+            # 新しいキャッシュを準備
+            new_cache: dict[str, set[str] | list[re.Pattern]] = {
+                "phishing": set(), "urlhaus": set(),
+                "phishing_regex": [], "urlhaus_regex": []
+            }
+            
+            # 結果を処理
+            download_idx = 0
+            for source in BLOCKLIST_SOURCES:
+                category = source.get("category", "phishing")
+                list_type = source.get("type", "domain")
+                
+                items = []
+                if "url" in source:
+                    res = download_results[download_idx]
+                    download_idx += 1
+                    if isinstance(res, Exception):
+                        logger.error(f"Blocklist download failed for {source['url']}: {res}", exc_info=True)
+                        continue
+                    items = res if isinstance(res, (list, set)) else []
+                elif "list" in source:
+                    items = source["list"]
+                elif "path" in source:
+                    items = _read_local_blocklist(source["path"])
+                else:
                     continue
-                if idx in (0, 1) or idx >= len(core_tasks):
-                    phishing_sets.append(res)
-                elif idx == 2:
-                    urlhaus_sets.append(res)
 
-            # old mirror.cedia はドメインリスト形式だが品質不確実のため現状は未使用
-            # 必要になれば以下の通りで追加可能:
-            # cedia = await _download_blocklist(BLOCK_LIST[1])
-            # phishing_sets.append(cedia)
+                if list_type == "domain":
+                    domain_set = new_cache.get(category, set())
+                    if isinstance(domain_set, set):
+                        domain_set.update(items)
+                else: # regex or adblock
+                    regex_list = new_cache.get(f"{category}_regex", [])
+                    if isinstance(regex_list, list):
+                        for item in items:
+                            regex_str = None
+                            if list_type == "regex":
+                                regex_str = item
+                            elif list_type == "adblock":
+                                regex_str = _convert_adblock_rule_to_regex(item)
+                            
+                            if regex_str:
+                                try:
+                                    # Adblockルールは基本的に大文字小文字を区別しない
+                                    regex_list.append(re.compile(regex_str, re.IGNORECASE))
+                                except re.error as e:
+                                    logger.warning(f"Invalid regex pattern '{regex_str}' from '{item}': {e}")
 
-            # 集約してセット化
-            phishing = set().union(*phishing_sets) if phishing_sets else set()
-            urlhaus = set().union(*urlhaus_sets) if urlhaus_sets else set()
+            # phishing と urlhaus の重複を除去（urlhaus を優先）
+            phishing_set = new_cache.get("phishing")
+            urlhaus_set = new_cache.get("urlhaus")
+            if isinstance(phishing_set, set) and isinstance(urlhaus_set, set):
+                common = phishing_set & urlhaus_set
+                if common:
+                    phishing_set -= common
 
-
-            common = phishing & urlhaus
-            if common:
-                urlhaus = urlhaus - common
-
-            # 最低限の正規化（空要素は _download_blocklist 側で排除済み）
             # キャッシュに反映（全置換）
-            _blocklist_cache["phishing"] = phishing
-            _blocklist_cache["urlhaus"] = urlhaus
+            _blocklist_cache = new_cache
 
             _blocklist_loaded = True
             _blocklist_expire_at = asyncio.get_event_loop().time() + _BLOCKLIST_TTL
 
             logger.info(
-                f"Blocklists loaded: phishing={len(phishing)}, urlhaus={len(urlhaus)}, ttl={_BLOCKLIST_TTL}s, extras={len(EXTRA_BLOCKLISTS)}"
+                f"Blocklists loaded: "
+                f"phishing={len(_blocklist_cache.get('phishing', set()))}, "
+                f"urlhaus={len(_blocklist_cache.get('urlhaus', set()))}, "
+                f"phishing_regex={len(_blocklist_cache.get('phishing_regex', []))}, "
+                f"urlhaus_regex={len(_blocklist_cache.get('urlhaus_regex', []))}, "
+                f"ttl={_BLOCKLIST_TTL}s"
             )
         except Exception as e:
             # 失敗時はロードフラグやTTLは更新しない（既存キャッシュを維持）
@@ -313,24 +393,37 @@ def _extract_domain_from_url(url: str) -> Optional[str]:
     except Exception:
         return None
 
-def _check_domain_safety(domain: str) -> Optional[Dict[str, str]]:
+def _check_url_safety(url: str) -> Optional[Dict[str, str]]:
     """
-    ドメインがブロックリストに含まれるかチェックする。高速なセット検索を利用。
-    サブドメインのマッチングも行う。
+    URLがブロックリストに含まれるかチェックする。
+    1. 高速なセット検索（ドメイン完全一致/サブドメイン）
+    2. 正規表現リストでの検索（URL全体）
     含まれる場合は {"matched_domain": str, "source": str} を返す。
     """
+    domain = _extract_domain_from_url(url)
     if not domain:
         return None
 
+    # 1. 高速なセット検索 (ドメイン)
     parts = domain.split('.')
-    # 少なくとも2つの部分（例: example.com）からなるドメインのみをチェック対象とする
-    # range(len(parts) - 1) は ["a.b.c", "b.c"] を生成するが "c" は生成しない
     domain_variants = [".".join(parts[i:]) for i in range(len(parts) - 1)]
+    
+    for category in ["phishing", "urlhaus"]:
+        blocklist_set = _blocklist_cache.get(category)
+        if isinstance(blocklist_set, set):
+            for variant in domain_variants:
+                if variant in blocklist_set:
+                    return {"matched_domain": variant, "source": category}
 
-    for source, blocklist in _blocklist_cache.items():
-        for variant in domain_variants:
-            if variant in blocklist:
-                return {"matched_domain": variant, "source": str(source)}
+    # 2. 正規表現での検索 (URL全体に対して)
+    for category_key in ["phishing_regex", "urlhaus_regex"]:
+        regex_list = _blocklist_cache.get(category_key)
+        category = category_key.replace('_regex', '')
+        if isinstance(regex_list, list):
+            for pattern in regex_list:
+                if pattern.search(url):
+                    return {"matched_domain": domain, "source": category}
+    
     return None
 
 async def _download_blocklist(url: str) -> set[str]:
@@ -360,6 +453,58 @@ async def _download_blocklist(url: str) -> set[str]:
     except Exception as e:
         logger.error(f"Blocklist download failed: {url} : {e}", exc_info=True)
         return set()
+
+def _read_local_blocklist(file_path: str) -> list[str]:
+    """
+    ローカルファイルからブロックリストのルールを読み込む。
+    コメント行と空行は無視する。
+    """
+    rules = []
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and not line.startswith("!"):
+                    rules.append(line)
+    except FileNotFoundError:
+        logger.warning(f"Local blocklist file not found: {file_path}")
+    except Exception as e:
+        logger.error(f"Error reading local blocklist file {file_path}: {e}", exc_info=True)
+    return rules
+
+def _convert_adblock_rule_to_regex(rule: str) -> Optional[str]:
+    """Adblockスタイルのフィルターを正規表現文字列に変換する（簡易版）"""
+    if not rule or rule.startswith("!"):
+        return None
+    
+    # オプション($以降)は無視
+    rule = rule.split("$")[0]
+
+    # /.../ 形式はそのまま正規表現として返す
+    if rule.startswith("/") and rule.endswith("/"):
+        return rule[1:-1]
+
+    # ||domain.tld 形式
+    if rule.startswith("||"):
+        # ||example.com -> ^https?://([^/]+\.)?example\.com
+        domain_pattern = rule[2:]
+        if domain_pattern.endswith("^"):
+            domain_pattern = domain_pattern[:-1]
+        
+        # メタ文字をエスケープし、ワイルドカード(*)を正規表現に変換
+        domain_pattern = re.escape(domain_pattern).replace(r"\*", ".*")
+        return r"^https?://([a-z0-9\-]+\.)*" + domain_pattern
+
+    # |http://... 形式
+    if rule.startswith("|http"):
+        return "^" + re.escape(rule[1:])
+
+    # ...| 形式
+    if rule.endswith("|"):
+        return re.escape(rule[:-1]) + "$"
+
+    # 上記以外は、ワイルドカードを変換した部分一致として扱う
+    return re.escape(rule).replace(r"\*", ".*")
 
 
 
@@ -412,8 +557,8 @@ async def url_safe_check(payload: URLRequest):
     if not domain:
         return URLSafetyResponse(safe=False, reason="invalid_url")
 
-    # 高速なドメインチェック
-    match = _check_domain_safety(domain)
+    # 高速なURLチェック
+    match = _check_url_safety(payload.url)
     if match:
         return URLSafetyResponse(safe=False, reason="matched", **match)
 
@@ -450,9 +595,13 @@ async def read_index(request: Request):
 async def read_plan(request: Request):
     return templates.TemplateResponse("plan.html", {"request": request})
 
-@app.get("/slide/", response_class=HTMLResponse)
-async def read_slide_index(request: Request, data: Optional[str] = None):
-    return templates.TemplateResponse("slide.html", {"request": request, "data": data})
+@app.get("/slide/{slide_id}", response_class=HTMLResponse)
+async def read_slide_index(request: Request, slide_id: str):
+    return templates.TemplateResponse("slide.html", {"request": request, "slide_id": slide_id})
+
+@app.get("/scoring/", response_class=HTMLResponse)
+async def read_scoring(request: Request):
+    return templates.TemplateResponse("scroing.html", {"request": request})
 
 # --- User Account Endpoints ---
 @app.post("/auth/register", response_model=UserResponse)
@@ -526,6 +675,9 @@ async def update_username(
     db: Session = Depends(get_db),
     lang: str = 'ja'
 ):
+    if not auth.verify_password(user_update.password, str(current_user.hashed_password)):
+        raise create_error_response('invalid_credentials', lang, status.HTTP_400_BAD_REQUEST)
+
     if db.query(User).filter_by(username=user_update.new_username).first():
         raise create_error_response('username_already_exists', lang, status.HTTP_400_BAD_REQUEST)
     
@@ -534,7 +686,13 @@ async def update_username(
     db.refresh(current_user)
 
     log_user_action('username_updated', current_user.id, f"New username: {user_update.new_username}", lang) # type: ignore
-    return create_user_response('username_updated', lang)
+
+    # ユーザー名変更後に新しいトークンを生成して返す
+    access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = auth.create_access_token(
+        data={"sub": user_update.new_username}, expires_delta=access_token_expires
+    )
+    return {"message": get_message('username_updated', lang), "access_token": access_token, "token_type": "bearer"}
 
 
 # --- File Upload Endpoints ---
@@ -681,18 +839,35 @@ async def delete_file_endpoint(file_id: int, *, db: Session = Depends(get_db), c
 # --- Slide Endpoints ---
 @app.post("/slides", response_model=SlideResponse)
 async def create_slide_endpoint(slide: SlideCreate, *, db: Session = Depends(get_db), current_user: Annotated[User, Depends(auth.get_current_user)]):
-    db_slide = Slide(**slide.model_dump(), owner_id=current_user.id)
+    try:
+        # Base64デコードしてバイナリデータとして保存
+        decoded_data = base64.b64decode(slide.slide_data)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 data for slide_data")
+    
+    db_slide = Slide(slide_data=decoded_data, owner_id=current_user.id)
     db.add(db_slide)
     db.commit()
     db.refresh(db_slide)
-    return db_slide
+    
+    # レスポンスとして返すために再度Base64エンコード
+    encoded_data = base64.b64encode(db_slide.slide_data).decode('utf-8')
+    return SlideResponse(id=db_slide.id, slide_data=encoded_data, owner_id=db_slide.owner_id)
 
 @app.get("/slides/{slide_id}", response_model=SlideResponse)
-async def get_slide_endpoint(slide_id: int, *, db: Session = Depends(get_db), current_user: Annotated[User, Depends(auth.get_current_user)]):
-    db_slide = db.query(Slide).filter(Slide.id == slide_id, Slide.owner_id == current_user.id).first()
+async def get_slide_endpoint(slide_id: str, *, db: Session = Depends(get_db), current_user: Annotated[User, Depends(auth.get_current_user)]):
+    try:
+        slide_id_int = int(slide_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid slide ID format.")
+
+    db_slide = db.query(Slide).filter(Slide.id == slide_id_int, Slide.owner_id == current_user.id).first()
     if not db_slide:
         raise HTTPException(status_code=404, detail="Slide not found or not authorized")
-    return db_slide
+    
+    # バイナリデータをBase64エンコードして返す
+    encoded_data = base64.b64encode(db_slide.slide_data).decode('utf-8')
+    return SlideResponse(id=db_slide.id, slide_data=encoded_data, owner_id=db_slide.owner_id)
 
 @app.delete("/slides/{slide_id}", response_model=SlideResponse)
 async def delete_slide_endpoint(slide_id: int, *, db: Session = Depends(get_db), current_user: Annotated[User, Depends(auth.get_current_user)]):
@@ -704,6 +879,24 @@ async def delete_slide_endpoint(slide_id: int, *, db: Session = Depends(get_db),
     db.delete(db_slide)
     db.commit()
     return deleted_slide_details
+
+# --- New In-memory Slide Endpoints ---
+class SlideData(BaseModel):
+    data: str # Base64 encoded string
+
+@app.get("/api/slides/{slide_id}")
+async def get_slide_data(slide_id: str):
+    if slide_id not in slides:
+        raise HTTPException(status_code=404, detail="Slide not found")
+    return {"data": base64.b64encode(slides[slide_id]).decode('utf-8')}
+
+@app.put("/api/slides/{slide_id}")
+async def update_slide_data(slide_id: str, payload: SlideData):
+    try:
+        slides[slide_id] = base64.b64decode(payload.data)
+        return {"message": "Slide updated successfully"}
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 data")
 
 
 load_dotenv()
@@ -972,7 +1165,7 @@ async def safe_redirect(url: str):
         return HTMLResponse(content=html, status_code=400)
 
     # ブロックチェック
-    match = _check_domain_safety(domain)
+    match = _check_url_safety(url)
     if match:
         # ブロック用の警告ページ
         blocked = match['matched_domain']
@@ -1119,26 +1312,155 @@ async def get_wiki_image(keyword: str):
 
         return JSONResponse(content={"image_urls": sorted(filtered_urls)})
 
+# --- Scoring Endpoint ---
+@app.post("/scoring/upload")
+async def scoring_upload(
+    slide_id: str = Form(...),
+    video: UploadFile = File(...),
+    current_user: User = Depends(auth.get_current_user)
+):
+    """
+    Uploads a video for scoring, processes it with AI, and returns feedback.
+    """
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="AI service is currently unavailable")
+
+    # Validate video file
+    if not video.content_type or not video.content_type.startswith("video/"):
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload a video.")
+
+    temp_dir = "data/temp"
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    input_path = os.path.join(temp_dir, f"input_{uuid.uuid4()}.webm")
+    output_path = os.path.join(temp_dir, f"output_{uuid.uuid4()}.mp4")
+
+    try:
+        # Save the uploaded video to a temporary file
+        with open(input_path, "wb") as f:
+            shutil.copyfileobj(video.file, f)
+
+        # Check and convert video properties using ffmpeg-python
+        (
+            ffmpeg
+            .input(input_path)
+            .output(output_path, vf='scale=w=1280:h=720:force_original_aspect_ratio=decrease', r=30)
+            .run(capture_stdout=True, capture_stderr=True, overwrite_output=True)
+        )
+
+        # Initialize Gemini Client
+        client = genai.Client(api_key=GEMINI_API_KEY)
+
+        # Upload the video file to Gemini
+        uploaded_video = client.files.upload(file=output_path)
+
+        # Generate content using Gemini
+        prompt = """
+        あなたはプレゼンテーションのプロのコーチです。
+        この動画を見て、以下の観点からプレゼンテーションを評価し、JSON形式で結果を返してください。
+
+        - score: 総合スコア（0-100点）
+        - feedback:
+            - clarity: 声の明瞭さ、聞き取りやすさについての評価コメント
+            - pace: 話すペースの適切さについての評価コメント
+            - engagement: 聴衆を引きつける工夫（ジェスチャー、視線など）についての評価コメント
+            - improvement_points: 具体的な改善点のリスト（2〜3個）
+
+        以下は出力形式の例です。この形式に厳密に従ってください。
+        {
+            "score": 85,
+            "feedback": {
+                "clarity": "声が明瞭で、非常に聞き取りやすかったです。特に重要なキーワードが強調されており、理解を助けていました。",
+                "pace": "全体的に適切なペースでしたが、一部早口になる場面がありました。特にデータの説明部分では、もう少し間を取ると良いでしょう。",
+                "engagement": "ジェスチャーが効果的に使われており、視線も聴衆全体に向けられていて素晴らしいです。",
+                "improvement_points": [
+                    "専門用語を使用する際に、簡単な言葉での補足を加えると、より多くの聴衆に理解されやすくなります。",
+                    "スライドの切り替えと話すタイミングが少しずれている箇所があったため、リハーサルで調整することをお勧めします。"
+                ]
+            }
+        }
+        """
+        
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[prompt, uploaded_video],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=ScoringResult,
+            ),
+        )
+
+        # Delete the file from Gemini server after processing
+        client.files.delete(name=uploaded_video.name)
+        
+        log_user_action('ai_request_processing', current_user.id, f"Scoring for slide {slide_id}")
+        
+        # The response.text should be a valid JSON string based on the schema
+        return JSONResponse(content=json.loads(response.text))
+
+    except ffmpeg.Error as e:
+        logger.error(f"FFmpeg error: {e.stderr.decode()}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to process video.")
+    except Exception as e:
+        logger.error(f"Error during scoring process for slide {slide_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An error occurred during the scoring process.")
+    
 # --- WebSocket Endpoint ---
 @app.websocket("/ws/collaborate/{slide_id}")
-async def websocket_collaborate(websocket: WebSocket, slide_id: str, user: Optional[User] = Depends(auth.get_current_user_ws)):
-    if user is None:
+async def websocket_collaborate(
+    websocket: WebSocket,
+    slide_id: str,
+    user: Optional[User] = Depends(auth.get_current_user_ws)
+):
+    # Auth handling
+    if user is None and not ALLOW_ANON_WS:
+        logger.info(f"WS reject: unauthenticated access for slide {slide_id}")
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Authentication Failed")
         return
+    elif user is None and ALLOW_ANON_WS:
+        # Mark as anonymous
+        anon_user = "anonymous"
+    else:
+        anon_user = user.username  # type: ignore
 
-    await websocket.accept()
-    logger.info(f"User {user.username} connected to WebSocket for slide {slide_id}")
+    # Slide existence handling
+    if slide_id not in slides:
+        if ALLOW_ANON_WS:
+            # Auto-create empty slide for development to avoid 403 storm
+            slides[slide_id] = b""
+            logger.info(f"WS auto-created empty slide for id={slide_id}")
+        else:
+            logger.info(f"WS reject: slide not found for id={slide_id}")
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Slide not found")
+            return
+
+    await manager.connect(websocket, slide_id)
+    logger.info(f"User {anon_user} connected to WebSocket for slide {slide_id}")
+
+    # Send current slide data on connect
+    try:
+        # スライドが存在しない、または空の場合は、空のバイト列を送信
+        slide_data = slides.get(slide_id, b"")
+        await manager.send_personal_message(slide_data, websocket)
+    except Exception as e:
+        logger.error(f"Error sending initial slide data for slide {slide_id}: {e}")
+
     try:
         while True:
-            data = await websocket.receive_text()
-            # TODO: Implement actual collaboration logic instead of echo
-            await websocket.send_text(f"User {user.username} said: {data} (slide: {slide_id})")
-    except Exception as e:
-        logger.warning(f"WebSocket connection closed for slide {slide_id}, user {user.username}: {e}")
-    finally:
-        logger.info(f"User {user.username} disconnected from slide {slide_id}")
+            # クライアントから送信される差分(JSON文字列)を待機
+            message_text = await websocket.receive_text()
+            
+            # 差分はDB/メモリに保存せず、そのまま他のクライアントにテキストとしてブロードキャスト
+            # ドキュメントの永続化はHTTP PUT /api/slides/{slide_id} で行われる
+            await manager.broadcast_text(message_text, slide_id, sender=websocket)
 
-app.mount("/", StaticFiles(directory="static"), name="static")
+    except Exception as e:
+        logger.warning(f"WebSocket connection closed for slide {slide_id}, user {anon_user}: {e}")
+    finally:
+        manager.disconnect(websocket, slide_id)
+        logger.info(f"User {anon_user} disconnected from slide {slide_id}")
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # --- Uvicorn startup ---
 if __name__ == "__main__":

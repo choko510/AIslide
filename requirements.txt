@@ -6,8 +6,11 @@ google-genai
 python-jose[cryptography]
 werkzeug
 pillow
-passlib
 bcrypt
 Jinja2
 requests
 httpx
+pytest
+pytest-asyncio
+pytest-playwright
+playwright

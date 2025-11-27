@@ -5,7 +5,7 @@ from typing import Optional, Annotated
 from fastapi import Depends, HTTPException, status, WebSocket, Query
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-import bcrypt
+from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
@@ -17,25 +17,16 @@ load_dotenv()
 
 # Configuration
 SECRET_KEY = os.getenv("SECRET_KEY")
-
-# 開発環境やテスト環境での利便性のため、環境変数が設定されていない場合のデフォルト値を許可するか、
-# 明示的にエラーにするかはプロジェクトの方針による。
-# ここではセキュリティを重視し、環境変数が設定されていない場合はエラーとするが、
-# 既存コードとの互換性(デフォルト値 "SeceretKey" のチェックなど)を考慮する。
-if not SECRET_KEY:
-    # テスト実行時など、コンテキストによってはここでエラーになる可能性があるため注意。
-    # conftest.pyで設定していれば問題ない。
+if not SECRET_KEY or SECRET_KEY == "SeceretKey":
     raise ValueError("SECRET_KEY not found in environment variables")
-
-if SECRET_KEY == "SeceretKey":
-     # 警告を出すか、エラーにするべきだが、既存ロジックに合わせてエラーとする
-     raise ValueError("SECRET_KEY must be changed from the default value")
-
 if len(SECRET_KEY) < 8:
     raise ValueError("SECRET_KEY must be at least 8 characters long")
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# Password Hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login") # tokenUrl should match your login path
 
@@ -47,23 +38,10 @@ class Token(BaseModel):
     token_type: str
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """
-    パスワードを検証する。bcryptを使用。
-    """
-    if isinstance(plain_password, str):
-        plain_password = plain_password.encode('utf-8')
-    if isinstance(hashed_password, str):
-        hashed_password = hashed_password.encode('utf-8')
-    return bcrypt.checkpw(plain_password, hashed_password)
+    return pwd_context.verify(plain_password, hashed_password)
 
 def get_password_hash(password: str) -> str:
-    """
-    パスワードをハッシュ化する。bcryptを使用。
-    """
-    if isinstance(password, str):
-        password = password.encode('utf-8')
-    salt = bcrypt.gensalt()
-    return bcrypt.hashpw(password, salt).decode('utf-8')
+    return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
